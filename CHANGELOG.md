@@ -1,18 +1,19 @@
 # Buffeteria
 
-## Unreleased
+## v0.6.0
 
-- Paladin auras, PallyPower style: each paladin's tree has an aura button in its header. Auto gives every paladin a different aura (Devotion, Concentration, Sanctity, Retribution, then resistances), preferring talented auras for the paladins who have them. Aura choices are shared with the group and included in announcements, the Kitchen, and the tracker, which reminds you to turn on your assigned aura.
-- The Paladins tab now plans every class, including classes not currently in the group (from their class defaults), so all blessing buttons are filled in.
-- Added **Auto-fill** (turns every Auto blessing and aura into Buffeteria's current pick and shares it) and **Clear** (back to Auto) to the Paladins tab.
-- Restyled `/buff` to match the game's Talents panel: a portrait window, top tabs, a header band with a paladin counter, and talent trees with class artwork. Blessings and wanted buffs use talent buttons (gold assigned, green auto, grey off). The Paladins tab always shows three trees and scrolls when more paladins join.
-- Rebuilt the Paladins panel with talent-style backgrounds, gold borders, and one column per group paladin. The window grows with the roster and scrolls horizontally for larger groups.
-- Updated the options window to Forever's translucent Edit Mode panel style and the tracker selection to native blue/gold nine-slice artwork.
-- Added a Paladins-only tab for built-in, shared class blessing assignments, including assignments for players without Buffeteria.
-- Class assignments support Auto, a specific blessing, or None, and each paladin's own assignments persist between sessions.
-- Explicit personal blessing preferences take priority over the class plan; existing custom rankings are preserved as overrides.
-- Use single blessings when a Greater Blessing would overwrite a personal assignment.
-- Updated assignment synchronization and retry handling. Buffeteria users should update together.
+Update Buffeteria together with your group: this release changes the assignment message format.
+
+- Added a **Paladins** tab for shared class blessing assignments, including paladins without Buffeteria. Choose Auto, a specific blessing, or None; your own assignments persist between sessions. Auto plans every class, including classes not currently in the group.
+- Added shared paladin aura assignments. Auto gives each paladin a different aura and accounts for talented auras. The tracker reminds you to activate your assigned aura, and announcements include it.
+- Added **Auto-fill** to lock in the current automatic blessing and aura picks, plus **Clear** to return all slots to Auto.
+- Personal blessing overrides take priority over the class plan. Custom rankings are preserved, and single blessings prevent Greater Blessings from overwriting personal choices.
+- Updated class defaults: warriors and rogues prefer Might, casters prefer Wisdom, and hunters prefer Kings. Existing untouched default rankings migrate; custom rankings stay as saved.
+- Added **Tanks** preferences with Auto, Tank, and Not tank role choices. The tracker serves Righteous Fury for paladin tanks and distributes Thorns targets among druids, including assigned tanks without Buffeteria.
+- Restyled `/buff` with a Talents-style window and talent buttons. Paladin trees share the board according to roster size and scroll horizontally beyond three paladins; preference panels name assigned casters.
+- Replaced the tracker head with a transparent orc whose expression and color reflect buff status. Out-of-range players no longer change his mood; tooltips still identify them.
+- Rebuilt **Settings** with Tracker, Size, Show icons, and Layout cards plus a border-color legend. Added separate head and small-icon sizes, missing/expiring icon filters, 2/3/4 icons per row, and Left/Top/Right/Bottom/Auto positioning. Auto adapts to screen edges and available space.
+- Tracker and minimap actions occur on click release; releasing a drag only finishes moving the button. Improved assignment synchronization and retries, and reorganized the add-on into feature modules.
 
 ## v0.5.0
 
