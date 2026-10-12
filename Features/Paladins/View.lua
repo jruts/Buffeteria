@@ -5,8 +5,8 @@ local View = {}
 ns.Paladins.View = View
 local panel, band, viewport, canvas, scrollbar, empty
 local columns, seats = {}, {}
--- Like the talent panel, the board always shows at least three trees.
-local SEATS, GAP, EDGE, BOARD_H, MIN_COLUMN = 3, 2, 8, 360, 196
+-- Paladins share the board's width; past three trees it scrolls sideways.
+local MAX_VISIBLE, GAP, EDGE, BOARD_H, MIN_COLUMN, CELL = 3, 2, 8, 360, 196, 68
 local SPEC_ICONS = { "Interface\\Icons\\Spell_Holy_HolyBolt", "Interface\\Icons\\Spell_Holy_DevotionAura",
 	"Interface\\Icons\\Spell_Holy_AuraOfLight" }
 local columnWidth, contentWidth, scrollOffset, paladinCount = MIN_COLUMN, 0, 0, 0
@@ -64,19 +64,25 @@ end
 
 local function createSeat()
 	local seat = ns.UI.Tree(canvas)
-	seat:SetHeader(nil, "Open seat", "Waiting for a paladin")
-	seat.title:SetFontObject("GameFontDisableLarge")
-	seat.title:ClearAllPoints(); seat.title:SetPoint("TOPLEFT", 18, -20); seat.title:SetPoint("RIGHT", -8, 0)
+	seat:SetHeader(nil, "", "")
 	return seat
 end
 
--- Three classes per tier, like a talent tree's rows.
+-- Talent tiers sized to the tree: three classes per tier in a narrow tree, up to
+-- five in a wide one, with tiers balanced and centered.
 local function layoutColumn(column)
-	local cell = columnWidth / 3
+	local count = #Buffs.CLASS_KEYS
+	local perTier = math.max(3, math.min(5, math.floor(columnWidth / CELL)))
+	local tiers = math.ceil(count / perTier)
+	perTier = math.ceil(count / tiers)
+	local cell = columnWidth / perTier
+	local top = -92 - (3 - tiers) * 44
 	for i, class in ipairs(Buffs.CLASS_KEYS) do
 		local row = column.rows[class]
-		local x, y = (i - 1) % 3, math.floor((i - 1) / 3)
-		row:ClearAllPoints(); row:SetPoint("TOP", column, "TOPLEFT", cell * (x + 0.5), -92 - y * 88)
+		local tier, x = math.floor((i - 1) / perTier), (i - 1) % perTier
+		local inTier = math.min(perTier, count - tier * perTier)
+		local offset = (columnWidth - inTier * cell) / 2
+		row:ClearAllPoints(); row:SetPoint("TOP", column, "TOPLEFT", offset + cell * (x + 0.5), top - tier * 88)
 		row.name:SetWidth(cell - 4); row.assignment:SetWidth(cell - 4)
 	end
 end
@@ -84,8 +90,9 @@ end
 function View.Layout(width)
 	if not panel then return end
 	local available = math.max(1, width - EDGE * 2)
-	columnWidth = math.max(MIN_COLUMN, math.floor((available - GAP * (SEATS - 1)) / SEATS))
-	local trees = math.max(SEATS, paladinCount)
+	local visible = math.max(1, math.min(MAX_VISIBLE, paladinCount))
+	columnWidth = math.max(MIN_COLUMN, math.floor((available - GAP * (visible - 1)) / visible))
+	local trees = math.max(1, paladinCount)
 	contentWidth = trees * (columnWidth + GAP) - GAP
 	viewport:SetSize(available, BOARD_H)
 	canvas:SetSize(math.max(available, contentWidth), BOARD_H)
@@ -101,7 +108,8 @@ function View.Layout(width)
 		index = index + 1
 	end
 	for i = 1, paladinCount do place(columns[i]); layoutColumn(columns[i]) end
-	for i = 1, trees - paladinCount do place(seats[i]) end
+	-- An empty group keeps one dimmed tree behind the "No paladins" note.
+	if paladinCount == 0 and seats[1] then place(seats[1]) end
 end
 
 function View.Refresh()
@@ -136,17 +144,9 @@ function View.Refresh()
 			member.hasAddon and "Buffeteria connected" or "Without Buffeteria", covered)
 	end
 	for i = paladinCount + 1, #columns do columns[i].paladin = nil; columns[i]:Hide() end
-	local open = math.max(0, SEATS - paladinCount)
-	for i = 1, math.max(open, #seats) do
-		if i <= open then
-			seats[i] = seats[i] or createSeat()
-			seats[i]:SetArt(ns.UI.TREE_ART.PALADIN[(paladinCount + i - 1) % 3 + 1], true)
-			seats[i].note:SetShown(paladinCount > 0); seats[i].title:SetShown(paladinCount > 0)
-			seats[i]:Show()
-		else
-			seats[i]:Hide()
-		end
-	end
+	seats[1] = seats[1] or createSeat()
+	seats[1]:SetArt(ns.UI.TREE_ART.PALADIN[1], true)
+	seats[1]:SetShown(paladinCount == 0)
 end
 
 function View.Create(parent)

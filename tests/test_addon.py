@@ -235,12 +235,20 @@ class AddonTests(unittest.TestCase):
             local override = findWidget('Override the Paladins class plan').parent
             override:SetChecked(true); override:GetScript('OnClick')(override)
             assert(ns.db.blessingsOverride)
-            -- Wanted buffs are talent buttons: gold when on the plate, grey when not.
+            -- Wanted buffs are talent buttons: gold when wanted, grey when not.
             local fort = findWidget('Your buffet').parent.wants.FORT
             local wanted = ns.db.wants.FORT and true or false
             fort:GetScript('OnClick')(fort)
             assert((ns.db.wants.FORT and true or false) == not wanted)
             assert(fort.state == (wanted and 'grey' or 'gold'))
+            -- The third tree is the whole group's plan: paladins, then group buffs.
+            local menu = findWidget('Your buffet').parent.menu
+            assert(menu[1].head:GetText() == 'Paladins')
+            local kitchen = false
+            for _, row in ipairs(menu) do
+                if row:IsShown() and row.head:GetText() == 'Group buffs' then kitchen = true end
+            end
+            assert(kitchen)
         """)
 
     def test_paladin_columns_follow_roster_and_scroll_in_both_hosts(self):
@@ -254,9 +262,9 @@ class AddonTests(unittest.TestCase):
                 for _, seat in ipairs(panel.seats) do if seat:IsShown() then n = n + 1 end end
                 return n
             end
-            -- Like the talent panel, three trees fill the fixed-size window.
-            assert(#panel.columns == 2 and shownSeats() == 1 and Buffeteria_Prefs:GetWidth() == 652)
-            assert(panel.columns[1].width == 210 and panel.seats[1].width == 210)
+            -- Paladins share the board: two paladins get half of it each, no empty seats.
+            assert(#panel.columns == 2 and shownSeats() == 0 and Buffeteria_Prefs:GetWidth() == 652)
+            assert(panel.columns[1].width == 317 and panel.columns[2].width == 317)
             assert(not panel.scrollbar:IsShown())
             -- Add paladins through the real roster -> solver -> refresh event path.
             function UnitFullName(unit)
@@ -266,6 +274,7 @@ class AddonTests(unittest.TestCase):
             GROUP_SIZE = 2
             ns.Assignments.Resolve(); runTimers()
             assert(#panel.columns == 3 and shownSeats() == 0 and Buffeteria_Prefs:GetWidth() == 652)
+            assert(panel.columns[1].width == 210)
             assert(panel.columns[2].paladin == 'Party1-Realm')
             assert(panel.columns[3].paladin == 'Party2-Realm')
             assert(not panel.scrollbar:IsShown())
@@ -286,10 +295,11 @@ class AddonTests(unittest.TestCase):
             assert(panel:GetParent():GetWidth() == 618 and panel.scrollbar:IsShown())
             settingsPage:SetWidth(800); settingsPage:GetScript('OnSizeChanged')(settingsPage)
             assert(panel:GetParent():GetWidth() == 768)
-            -- Remove everyone else: open seats return and stale columns stop accepting edits.
+            -- Remove everyone else: one tree fills the board and stale columns stop accepting edits.
             GROUP_SIZE = 0
             ns.Assignments.Resolve(); runTimers()
-            assert(panel.columns[1].paladin == 'A-Realm' and shownSeats() == 2)
+            assert(panel.columns[1].paladin == 'A-Realm' and shownSeats() == 0)
+            assert(panel.columns[1].width == panel:GetParent():GetWidth() - 16)
             assert(not panel.scrollbar:IsShown())
             assert(panel.viewport.horizontalScroll == 0)
             for i = 2, #panel.columns do

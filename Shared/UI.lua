@@ -69,6 +69,20 @@ local function goldRule(parent)
 	return line
 end
 
+-- A sub-heading inside a tree: small gold caption with a rule running to the right edge.
+function UI.Section(parent, label, x, y)
+	local text = UI.Text(parent, "GameFontNormalSmall", x, y, nil, label)
+	local line = goldRule(parent)
+	line:SetPoint("LEFT", text, "RIGHT", 6, 0); line:SetPoint("RIGHT", parent, "RIGHT", -10, 0)
+	return text
+end
+
+-- An icon embedded in a font string, trimmed like an action button.
+function UI.InlineIcon(texture, size)
+	size = size or 14
+	return ("|T%s:%d:%d:0:0:64:64:5:59:5:59|t"):format(tostring(texture), size, size)
+end
+
 -- Talent rank badge: the small numbered box at a talent button's corner.
 local function badge(parent)
 	local border = parent:CreateTexture(nil, "OVERLAY")
@@ -88,6 +102,8 @@ function UI.TalentButton(parent)
 	button.slot:SetTexture("Interface\\Buttons\\UI-EmptySlot-White")
 	button.icon = button:CreateTexture(nil, "BORDER")
 	button.icon:SetAllPoints()
+	-- Trim the icon's own baked-in border so only the slot frames it.
+	button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	button:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
 	button.rankBorder, button.rank = badge(button)
@@ -234,4 +250,10 @@ function UI.PaladinNames()
 	end
 	table.sort(out)
 	return out
+end
+
+-- A roster member's short name in class color, or the plain short name.
+function UI.MemberName(full)
+	local member = ns.roster and ns.roster.members[full]
+	return member and ns.WoW.ClassColorName(full, member.class) or ns.WoW.Short(full)
 end
