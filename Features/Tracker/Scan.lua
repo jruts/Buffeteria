@@ -127,6 +127,10 @@ function Scan.Update(now, warnSec)
 			for key, caster in pairs(exp) do
 				summary.any = true
 				local st, rem = Scan.Rate(full, key, now, warnSec)
+				if caster == me then
+					summary.mine.total = summary.mine.total + 1
+					if st == "bad" or st == "warn" then summary.mine.pending = summary.mine.pending + 1 end
+				end
 				local pk = summary.perKey[key] or Status.NewCounts()
 				summary.perKey[key] = pk
 				pk.total = pk.total + 1
@@ -159,7 +163,9 @@ function Scan.Update(now, warnSec)
 		local pk = Status.NewCounts()
 		pk.bad, pk.total, pk.casters[me] = missingAura and 1 or 0, 1, true
 		summary.perKey[aura] = pk
+		summary.mine.total = summary.mine.total + 1
 		if missingAura then
+			summary.mine.pending = summary.mine.pending + 1
 			summary.yours[aura] = true
 			problem(me, aura, "bad", nil, me)
 		end

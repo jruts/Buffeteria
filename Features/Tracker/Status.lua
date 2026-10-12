@@ -18,9 +18,17 @@ function Status.Worst(a, b) return Status.PRIORITY[b] < Status.PRIORITY[a] and b
 --   problems  { who, key, status, rem, caster } worst first
 --   unreadable  members whose buffs can't be read; any  something is tracked
 --   yours     keys I have to cast; needs  { key, status, caster } I'm missing
+--   mine      { total, pending } recipient pairs assigned to me, and those still missing or low
 --   next      my next cast (Actions.Next); cancel  unwanted aura on me
 function Status.NewSummary()
-	return { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false, yours = {}, needs = {} }
+	return { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false, yours = {}, needs = {},
+		mine = { total = 0, pending = 0 } }
+end
+
+-- Whether I'm assigned buffs to give and have served every one I can see.
+function Status.MineDone(summary)
+	local mine = summary and summary.mine
+	return mine ~= nil and mine.total > 0 and mine.pending == 0
 end
 
 -- Recipient counts for one buff, and who is supposed to cast it.

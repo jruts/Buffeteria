@@ -123,7 +123,7 @@ class AddonTests(unittest.TestCase):
                     COMBAT = true
                     ns.Database.Set('iconSize', 128)
                     ns.Database.Set('statusIconSize', 64)
-                    assert(head:GetWidth() == 64 and sample.head:GetWidth() <= 128)
+                    assert(head:GetWidth() == 96 and sample.head:GetWidth() <= 128)
                     assert(not frame:IsShown() and sample:IsVisible())
                     for _, side in ipairs({'LEFT','RIGHT','TOP','BOTTOM','AUTO'}) do
                         for columns = 2, 4 do
@@ -243,7 +243,7 @@ class AddonTests(unittest.TestCase):
                     ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria-Dev')
                     ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
                     assert(ns.db == BuffeteriaDevCharDB and ns.db ~= liveDB)
-                    assert(ns.db.iconSize == 64 and liveDB.iconSize == 37)
+                    assert(ns.db.iconSize == 96 and liveDB.iconSize == 37)
                     assert(BuffeteriaCharDB == liveDB and liveDB.sentinel)
                     assert(ns.UI.ICON == 'Interface\\AddOns\\Buffeteria-Dev\\Media\\Icon')
                     assert(BuffeteriaDev_CastButton.icon.texture:find('Buffeteria%-Dev'))
@@ -515,14 +515,14 @@ class AddonTests(unittest.TestCase):
                 assert(ns.db.iconSize == 128)
                 assert(ns.db.iconsPerRow == 2)
                 assert(ns.db.iconPosition == 'BOTTOM')
-                assert(ns.db.statusIconSize == 21)
+                assert(ns.db.statusIconSize == 32)
             end
             BuffeteriaCharDB = {onlyProblems=false, buffDisplay='MISSING', iconSize=16}
             ns.Database.Init()
             assert(ns.db.buffDisplay == 'MISSING' and ns.db.iconSize == 32)
             BuffeteriaCharDB = {buffDisplay='invalid', iconSize='invalid'}
             ns.Database.Init()
-            assert(ns.db.buffDisplay == 'PROBLEMS' and ns.db.iconSize == 64)
+            assert(ns.db.buffDisplay == 'PROBLEMS' and ns.db.iconSize == 96)
             for _, columns in ipairs({2, 3, 4, '3'}) do
                 BuffeteriaCharDB = {iconsPerRow=columns}
                 ns.Database.Init()
@@ -544,7 +544,7 @@ class AddonTests(unittest.TestCase):
                 assert(ns.db.iconPosition == 'BOTTOM')
             end
             for _, sample in ipairs({{16,16}, {64,64}, {32,32}, {'24',24}, {24.6,25},
-                                      {0,16}, {100,64}, {'invalid',21}, {false,21}}) do
+                                      {0,16}, {100,64}, {'invalid',32}, {false,32}}) do
                 BuffeteriaCharDB = {statusIconSize=sample[1], iconSize=96, iconsPerRow=3, iconPosition='LEFT'}
                 ns.Database.Init()
                 assert(ns.db.statusIconSize == sample[2])
@@ -668,10 +668,10 @@ class AddonTests(unittest.TestCase):
                 end
             end
             s.perKey = {}; ns.Tracker.Refresh()
-            assert(frame:GetHeight() == 68)
+            assert(frame:GetHeight() == 100)
             ns.db.iconSize = 100
             COMBAT = true; ns.Tracker.Refresh()
-            assert(head:GetWidth() == 64 and frame:GetWidth() == 68)
+            assert(head:GetWidth() == 96 and frame:GetWidth() == 100)
             COMBAT = false
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
             assert(head:GetWidth() == 100 and frame:GetWidth() == 104)
@@ -732,6 +732,20 @@ class AddonTests(unittest.TestCase):
                 if w.parent == frame and w.key and w.tex and w:IsShown() then alpha[w.key] = w:GetAlpha() end
             end
             assert(alpha.FORT == 1 and alpha.KINGS == 1 and alpha.INT < 1)
+            -- The badge: my pending count, a check when done, nothing with no job.
+            s.mine = {total=3, pending=2}; ns.Tracker.Refresh()
+            assert(head.owed:IsShown() and head.owed:GetText() == 2 and not head.done:IsShown())
+            assert(head.owed.font[2] == math.floor(head:GetWidth() * 0.18 + 0.5) and head.owed.font[3] == 'OUTLINE')
+            s.mine = {total=3, pending=0}; ns.Tracker.Refresh()
+            assert(head.done:IsShown() and not head.owed:IsShown())
+            assert(head.done.width == math.floor(head:GetWidth() * 0.16 + 0.5) and head.done:GetAlpha() < 1)
+            assert(head.done.point[1] == 'TOPRIGHT' and head.done.point[2] == head)
+            -- Beside the remove-unwanted-buff button, which owns the corner.
+            s.cancel = 'Blessing of Salvation'; ns.Tracker.Refresh()
+            assert(Buffeteria_CancelButton:IsShown() and head.done.point[2] == Buffeteria_CancelButton)
+            s.cancel = nil
+            s.mine = {total=0, pending=0}; ns.Tracker.Refresh()
+            assert(not head.done:IsShown() and not head.owed:IsShown())
             -- The tooltip names who I'm waiting for.
             local lines = {}
             local add = GameTooltip.AddDoubleLine
@@ -754,8 +768,9 @@ class AddonTests(unittest.TestCase):
                     local s, frame = ns.Tracker.Summary(), Buffeteria_Tracker
                     assert(frame.gief:IsShown() == %s and Buffeteria_CastButton.halo:IsShown() == %s)
                     assert((s.next ~= nil) == %s and (#s.needs > 0) ~= %s)
+                    assert(Buffeteria_CastButton.owed:IsShown() == %s)
                     ns.Tracker.Preview.Set(false)
-                """ % ((("true" if gief else "false"),) * 4))
+                """ % ((("true" if gief else "false"),) * 5))
 
     def test_tracker_icons_keep_color_and_share_status_borders_for_buffs_and_auras(self):
         lua = full_addon()
@@ -926,7 +941,7 @@ class AddonTests(unittest.TestCase):
                         assert(head.icon.texture == ns.Tracker.Art.Texture(ns.Tracker.Status.Mood(ns.Tracker.Summary())))
                         assert(not head.glow and head.halo.texture == ns.mediaPath .. choice.prefix .. 'ColoredGlow')
                         assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
-                        assert(frame.point == point and head:GetWidth() == 64)
+                        assert(frame.point == point and head:GetWidth() == 96)
                     end
                     COMBAT = false
                     settingsPage:GetScript('OnShow')(settingsPage)
@@ -2719,6 +2734,13 @@ class AddonTests(unittest.TestCase):
             ns.Tracker.Refresh()
             local summary = ns.Tracker.Summary()
             assert(summary.perKey.CONC.bad == 1 and summary.overall == 'bad')
+            -- My part counts every recipient assigned to me, plus my aura.
+            local mineTotal, me = 1, ns.WoW.Me()
+            for _, exp in pairs(ns.Assignments.result.expected) do
+                for _, caster in pairs(exp) do if caster == me then mineTotal = mineTotal + 1 end end
+            end
+            assert(summary.mine.total == mineTotal and summary.mine.pending >= 1)
+            local pendingBefore = summary.mine.pending
             local button = Buffeteria_CastButton
             -- Highest known rank of Concentration Aura, cast on myself.
             assert(button:GetAttribute('spell') == '19746' and button:GetAttribute('*unit1') == 'player')
@@ -2733,6 +2755,7 @@ class AddonTests(unittest.TestCase):
             assert(ns.Tracker.Scan.MissingAura() == nil)
             ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.CONC.bad == 0)
+            assert(ns.Tracker.Summary().mine.pending == pendingBefore - 1)
             assert(button:GetAttribute('spell') ~= '19746')
         """)
 

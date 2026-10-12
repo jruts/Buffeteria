@@ -18,6 +18,10 @@ local HALO = {
 	default = { 1, 0.6, 0.12, 0.6 },
 }
 local OTHERS_ALPHA = 0.5  -- small icons for buffs that are someone else's job
+local BADGE_SCALE = 0.18  -- "your part" count size relative to the head
+local DONE_SCALE = 0.16   -- the "done" check is a quiet confirmation, not a call to act
+local DONE_ALPHA = 0.6
+local DONE_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-Ready"
 local GCD = 1.5           -- assumed global cooldown when the client hides cooldowns
 local lastCastAt = -math.huge
 -- Per display mode: whether a buff's icon shows, and the count on it.
@@ -205,6 +209,16 @@ local function buildCastButton()
 	castBtn.shade:SetVertexColor(0, 0, 0)
 	castBtn.shade:SetAlpha(0.65)
 	castBtn.shade:Hide()
+	-- "Your part" badge in the top-right corner: casts I still owe, or a check
+	-- once I've served everyone assigned to me. Separate from the group's mood.
+	castBtn.done = castBtn:CreateTexture(nil, "OVERLAY")
+	castBtn.done:SetTexture(DONE_TEXTURE)
+	castBtn.done:SetAlpha(DONE_ALPHA)
+	castBtn.done:Hide()
+	castBtn.owed = castBtn:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
+	castBtn.owed:SetTextColor(1, 0.82, 0)
+	castBtn.owedFont = castBtn.owed.GetFont and castBtn.owed:GetFont()
+	castBtn.owed:Hide()
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
 	ns.UI.PressFeedback(castBtn, castBtn.icon, function(self)
 		if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
@@ -342,6 +356,31 @@ local function build()
 	frame:Hide()
 end
 
+-- The "your part" badge: what I still owe, a check once I've served everyone,
+-- or nothing when I have no buffs to give. It sits in the head's top-right
+-- corner, beside the remove-unwanted-buff button when that is showing.
+local function showBadge(s)
+	local pending = s.mine and s.mine.pending or 0
+	for _, badge in ipairs({ castBtn.done, castBtn.owed }) do
+		badge:ClearAllPoints()
+		if cancelBtn:IsShown() then
+			badge:SetPoint("RIGHT", cancelBtn, "LEFT", -1, 0)
+		else
+			badge:SetPoint("TOPRIGHT", castBtn, "TOPRIGHT", -2, -2)
+		end
+	end
+	local size = math.max(9, math.floor(MAIN * BADGE_SCALE + 0.5))
+	local check = math.max(8, math.floor(MAIN * DONE_SCALE + 0.5))
+	castBtn.done:SetSize(check, check)
+	castBtn.done:SetShown(Status.MineDone(s))
+	if castBtn.owedFont and castBtn.owedSize ~= size then
+		castBtn.owed:SetFont(castBtn.owedFont, size, "OUTLINE")
+		castBtn.owedSize = size
+	end
+	castBtn.owed:SetText(pending > 0 and pending or "")
+	castBtn.owed:SetShown(pending > 0)
+end
+
 -- The GIEF call-out on your turn, and the DEV/preview tag above it.
 local function showShout(turn, n)
 	if frame.giefFont and frame.giefSize ~= ns.db.shoutSize then
@@ -474,6 +513,7 @@ function Tracker.Refresh()
 	layoutStatusIcons(s)
 	-- In preview the button never casts anything.
 	applySecure(preview and {} or s)
+	showBadge(s)
 	updateShade()
 	ns.Events.Emit("SummaryChanged")
 end

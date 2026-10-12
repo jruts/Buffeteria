@@ -146,8 +146,8 @@ Its controls are grouped by **Display**, **Behavior**, **Appearance**, **Buff
 icons**, and **Layout**, with an isolated **Tracker preview** beside them.
 Display contains Show tracker, Lock tracker and Minimap button. Behavior contains
 **Help with overdue buffs** (see below). Appearance contains the head selector,
-Colored hair and three size sliders: head (32–128 pixels), small icons (16–64
-pixels, default 21), and shout-out text (10–24 pixels, default 16).
+Colored hair and three size sliders: head (32–128 pixels, default 96), small icons (16–64
+pixels, default 32), and shout-out text (10–24 pixels, default 16).
 
 The preview uses sample raid data, the same head artwork, icon filters, border
 colors and layout calculation as the real tracker. Switch its Happy, Grumpy and
@@ -212,6 +212,13 @@ Existing tracker visibility and display choices are preserved.
   GIEF only appear when you can make the cast yourself, including on yourself;
   just needing a buff never triggers them. In combat, only Battle Shout and Inner
   Fire are demanded.
+- **Your part vs. theirs.** A badge in the head's top-right corner shows your own
+  share, separate from the group's mood. A gold number counts the players (and your
+  aura) you still have to serve. A small, faint green check means everyone assigned
+  to you is served, so a grumpy head with a check is someone else's job. With no buffs
+  to give, there is no badge. Players out of range aren't counted against your check.
+  When the remove-unwanted-buff button occupies the corner, the badge sits beside it.
+  Hover the head or the small icons to see who you're waiting for.
 - **Mash away.** A cast counts once it actually goes off, so pressing the button or
   key binding during the global cooldown never skips a target. Presses during the
   cooldown are simply held, so they don't flood you with "Spell is not ready yet"

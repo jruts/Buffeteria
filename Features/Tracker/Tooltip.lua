@@ -20,8 +20,14 @@ local function addTurn(s)
 		if s.next.helping then
 			GameTooltip:AddLine("Covering for " .. ns.Roster.Name(s.next.helping) .. ".", BLUE[1], BLUE[2], BLUE[3], true)
 		end
+	elseif Status.MineDone(s) then
+		GameTooltip:AddLine("Your part is done: everyone you buff is served.", unpack(Status.COLORS.ok))
 	else
 		GameTooltip:AddLine("Nothing for you to cast right now.", unpack(GREY))
+	end
+	local pending = s and s.mine and s.mine.pending or 0
+	if s and s.next and pending > 0 then
+		GameTooltip:AddLine(("%d of your buffs still to serve."):format(pending), GREY[1], GREY[2], GREY[3], true)
 	end
 	if not (s and s.needs and #s.needs > 0) then return end
 	GameTooltip:AddLine("You're waiting for:", unpack(Status.COLORS.warn))

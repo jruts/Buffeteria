@@ -4,8 +4,8 @@ ns.Database = {}
 
 -- Numeric settings: { minimum, maximum, step, default }. Controls read their range here.
 ns.Database.RANGES = {
-	iconSize = { 32, 128, 4, 64 },
-	statusIconSize = { 16, 64, 1, 21 },
+	iconSize = { 32, 128, 4, 96 },
+	statusIconSize = { 16, 64, 1, 32 },
 	shoutSize = { 10, 24, 1, 16 },
 	warnMinutes = { 1, 15, 1, 5 },
 }

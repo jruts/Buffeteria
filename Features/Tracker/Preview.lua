@@ -38,6 +38,8 @@ function Preview.Summary()
 		s.perKey[key].total = #FAKE
 	end
 
+	local key = CLASS_CAST[ns.WoW.PlayerClass()]
+	if key then s.mine.total = #FAKE end
 	if phase ~= "ok" then
 		for i, who in ipairs(FAKE) do
 			for j, key in ipairs(KEYS) do
@@ -57,8 +59,8 @@ function Preview.Summary()
 			table.insert(s.problems, { who = "Shieldwalla", class = "WARRIOR", key = "SALV", status = "unwanted" })
 		end
 		table.sort(s.problems, Status.CompareProblems)
-		local key = CLASS_CAST[ns.WoW.PlayerClass()]
 		if key then
+			s.mine.pending = math.max(1, s.perKey[key].bad + s.perKey[key].warn)
 			local b = Buffs.byKey[key]
 			s.next = { spell = ns.WoW.SpellName(b.groupIds[1]) or b.label, icon = ns.WoW.SpellIcon(b.groupIds[1]),
 				label = ns.WoW.ClassName("WARRIOR"), key = key, status = phase }
