@@ -28,7 +28,8 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
 
 Paladins have a **Paladins** tab in `/buff` and Settings > AddOns > Buffeteria.
 The window is styled like the game's Talents panel. Each paladin gets a talent tree,
-with the nine classes' blessings shown as talent buttons. Gold buttons are
+with the nine classes' blessings shown as talent buttons and the paladin's aura as
+a button in the tree's header. Gold buttons are
 assignments you set, green ones follow Auto, and grey ones have nothing. The trees
 share the board: one paladin fills it, two split it, three take a third each. With
 more than three paladins, scroll horizontally with the mouse wheel or the scrollbar.
@@ -36,9 +37,22 @@ Click a class's blessing to cycle through the choices; right-click cycles backwa
 assign paladins without the addon. For those paladins, choose blessings you know they
 can cast.
 
-- **Auto** uses Buffeteria's normal class assignment solver.
+- **Auto** uses Buffeteria's normal class assignment solver. Every class is planned,
+  including classes not in the group yet (from their class defaults), so all
+  buttons are filled in, like PallyPower.
 - A **specific blessing** sets that paladin's class assignment.
 - **None** removes that paladin's class assignment.
+
+Auras work the same way: Auto gives each paladin a different aura, in the order
+Devotion, Concentration, Sanctity, Retribution, Fire, Frost and Shadow Resistance.
+Paladins that know the fewest auras choose first, so a Concentration or Sanctity
+talent goes to the paladin who has it. Without Buffeteria, a paladin is assumed to
+know only the untalented auras. The tracker reminds you when your assigned aura
+isn't running, and the big button turns it on.
+
+**Auto-fill** turns every Auto blessing and aura into Buffeteria's current pick and
+shares it, so the plan stays put when people join or leave. Your manual choices,
+including None, stay as they are. **Clear** sets every slot back to Auto.
 
 Edits are shared with the group's Buffeteria users. A paladin's own assignments are
 saved between sessions; assignments for other paladins stay with the current group.

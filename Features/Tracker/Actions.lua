@@ -127,6 +127,15 @@ function Actions.Next(now, warnSec)
 		end
 	end
 
+	-- My assigned aura: a self-cast toggle, so it never needs a target.
+	local aura = ns.Scan.MissingAura()
+	if aura and (pendingUntil[me .. ":" .. aura] or 0) <= now then
+		local spell, icon = spellFor(bless[aura].ids)
+		if spell then
+			add({ spell = spell, icon = icon, unit = "player", who = me, key = aura, status = "bad", big = true, label = "Aura" })
+		end
+	end
+
 	table.sort(cands, function(a, b)
 		if a.status ~= b.status then return a.status == "bad" end
 		if a.big ~= b.big then return a.big end

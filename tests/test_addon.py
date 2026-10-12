@@ -212,7 +212,7 @@ class AddonTests(unittest.TestCase):
             local tab = findWidget('Paladins')
             assert(tab:IsVisible())
             tab:GetScript('OnClick')(tab)
-            local heading = findWidget('Class blessing assignments')
+            local heading = findWidget('Blessings and auras')
             assert(heading:IsVisible())
             local columns = heading.parent.columns
             assert(#columns == 2 and columns[1].paladin == 'A-Realm' and columns[2].paladin == 'B-Realm')
@@ -256,7 +256,7 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             ns.Options.Toggle()
             local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
-            local panel = findWidget('Class blessing assignments').parent
+            local panel = findWidget('Blessings and auras').parent
             local function shownSeats()
                 local n = 0
                 for _, seat in ipairs(panel.seats) do if seat:IsShown() then n = n + 1 end end
@@ -316,7 +316,7 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             ns.Options.Toggle()
             local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
-            local panel = findWidget('Class blessing assignments').parent
+            local panel = findWidget('Blessings and auras').parent
             ns.roster.members['A-Realm'].caps = {WISDOM=true}
             ns.roster.members['B-Realm'].hasAddon = false
             ns.Events.Emit('AssignmentsChanged')
@@ -578,6 +578,109 @@ class AddonTests(unittest.TestCase):
             assert(ns.Scan.UnwantedOnMe() == '25290')
         """)
 
+
+    def test_auras_are_unique_prioritized_and_respect_manual_picks(self):
+        self.solver("""
+            local base = {DEVO=true, RETRI=true, FIRERES=true, FROSTRES=true, SHADOWRES=true}
+            local function with(extra) local c = {} for k in pairs(base) do c[k] = true end; c[extra] = true; return c end
+            local roster = {members={Holy=member('PALADIN', with('CONC')), Ret=member('PALADIN', with('SANCTITY')),
+                Prot=member('PALADIN', base), Rogue=member('ROGUE')}}
+            local r = ns.Solver.Solve(roster)
+            -- Talented auras land on the paladins who have them; Devotion goes to the other.
+            assert(r.auras.Prot == 'DEVO' and r.auras.Holy == 'CONC' and r.auras.Ret == 'SANCTITY')
+            assert(r.auras.Rogue == nil)
+            roster.paladinAuras = {Prot='FIRERES', Holy='NONE'}
+            r = ns.Solver.Solve(roster)
+            assert(r.auras.Prot == 'FIRERES' and r.auras.Holy == nil and r.auras.Ret == 'DEVO')
+            -- An unknown manual aura falls back to Auto.
+            roster.paladinAuras = {Prot='CONC'}
+            r = ns.Solver.Solve(roster)
+            assert(r.auras.Prot == 'DEVO' and r.auras.Holy == 'CONC')
+        """)
+
+    def test_aura_slot_syncs_persists_and_stays_unique(self):
+        lua = self.plan_runtime()
+        lua.execute("""
+            ns.roster.members['A-Realm'].caps.DEVO = true; ns.roster.members['B-Realm'].caps.DEVO = true
+            ns.Paladins.Set('A-Realm', 'AURA', 'DEVO')
+            assert(ns.db.paladinBlessings.AURA == 'DEVO')
+            assert(sent[#sent]:match('^P|2|A%-Realm|10|DEVO|'))
+            ns.Paladins.Set('A-Realm', 'AURA', 'KINGS') -- blessings are not auras
+            ns.Paladins.Set('A-Realm', 'ROGUE', 'DEVO') -- auras are not blessings
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'DEVO' and ns.Paladins.Get('A-Realm', 'ROGUE') == 'AUTO')
+            ns.Paladins.Set('B-Realm', 'AURA', 'DEVO')
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'NONE' and ns.Paladins.Get('B-Realm', 'AURA') == 'DEVO')
+            ns.Paladins.Set('C-Realm', 'AURA', 'SANCTITY')
+            local blessings, auras = ns.Paladins.Assignments(ns.roster)
+            assert(auras['C-Realm'] == 'SANCTITY' and auras['B-Realm'] == 'DEVO' and blessings.AURA == nil)
+            assert(ns.roster.members['C-Realm'].caps.SANCTITY)
+            ns.Paladins.Receive('B-Realm', 'A-Realm', '10', 'RETRI', '9999', 'B-Realm')
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'RETRI')
+            ns.Paladins.Receive('B-Realm', 'A-Realm', '10', 'MIGHT', '99999', 'B-Realm')
+            ns.Paladins.Receive('B-Realm', 'A-Realm', '11', 'DEVO', '99999', 'B-Realm')
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'RETRI')
+            ns.Paladins.cells = {}; ns.Paladins.Init()
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'RETRI')
+        """)
+
+    def test_auto_fill_and_clear_from_the_paladins_tab(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.Options.Toggle()
+            local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
+            local panel = findWidget('Blessings and auras').parent
+            -- B has no add-on, so only baseline auras are assumed: it gets Devotion,
+            -- and A takes Concentration, which only A knows.
+            assert(ns.result.auras['B-Realm'] == 'DEVO' and ns.result.auras['A-Realm'] == 'CONC')
+            local aura = panel.columns[1].aura
+            assert(aura.state == 'green' and panel.columns[1].note:GetText():find('Concentration Aura'))
+            ns.Paladins.Set('A-Realm', 'ROGUE', 'NONE'); runTimers()
+            panel.fill:GetScript('OnClick')(panel.fill); runTimers()
+            for _, class in ipairs(ns.Buffs.CLASS_KEYS) do
+                local b = ns.Paladins.Get('B-Realm', class)
+                assert(b ~= 'AUTO' and ns.Buffs.byKey[b].kind == 'blessing')
+            end
+            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'NONE') -- manual picks stay
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'CONC' and ns.Paladins.Get('B-Realm', 'AURA') == 'DEVO')
+            assert(aura.state == 'gold' and panel.columns[1].rows.WARRIOR.state == 'gold')
+            local wire = false
+            for _, msg in ipairs(delivered) do if msg:match('^P|2|B%-Realm|10|DEVO|') then wire = true end end
+            assert(wire)
+            -- Cycling the aura button skips auras the paladin can't cast.
+            aura:GetScript('OnClick')(aura, 'LeftButton'); runTimers()
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'SANCTITY')
+            aura:GetScript('OnEnter')(aura)
+            assert(GameTooltip:GetText() == 'A - Aura')
+            panel.clear:GetScript('OnClick')(panel.clear); runTimers()
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'AUTO' and ns.Paladins.Get('A-Realm', 'ROGUE') == 'AUTO')
+            assert(ns.Paladins.Get('B-Realm', 'WARRIOR') == 'AUTO')
+            local announced = table.concat(ns.Assignments.Lines(false), ' ; ')
+            assert(announced:find('Concentration Aura') and announced:find('Devotion Aura'))
+        """)
+
+    def test_tracker_turns_on_my_missing_aura(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.db.showTracker = true
+            ns.Tracker.Refresh()
+            local summary = ns.Tracker.Summary()
+            assert(summary.perKey.CONC.bad == 1 and summary.overall == 'bad')
+            local button = Buffeteria_CastButton
+            -- Highest known rank of Concentration Aura, cast on myself.
+            assert(button:GetAttribute('spell') == '19746' and button:GetAttribute('unit') == 'player')
+            -- Another paladin's Concentration Aura is not mine.
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='party1'} end
+            end
+            assert(ns.Scan.MissingAura() == 'CONC')
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='player'} end
+            end
+            assert(ns.Scan.MissingAura() == nil)
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.CONC.bad == 0)
+            assert(button:GetAttribute('spell') ~= '19746')
+        """)
 
 if __name__ == "__main__":
     unittest.main()

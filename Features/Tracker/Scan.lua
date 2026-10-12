@@ -20,8 +20,8 @@ local function auraAt(unit, i)
 	if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
 		return C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
 	end
-	local name, _, _, _, _, exp = UnitBuff(unit, i)
-	if name then return { name = name, expirationTime = exp } end
+	local name, _, _, _, _, exp, source = UnitBuff(unit, i)
+	if name then return { name = name, expirationTime = exp, sourceUnit = source } end
 end
 
 -- Returns a key -> {exp,name} map, or nil if the client hides aura data right now.
@@ -98,11 +98,39 @@ function Scan.Update()
 			end
 		end
 	end
+	-- My own assigned aura.
+	local me = ns.WoW.FullName("player")
+	local aura = (res.auras or {})[me]
+	if aura and roster.members[me] and not roster.members[me].dead then
+		summary.any = true
+		local missing = Scan.MissingAura() and 1 or 0
+		summary.perKey[aura] = { bad = missing, warn = 0, total = 1 }
+		if missing > 0 then
+			table.insert(summary.problems, { who = me, key = aura, status = "bad" })
+			summary.overall = "bad"
+		end
+	end
 	if not summary.any then summary.overall = "idle" end
 	table.sort(summary.problems, ns.Status.CompareProblems)
 	summary.next = ns.Actions.Next(now, warnSec)
 	summary.cancel = Scan.UnwantedOnMe()
 	return summary
+end
+
+-- My assigned aura when I am not running it, or nil (none assigned, or auras hidden).
+function Scan.MissingAura()
+	local me = ns.WoW.FullName("player")
+	local key = ((ns.result or {}).auras or {})[me]
+	if not key then return nil end
+	if not next(nameToKey) then buildNameMap() end
+	for i = 1, 40 do
+		local ok, a = pcall(auraAt, "player", i)
+		if not ok or (a and (isSecret(a.name) or isSecret(a.sourceUnit))) then return nil end
+		if not a then break end
+		-- Another paladin's copy of the same aura doesn't count as mine.
+		if nameToKey[a.name] == key and (a.sourceUnit == nil or a.sourceUnit == "player") then return nil end
+	end
+	return key
 end
 
 -- An excluded blessing sitting on me -> the aura name to cancel.

@@ -32,11 +32,14 @@ function ns.Assignments.Lines(withColor)
 			table.insert(perPal[p][b], ns.WoW.ClassName(class))
 		end
 	end
+	for p in pairs(r.auras or {}) do perPal[p] = perPal[p] or {} end
 	local pals = {}
 	for p in pairs(perPal) do pals[#pals + 1] = p end
 	table.sort(pals)
 	for _, p in ipairs(pals) do
 		local parts = {}
+		local aura = (r.auras or {})[p]
+		if aura then parts[1] = Buffs.byKey[aura].label end
 		local bs = {}
 		for b in pairs(perPal[p]) do bs[#bs + 1] = b end
 		table.sort(bs)

@@ -1,4 +1,5 @@
--- Talent-panel class plan editor; one talent tree for every paladin in the roster.
+-- Talent-panel paladin plan editor; one talent tree for every paladin in the roster,
+-- with their aura in the header and a class blessing per talent button.
 local _, ns = ...
 local Buffs = ns.Buffs
 local View = {}
@@ -10,21 +11,23 @@ local MAX_VISIBLE, GAP, EDGE, BOARD_H, MIN_COLUMN, CELL = 3, 2, 8, 360, 196, 68
 local SPEC_ICONS = { "Interface\\Icons\\Spell_Holy_HolyBolt", "Interface\\Icons\\Spell_Holy_DevotionAura",
 	"Interface\\Icons\\Spell_Holy_AuraOfLight" }
 local columnWidth, contentWidth, scrollOffset, paladinCount = MIN_COLUMN, 0, 0, 0
+local AURA = ns.Paladins.AURA
 
-local function cycle(column, class, mouseButton)
+-- slot is a class, or AURA for the paladin's own aura.
+local function cycle(column, slot, mouseButton)
 	local name = column.paladin
 	local member = name and ns.roster.members[name]
 	if not member or member.class ~= "PALADIN" then return end
 	local choices = { "AUTO" }
 	local caps = member.caps or {}
-	for _, key in ipairs(Buffs.BLESSING_KEYS) do
+	for _, key in ipairs(slot == AURA and Buffs.AURA_KEYS or Buffs.BLESSING_KEYS) do
 		if not member.hasAddon or caps[key] or caps["g" .. key] then choices[#choices + 1] = key end
 	end
 	choices[#choices + 1] = "NONE"
-	local current, index = ns.Paladins.Get(name, class), 1
+	local current, index = ns.Paladins.Get(name, slot), 1
 	for i, key in ipairs(choices) do if key == current then index = i; break end end
 	local delta = mouseButton == "RightButton" and -1 or 1
-	ns.Paladins.Set(name, class, choices[((index - 1 + delta) % #choices) + 1])
+	ns.Paladins.Set(name, slot, choices[((index - 1 + delta) % #choices) + 1])
 end
 
 local function tooltip(button)
@@ -32,14 +35,17 @@ local function tooltip(button)
 	local name = column.paladin
 	if not name or not ns.roster.members[name] then return end
 	GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-	GameTooltip:SetText(ns.WoW.Short(name) .. " - " .. ns.WoW.ClassName(class))
+	local aura = class == AURA
+	local thing = aura and "aura" or "blessing"
+	GameTooltip:SetText(ns.WoW.Short(name) .. " - " .. (aura and "Aura" or ns.WoW.ClassName(class)))
 	GameTooltip:AddLine(button.detail, 1, 0.82, 0)
-	if button.duplicate then GameTooltip:AddLine("Another paladin already has this blessing assigned.", 1, 0.35, 0.2, true) end
+	if button.duplicate then GameTooltip:AddLine("Another paladin already has this " .. thing .. " assigned.", 1, 0.35, 0.2, true) end
 	if not ns.roster.members[name].hasAddon then
-		GameTooltip:AddLine("Without Buffeteria: choose blessings this paladin can cast.", 0.8, 0.8, 0.8, true)
+		GameTooltip:AddLine("Without Buffeteria: choose " .. thing .. "s this paladin can cast.", 0.8, 0.8, 0.8, true)
 	end
-	GameTooltip:AddLine("Left-click: next blessing. Right-click: previous.", 1, 1, 1, true)
-	GameTooltip:AddLine("Auto follows the class plan. None leaves this class unassigned.", 0.8, 0.8, 0.8, true)
+	GameTooltip:AddLine("Left-click: next " .. thing .. ". Right-click: previous.", 1, 1, 1, true)
+	GameTooltip:AddLine(aura and "Auto picks a different aura for every paladin. None runs no aura."
+		or "Auto follows the class plan. None leaves this class unassigned.", 0.8, 0.8, 0.8, true)
 	GameTooltip:Show()
 end
 
@@ -59,6 +65,16 @@ local function createColumn()
 		row:SetScript("OnEnter", tooltip); row:SetScript("OnLeave", GameTooltip_Hide)
 		column.rows[class] = row
 	end
+	-- The paladin's aura sits in the tree header, right of the name.
+	local aura = ns.UI.TalentButton(column.header)
+	aura.column, aura.class = column, AURA
+	aura:SetPoint("TOPRIGHT", -14, -14)
+	aura:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	aura:SetScript("OnClick", function(_, mouseButton) cycle(column, AURA, mouseButton) end)
+	aura:SetScript("OnEnter", tooltip); aura:SetScript("OnLeave", GameTooltip_Hide)
+	column.title:SetPoint("RIGHT", aura, "LEFT", -6, 0)
+	column.note:SetPoint("RIGHT", aura, "LEFT", -6, 0)
+	column.aura = aura
 	return column
 end
 
@@ -125,23 +141,35 @@ function View.Refresh()
 		column.paladin = name; column:Show()
 		column:SetArt(ns.UI.TREE_ART.PALADIN[spec])
 		local covered = 0
+		local function show(row, key, buff, duplicate)
+			row.duplicate = duplicate
+			row.detail = key == "AUTO" and ("Auto: " .. (buff and buff.label or "none"))
+				or (key == "NONE" and "None" or Buffs.byKey[key].label)
+			if duplicate then row.detail = row.detail .. " (duplicate)" end
+			local state = duplicate and "red" or not buff and "grey" or key == "AUTO" and "green" or "gold"
+			row:SetState(state, buff and ns.UI.BuffIcon(buff.key) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			return state
+		end
 		for class, row in pairs(column.rows) do
 			local key = ns.Paladins.Get(name, class)
 			local resolved = ((ns.result.pally or {})[class] or {})[name]
 			local buff = Buffs.byKey[key == "AUTO" and resolved or key]
 			if buff then covered = covered + 1 end
-			row.duplicate = Buffs.byKey[key] and (((ns.roster.paladinAssignments or {})[class] or {})[name] == "NONE")
-			row.detail = key == "AUTO" and ("Auto: " .. (buff and buff.label or "none"))
-				or (key == "NONE" and "None" or Buffs.byKey[key].label)
-			if row.duplicate then row.detail = row.detail .. " (duplicate)" end
-			local state = row.duplicate and "red" or not buff and "grey" or key == "AUTO" and "green" or "gold"
-			row:SetState(state, buff and ns.UI.BuffIcon(buff.key) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			local state = show(row, key, buff,
+				Buffs.byKey[key] and (((ns.roster.paladinAssignments or {})[class] or {})[name] == "NONE"))
 			local color = ns.UI.SLOT_COLORS[state]
 			row.assignment:SetText(buff and buff.label or (key == "NONE" and "None" or "Auto"))
 			row.assignment:SetTextColor(color[1], color[2], color[3])
 		end
+		local auraKey = ns.Paladins.Get(name, AURA)
+		local aura = Buffs.byKey[auraKey == "AUTO" and (ns.result.auras or {})[name] or auraKey]
+		local auraState = show(column.aura, auraKey, aura,
+			Buffs.byKey[auraKey] and (ns.roster.paladinAuras or {})[name] == "NONE")
+		local color = ns.UI.SLOT_COLORS[auraState]
+		local auraText = ("|cff%02x%02x%02x%s|r"):format(color[1] * 255, color[2] * 255, color[3] * 255,
+			aura and aura.label or (auraKey == "NONE" and "No aura" or "Aura: Auto"))
 		column:SetHeader(SPEC_ICONS[spec], ns.WoW.ClassColorName(name, "PALADIN"),
-			member.hasAddon and "Buffeteria connected" or "Without Buffeteria", covered)
+			auraText .. (member.hasAddon and "" or " |cff808080(no add-on)|r"), covered)
 	end
 	for i = paladinCount + 1, #columns do columns[i].paladin = nil; columns[i]:Hide() end
 	seats[1] = seats[1] or createSeat()
@@ -152,8 +180,27 @@ end
 function View.Create(parent)
 	panel = CreateFrame("Frame", nil, parent)
 	panel:SetPoint("TOPLEFT", 0, -34); panel:SetPoint("BOTTOMRIGHT")
-	band = ns.UI.Band(panel, "Class blessing assignments",
-		"One tree per paladin. Click a class blessing to cycle; right-click reverses.")
+	band = ns.UI.Band(panel, "Blessings and auras",
+		"One tree per paladin: aura top right, a blessing per class. Click cycles; right-click reverses.")
+	-- PallyPower-style shortcuts: lock in what Auto picked, or start over.
+	local function bandButton(label, width, anchor, tip, onClick)
+		local button = CreateFrame("Button", nil, band, "UIPanelButtonTemplate")
+		button:SetSize(width, 22); button:SetPoint("RIGHT", anchor, "LEFT", -8, 0)
+		button:SetText(label)
+		button:SetScript("OnClick", onClick)
+		button:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:SetText(label)
+			GameTooltip:AddLine(tip, 1, 1, 1, true); GameTooltip:Show()
+		end)
+		button:SetScript("OnLeave", GameTooltip_Hide)
+		return button
+	end
+	local clear = bandButton("Clear", 64, band.countLabel,
+		"Set every blessing and aura back to Auto.", function() ns.Paladins.Clear() end)
+	local fill = bandButton("Auto-fill", 84, clear,
+		"Fill every Auto blessing and aura with Buffeteria's pick and share it with the group. Your manual choices stay.",
+		function() ns.Paladins.Fill() end)
+	band.help:SetPoint("RIGHT", fill, "LEFT", -8, 0)
 	viewport = CreateFrame("ScrollFrame", nil, panel)
 	viewport:SetPoint("TOPLEFT", EDGE, -48)
 	canvas = CreateFrame("Frame", nil, viewport)
@@ -184,5 +231,6 @@ function View.Create(parent)
 	priority:SetText("Personal overrides take priority. Your own tree is saved.")
 	ns.UI.AnnounceButton(panel)
 	panel.columns, panel.seats, panel.viewport, panel.scrollbar = columns, seats, viewport, scrollbar
+	panel.fill, panel.clear = fill, clear
 	return panel
 end

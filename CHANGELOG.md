@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Paladin auras, PallyPower style: each paladin's tree has an aura button in its header. Auto gives every paladin a different aura (Devotion, Concentration, Sanctity, Retribution, then resistances), preferring talented auras for the paladins who have them. Aura choices are shared with the group and included in announcements, the Kitchen, and the tracker, which reminds you to turn on your assigned aura.
+- The Paladins tab now plans every class, including classes not currently in the group (from their class defaults), so all blessing buttons are filled in.
+- Added **Auto-fill** (turns every Auto blessing and aura into Buffeteria's current pick and shares it) and **Clear** (back to Auto) to the Paladins tab.
 - Restyled `/buff` to match the game's Talents panel: a portrait window, top tabs, a header band with a paladin counter, and talent trees with class artwork. Blessings and wanted buffs use talent buttons (gold assigned, green auto, grey off). The Paladins tab always shows three trees and scrolls when more paladins join.
 - Rebuilt the Paladins panel with talent-style backgrounds, gold borders, and one column per group paladin. The window grows with the roster and scrolls horizontally for larger groups.
 - Updated the options window to Forever's translucent Edit Mode panel style and the tracker selection to native blue/gold nine-slice artwork.

@@ -25,12 +25,26 @@ Buffs.BLESSINGS = {
 }
 Buffs.BLESSING_REAGENT = 21177 -- Symbol of Kings
 
+-- Paladin auras, in auto-assignment priority. Each paladin runs one; no two share one.
+Buffs.AURAS = {
+	{ key = "DEVO",      label = "Devotion Aura",          ids = {465,10290,643,10291,1032,10292,10293} },
+	{ key = "CONC",      label = "Concentration Aura",     ids = {19746} },
+	{ key = "SANCTITY",  label = "Sanctity Aura",          ids = {20218} },
+	{ key = "RETRI",     label = "Retribution Aura",       ids = {7294,10298,10299,10300,10301} },
+	{ key = "FIRERES",   label = "Fire Resistance Aura",   ids = {19891,19899,19900} },
+	{ key = "FROSTRES",  label = "Frost Resistance Aura",  ids = {19888,19897,19898} },
+	{ key = "SHADOWRES", label = "Shadow Resistance Aura", ids = {19876,19895,19896} },
+}
+
 Buffs.byKey = {}
 for _, b in ipairs(Buffs.GROUP_BUFFS) do b.kind = "group"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.BLESSINGS) do b.kind = "blessing"; Buffs.byKey[b.key] = b end
+for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey[b.key] = b end
 
 Buffs.BLESSING_KEYS = {}
 for _, b in ipairs(Buffs.BLESSINGS) do Buffs.BLESSING_KEYS[#Buffs.BLESSING_KEYS + 1] = b.key end
+Buffs.AURA_KEYS = {}
+for _, b in ipairs(Buffs.AURAS) do Buffs.AURA_KEYS[#Buffs.AURA_KEYS + 1] = b.key end
 
 Buffs.CLASS_KEYS = { "WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "PALADIN", "SHAMAN" }
 
@@ -56,7 +70,8 @@ end
 
 -- What we assume a player WITHOUT the add-on can cast (talents unknown, so be conservative).
 Buffs.ASSUMED_CAPS = {
-	PALADIN = { MIGHT = true, WISDOM = true, SALV = true, LIGHT = true },
+	PALADIN = { MIGHT = true, WISDOM = true, SALV = true, LIGHT = true,
+		DEVO = true, RETRI = true, FIRERES = true, FROSTRES = true, SHADOWRES = true },
 	PRIEST  = { FORT = true, SHADOW = true },
 	DRUID   = { MOTW = true },
 	MAGE    = { INT = true },

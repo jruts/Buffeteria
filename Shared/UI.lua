@@ -25,7 +25,7 @@ local ART_W, ART_H = 296, 332
 function UI.BuffIcon(key)
 	if not icons[key] then
 		local buff = ns.Buffs.byKey[key]
-		icons[key] = ns.WoW.SpellIcon(buff.groupIds[1]) or ns.WoW.SpellIcon(buff.ids[1]) or 134400
+		icons[key] = (buff.groupIds[1] and ns.WoW.SpellIcon(buff.groupIds[1])) or ns.WoW.SpellIcon(buff.ids[1]) or 134400
 	end
 	return icons[key]
 end

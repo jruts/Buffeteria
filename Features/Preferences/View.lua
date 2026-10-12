@@ -96,7 +96,7 @@ local function setMenuRow(i, entry)
 	row:Show()
 end
 
--- The whole group's plan: every paladin's blessings, then every group-buff caster.
+-- The whole group's plan: every paladin's aura and blessings, then every group-buff caster.
 local function menuEntries()
 	local out, result = {}, ns.result or {}
 	out[#out + 1] = { heading = "Paladins" }
@@ -111,6 +111,9 @@ local function menuEntries()
 			end
 		end
 	end
+	for paladin in pairs(result.auras or {}) do
+		if not stations[paladin] then stations[paladin] = {}; paladins[#paladins + 1] = paladin end
+	end
 	table.sort(paladins)
 	for _, paladin in ipairs(paladins) do
 		local dishes = {}
@@ -118,7 +121,9 @@ local function menuEntries()
 			local count = stations[paladin][key]
 			if count then dishes[#dishes + 1] = ns.UI.InlineIcon(blessingIcon(key), 13) .. count end
 		end
-		out[#out + 1] = { left = ns.UI.MemberName(paladin), right = table.concat(dishes, " ") }
+		-- The row's icon is the aura that paladin runs.
+		local aura = (result.auras or {})[paladin]
+		out[#out + 1] = { icon = aura and blessingIcon(aura), left = ns.UI.MemberName(paladin), right = table.concat(dishes, " ") }
 	end
 	if #out == before then out[#out + 1] = { left = GREY .. "No paladins cooking.|r" } end
 	out[#out + 1] = { heading = "Group buffs" }

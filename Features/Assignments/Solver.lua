@@ -12,11 +12,14 @@ ns.Solver = Solver
 		wants = { FORT=bool, ... },
 		ranking = { "KINGS", "MIGHT", ... }, excluded = { SALV=true },
 		blessingsOverride = bool, -- explicitly use my ranking over the class plan
-		caps = { KINGS=true, gKINGS=true, FORT=true, gFORT=true, ... },
+		caps = { KINGS=true, gKINGS=true, FORT=true, gFORT=true, DEVO=true, ... },
 	} }
+	paladinAssignments = { [class] = { [paladin] = blessingKey | "NONE" } }
+	paladinAuras = { [paladin] = auraKey | "NONE" }
 Output:
 	pally[class][paladin] = blessingKey
 	home[paladin] = blessingKey
+	auras[paladin] = auraKey
 	overrides[member][paladin] = blessingKey | false  (false = nothing suitable)
 	groups[buffKey][groupNum] = caster
 	expected[member][buffKey] = caster   (what the tracker checks)
@@ -88,12 +91,25 @@ local function solvePaladins(roster, names, out)
 	out.home = home
 
 	-- 3) Per class: top-N blessings, matched to paladins (Kuhn's algorithm, home paladin first).
+	-- Every class gets a plan, like PallyPower: classes not in the group are planned
+	-- from their defaults, so whoever joins is already covered.
+	local classes, planned = {}, {}
+	for _, class in ipairs(Buffs.CLASS_KEYS) do classes[#classes + 1] = class; planned[class] = true end
 	for _, class in ipairs(sortedKeys(byClass)) do
-		local members = byClass[class]
+		if not planned[class] then classes[#classes + 1] = class end
+	end
+	for _, class in ipairs(classes) do
+		local members = byClass[class] or {}
+		local voters = {}
+		for _, n in ipairs(members) do voters[#voters + 1] = roster.members[n] end
+		if #voters == 0 then
+			local ranking, excluded = Buffs.SplitOrder(Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR)
+			voters[1] = { ranking = ranking, excluded = excluded }
+		end
 		local score = {}
 		for _, b in ipairs(Buffs.BLESSING_KEYS) do
 			score[b] = 0
-			for _, n in ipairs(members) do score[b] = score[b] + blessingPoints(roster.members[n], b) end
+			for _, m in ipairs(voters) do score[b] = score[b] + blessingPoints(m, b) end
 		end
 		local order = {}
 		for _, b in ipairs(Buffs.BLESSING_KEYS) do if score[b] > 0 then order[#order + 1] = b end end
@@ -213,6 +229,50 @@ local function solvePaladins(roster, names, out)
 	end
 end
 
+-- One aura per paladin, no aura twice. Manual picks stay; the rest follow the
+-- catalog's priority, with paladins who know the fewest auras served first so
+-- talented auras (Concentration, Sanctity) land on the paladins who have them.
+local function solveAuras(roster, names, out)
+	local paladins = {}
+	for _, n in ipairs(names) do
+		if roster.members[n].class == "PALADIN" then paladins[#paladins + 1] = n end
+	end
+	local function knows(p, a) return (roster.members[p].caps or {})[a] end
+	local known = {}
+	for _, p in ipairs(paladins) do
+		known[p] = 0
+		for _, a in ipairs(Buffs.AURA_KEYS) do if knows(p, a) then known[p] = known[p] + 1 end end
+	end
+	table.sort(paladins, function(x, y)
+		if known[x] ~= known[y] then return known[x] < known[y] end
+		return x < y
+	end)
+	local manual, a2p, p2a, fixed = roster.paladinAuras or {}, {}, {}, {}
+	for _, p in ipairs(paladins) do
+		local a = manual[p]
+		if a == "NONE" then fixed[p] = true
+		elseif a and knows(p, a) and not a2p[a] then
+			fixed[p] = true; p2a[p] = a; a2p[a] = p
+		end
+	end
+	local function augment(a, visited)
+		for _, p in ipairs(paladins) do
+			if not fixed[p] and not visited[p] and knows(p, a) then
+				visited[p] = true
+				if not p2a[p] or augment(p2a[p], visited) then
+					p2a[p] = a; a2p[a] = p
+					return true
+				end
+			end
+		end
+		return false
+	end
+	for _, a in ipairs(Buffs.AURA_KEYS) do
+		if not a2p[a] then augment(a, {}) end
+	end
+	out.auras = p2a
+end
+
 local function solveGroupBuffs(roster, names, out)
 	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
 		local casters, groupsWanting = {}, {}
@@ -240,10 +300,11 @@ local function solveGroupBuffs(roster, names, out)
 end
 
 function Solver.Solve(roster)
-	local out = { pally = {}, home = {}, overrides = {}, groups = {}, expected = {} }
+	local out = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, expected = {} }
 	local names = sortedKeys(roster.members)
 	for _, n in ipairs(names) do out.expected[n] = {} end
 	solvePaladins(roster, names, out)
+	solveAuras(roster, names, out)
 	solveGroupBuffs(roster, names, out)
 	return out
 end

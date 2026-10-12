@@ -8,7 +8,7 @@ function ns.Roster.Capabilities()
 	local caps = {}
 	local _, class = UnitClass("player")
 	for _, b in pairs(Buffs.byKey) do
-		if b.kind ~= "blessing" or class == "PALADIN" then
+		if b.kind == "group" or class == "PALADIN" then
 			if ns.WoW.KnowsAny(b.ids) then caps[b.key] = true end
 			if ns.WoW.KnowsAny(b.groupIds) then caps["g" .. b.key] = true end
 		end
@@ -66,6 +66,6 @@ function ns.Roster.Build()
 		roster.units[full] = unit
 	end)
 	ns.Paladins.Prune(roster)
-	roster.paladinAssignments = ns.Paladins.Assignments(roster)
+	roster.paladinAssignments, roster.paladinAuras = ns.Paladins.Assignments(roster)
 	return roster
 end
