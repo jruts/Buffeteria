@@ -23,10 +23,10 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   Brilliance) but one cast per player without it, so the work evens out. On a tie, a
   caster keeps their own group, where they are in range. Everyone should update
   together: copies that split groups differently disagree on who buffs which group.
-- **Personal exclusions.** In **Use my ranking**, drag Salvation below
-  **Excluded from my ranking** to avoid it while tanking. **Follow class plan**
-  uses the shared plan, including manual assignments; exclusions belong to your
-  personal ranking.
+- **Personal exclusions.** With **Use my own order** ticked, drag Salvation
+  below **Don't want** to avoid it while tanking. With it off, you get your
+  class's blessings from the shared plan, including manual assignments;
+  exclusions belong to your own order.
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
   same preferences. Players without the add-on get sensible class defaults.
 
@@ -133,13 +133,16 @@ Use **Announce to group** to communicate the plan to players without the addon.
 Buffeteria cannot provide a cast button on a client that doesn't have it installed.
 
 An explicit personal blessing preference takes priority over this class plan.
-The Blessings panel has two explicit modes, **Follow class plan** and
-**Use my ranking**, each showing the blessings it would select. Hover either for
-the corresponding casters. Dragging the ranking selects Use my ranking visibly;
-switch back to Follow class plan to keep your ranking without applying it.
-Checkmarks identify blessings actually assigned to you. A gold cutoff appears
-only when assignments form a contiguous prefix of your personal ranking; it is
-computed from the plan, not from paladin count alone.
+The Blessings panel has one checkbox, **Use my own order**. Off, you get the
+Greater Blessings planned for your class; your list is saved but greyed out and
+not used. On, you get the blessings at the top of your list. The line under the
+checkbox names the blessings you get; hover it for the casters. Dragging the list
+ticks the checkbox; untick it to keep your order without applying it. A note under
+the list explains the current state in plain words.
+Checkmarks identify blessings actually cast on you; hover a row to see who casts
+it, or why nobody does. A gold **You get the top N** line appears only when
+assignments form a contiguous prefix of your personal ranking; it is computed
+from the plan, not from paladin count alone.
 Players without Buffeteria, and users who haven't enabled a personal override, follow
 the Paladins tab. When no manual assignment is set, class defaults apply.
 

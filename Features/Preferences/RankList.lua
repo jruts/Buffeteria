@@ -22,7 +22,7 @@ local function paintRow(r, key, rank, below, mine)
 		-- A heading for the blessings below it, not a row of its own.
 		r.rank:SetText(""); r.served:SetText("")
 		r.text:SetPoint("LEFT", 4, -2)
-		r.text:SetText(RED .. "Excluded from my ranking|r")
+		r.text:SetText(RED .. "Don't want|r")
 		r.bg:SetColorTexture(0, 0, 0, 0)
 		r.accent:SetColorTexture(0, 0, 0, 0)
 		return
@@ -92,7 +92,7 @@ local function refreshRows()
 	if prefix > 0 then
 		-- Centered in the gap below the last assigned row.
 		cutoff:ClearAllPoints(); cutoff:SetPoint("TOPLEFT", 0, -prefix * ROW_H + ROW_H - ROW)
-		cutoff.label:SetText(assigned .. (assigned == 1 and " blessing" or " blessings") .. " assigned now")
+		cutoff.label:SetText(assigned == 1 and "You get the top blessing" or ("You get the top " .. assigned))
 	end
 	return rank
 end
@@ -226,15 +226,37 @@ local function rowVisuals(r)
 	return r
 end
 
+-- Explains a row: who casts it on you, or why nobody does.
+local function rowTooltip(r, i)
+	local order = ns.Preferences.Order()
+	local key = order[i]
+	if key == "|" then return end
+	local below = false
+	for j = 1, i do if order[j] == "|" then below = true end end
+	local caster = served()[key]
+	GameTooltip:SetOwner(r, "ANCHOR_RIGHT"); GameTooltip:SetText(Buffs.byKey[key].label)
+	if caster then
+		GameTooltip:AddLine("Cast on you by " .. ns.Roster.Name(caster) .. ".", 1, 1, 1, true)
+	elseif below then
+		GameTooltip:AddLine("You don't want this blessing. Drag it up to rank it.", 1, 1, 1, true)
+	elseif ns.db.blessingsOverride then
+		GameTooltip:AddLine("Not cast on you: there aren't enough paladins for it.", 1, 1, 1, true)
+	else
+		GameTooltip:AddLine("Not in your class's blessings. Your list is used only with Use my own order.", 1, 1, 1, true)
+	end
+	GameTooltip:AddLine("Drag to reorder.", 0.65, 0.65, 0.65, true)
+	GameTooltip:Show()
+end
+
 local function createRow(i)
 	local r = rowVisuals(CreateFrame("Button", nil, list))
 	r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
 	r:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-	r:SetScript("OnEnter", function(self) if not dragging then setGrip(self, true) end end)
-	r:SetScript("OnLeave", function(self) setGrip(self, false) end)
+	r:SetScript("OnEnter", function(self) if not dragging then setGrip(self, true); rowTooltip(self, i) end end)
+	r:SetScript("OnLeave", function(self) setGrip(self, false); GameTooltip:Hide() end)
 	r:SetScript("OnMouseDown", function(self, button)
 		if button ~= "LeftButton" or dragging then return end
-		setGrip(self, false)
+		setGrip(self, false); GameTooltip:Hide()
 		startDrag(i)
 	end)
 	return r
@@ -261,7 +283,7 @@ function RankList.Create(parent, servedBy, movedCallback)
 	rows = {}
 	for i = 1, #Buffs.BLESSINGS + 1 do rows[i] = createRow(i) end
 	ghost = createGhost()
-	-- "N blessings assigned now": a gold label between two gold rules.
+	-- "You get the top N": a gold label between two gold rules.
 	cutoff = CreateFrame("Frame", nil, list)
 	cutoff:SetHeight(ROW_H - ROW)
 	cutoff.label = cutoff:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

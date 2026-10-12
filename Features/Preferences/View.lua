@@ -1,9 +1,9 @@
--- Personal preferences: explicit blessing modes, wanted buffs and tank role.
+-- Personal preferences: blessing order, wanted buffs and tank role.
 local _, ns = ...
 local UI, Buffs = ns.UI, ns.Buffs
 local View = {}
 ns.Preferences.View = View
-local panel, cards, list, modes, roles, wants, tankButtons, roleText, tankTip, note
+local panel, cards, list, own, ownText, roles, wants, tankButtons, roleText, tankTip, note
 local GREY = UI.COLOR.GREY
 local CARD_Y, CARD_H = -4, 560
 local cachedRoster, cachedOrder, outcomes
@@ -57,14 +57,16 @@ function View.Refresh()
 		cachedRoster, cachedOrder = ns.Assignments.roster, signature
 		outcomes = { ns.Preferences.BlessingOutcome(false), ns.Preferences.BlessingOutcome(true) }
 	end
-	for i, mode in ipairs(modes) do
-		mode:SetChecked((i == 2) == ns.db.blessingsOverride)
-		mode.selection:SetShown(mode:GetChecked())
-		mode.result:SetText(modeResult(outcomes[i]))
-	end
+	local on = ns.db.blessingsOverride
+	own:SetChecked(on)
+	ownText:SetText(on and ("On: you get " .. modeResult(outcomes[2]) .. " from your list.")
+		or ("Off: you get your class's blessings, " .. modeResult(outcomes[1]) .. "."))
 	list.Refresh()
-	note:SetText(ns.db.blessingsOverride and "Personal differences use single blessings."
-		or "Drag a blessing to switch to your own ranking.")
+	-- Greyed out while unused; dragging still switches it on.
+	list:SetAlpha(on and 1 or 0.45)
+	note:SetText(on
+		and "You get the blessings above the gold line, cast by the paladin named under each; a check mark means it is on you now. Blessings that differ from your class's Greater Blessing are cast on you as single blessings."
+		or "Your list is not used while Use my own order is off. Tick it, or drag a blessing, to use it.")
 	for _, row in pairs(wants) do
 		local buff = Buffs.byKey[row.key]
 		row:SetShown(visibleWant(buff, class))
@@ -96,11 +98,7 @@ function View.Layout(width)
 		local x = i == 1 and 12 or (i == 2 and 12 + first + gap or 12 + first + second + gap * 2)
 		cards[i]:ClearAllPoints(); cards[i]:SetPoint("TOPLEFT", x, CARD_Y); cards[i]:SetSize(size, CARD_H)
 	end
-	local modeWidth = math.floor((first - 28) / 2)
-	for i, mode in ipairs(modes) do
-		mode:ClearAllPoints(); mode:SetPoint("TOPLEFT", 10 + (i - 1) * (modeWidth + 8), -44)
-		mode:SetSize(modeWidth, 46); mode.result:SetWidth(modeWidth - 40)
-	end
+	ownText:SetWidth(first - 52)
 	list:SetRowWidth(first - 20); note:SetWidth(first - 24)
 	local row = 0
 	for _, buff in ipairs(Buffs.Wantable(ns.WoW.PlayerClass())) do
@@ -130,28 +128,22 @@ end
 function View.Create(host)
 	panel = host
 	cards = { UI.Card(panel, "Blessings"), UI.Card(panel, "Buffs"), UI.Card(panel, "Tank role") }
-	modes = {}
-	for i, label in ipairs({ "Follow class plan", "Use my ranking" }) do
-		local index, override = i, i == 2
-		local mode = UI.Chip(cards[1], label, 170, function() ns.Preferences.Set("blessingsOverride", override) end, "GameFontHighlight")
-		mode.caption:ClearAllPoints(); mode.caption:SetPoint("TOPLEFT", 30, -8)
-		local ring
-		ring, mode.selection = UI.RadioMark(mode, 16)
-		ring:SetPoint("TOPLEFT", 8, -8)
-		mode.result = hint(mode, 30, -26); mode.result:SetWordWrap(false)
-		mode:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:SetText(label)
-			for _, buff in ipairs(Buffs.BLESSINGS) do
-				local caster = outcomes and outcomes[index][buff.key]
-				if caster then GameTooltip:AddDoubleLine(buff.label, ns.WoW.Short(caster), 1, 1, 1, 1, 0.82, 0) end
-			end
-			GameTooltip:AddLine(override and "Your ranking takes priority; differences use single blessings."
-				or "Use the Paladins class plan. Your saved ranking is kept.", 0.8, 0.8, 0.8, true)
-			GameTooltip:Show()
-		end)
-		mode:SetScript("OnLeave", GameTooltip_Hide); modes[i] = mode
-	end
-	hint(cards[1], 12, -102, nil, "Drag to reorder")
+	-- One checkbox: off follows your class's blessings, on uses the list below.
+	own = UI.Checkbox(cards[1], "Use my own order", 8, -40, function(on) ns.Preferences.Set("blessingsOverride", on) end)
+	own:SetScript("OnEnter", function(self)
+		local on = ns.db.blessingsOverride
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:SetText("Use my own order")
+		GameTooltip:AddLine("Off: you get the Greater Blessings the paladins planned for your class.", 1, 1, 1, true)
+		GameTooltip:AddLine("On: you get the blessings at the top of your list. Where they differ from your class's, a paladin casts a single blessing on you.", 1, 1, 1, true)
+		local result = outcomes and outcomes[on and 2 or 1] or {}
+		for _, buff in ipairs(Buffs.BLESSINGS) do
+			if result[buff.key] then GameTooltip:AddDoubleLine(buff.label, ns.WoW.Short(result[buff.key]), 1, 1, 1, 1, 0.82, 0) end
+		end
+		GameTooltip:Show()
+	end)
+	own:SetScript("OnLeave", GameTooltip_Hide)
+	ownText = hint(cards[1], 40, -68)
+	hint(cards[1], 12, -102, nil, "Most wanted at the top. Drag to reorder.")
 	list = ns.Preferences.RankList.Create(cards[1], served, function() ns.Preferences.Set("blessingsOverride", true) end)
 	list:SetPoint("TOPLEFT", 10, -120)
 	note = hint(cards[1], 12, -408)
@@ -181,5 +173,5 @@ function View.Create(host)
 	panel.roleHelp = hint(cards[3], 12, -CARD_H + 44, 180, "Auto follows your assigned Tank role or raid main-tank assignment.")
 	panel.wants, panel.tankButtons, panel.roles = wants, tankButtons, roles
 	panel.rankList, panel.rankRows, panel.rankGhost = list, list.rows, list.ghost
-	panel.modes = modes
+	panel.own = own
 end

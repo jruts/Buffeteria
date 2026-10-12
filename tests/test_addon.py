@@ -1557,9 +1557,11 @@ class AddonTests(unittest.TestCase):
             assert(heading:IsVisible() and Buffeteria_Prefs:IsShown())
             local mine = findWidget('My preferences').parent; mine:GetScript('OnClick')(mine)
             assert(not heading:IsVisible())
-            local override = findWidget('Use my ranking').parent
+            local override = findWidget('Use my own order').parent
+            override.GetChecked = function() return true end
             override:GetScript('OnClick')(override)
-            assert(ns.db.blessingsOverride)
+            assert(ns.db.blessingsOverride and override.checked)
+            assert(findWidget('Blessings').parent.parent.rankList:GetAlpha() == 1)
             -- Wanted buffs are talent buttons: gold when wanted, grey when not.
             local fort = findWidget('Blessings').parent.parent.wants.FORT
             local wanted = ns.db.wants.FORT and true or false
