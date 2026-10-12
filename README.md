@@ -105,7 +105,8 @@ Devotion, Concentration, Sanctity, Retribution, Fire, Frost and Shadow Resistanc
 Paladins that know the fewest auras choose first, so a Concentration or Sanctity
 talent goes to the paladin who has it. Without Buffeteria, a paladin is assumed to
 know only the untalented auras. The tracker reminds you when your assigned aura
-isn't running, and the big button turns it on.
+isn't running, and the big button turns it on. Another paladin's copy of the same
+aura on you counts as covered, because the game shows only one copy.
 
 **Lock in Auto picks** turns every resolved Auto blessing and aura into
 Buffeteria's current pick and shares it, so the plan stays put when people join or

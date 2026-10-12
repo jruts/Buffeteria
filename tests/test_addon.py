@@ -2819,11 +2819,15 @@ class AddonTests(unittest.TestCase):
             local button = Buffeteria_CastButton
             -- Highest known rank of Concentration Aura, cast on myself.
             assert(button:GetAttribute('spell') == '19746' and button:GetAttribute('*unit1') == 'player')
-            -- Another paladin's Concentration Aura is not mine.
+            -- Another paladin's Concentration Aura hides mine and covers the group.
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='party1'} end
             end
-            assert(ns.Tracker.Scan.MissingAura() == 'CONC')
+            assert(ns.Tracker.Scan.MissingAura() == nil)
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'player' and i == 1 then return {name='465', expirationTime=0, sourceUnit='party1'} end
+            end
+            assert(ns.Tracker.Scan.MissingAura() == 'CONC') -- a different aura doesn't count
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='player'} end
             end

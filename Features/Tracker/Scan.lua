@@ -184,15 +184,16 @@ function Scan.MissingFor(full, key, now)
 	return since and now - since or 0
 end
 
--- My assigned aura when I am not running it, or nil (none assigned, or auras hidden).
+-- My assigned aura when nobody's copy of it is on me, or nil (none assigned, or
+-- auras hidden). The client shows one copy of an aura, so when another paladin
+-- runs the same one, mine never appears; theirs covers the group either way.
 function Scan.MissingAura()
 	local key = ns.Assignments.Aura(ns.WoW.Me())
 	if not key then return nil end
 	local running = false
 	local readable = eachAura("player", function(a)
-		if isSecret(a.name) or isSecret(a.sourceUnit) then return false end
-		-- Another paladin's copy of the same aura doesn't count as mine.
-		if keyOf(a.name) == key and (a.sourceUnit == nil or a.sourceUnit == "player") then running = true end
+		if isSecret(a.name) then return false end
+		if keyOf(a.name) == key then running = true end
 	end)
 	if readable and not running then return key end
 end
