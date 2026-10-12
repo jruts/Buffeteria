@@ -5,6 +5,9 @@ manual-changelog:
   markup-type: markdown
 
 ignore:
+  - tools
+  - AGENTS.md
+  - CLAUDE.md
   - .github
   - tests
   - README.md

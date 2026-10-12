@@ -66,7 +66,7 @@ function Options.Refresh()
 end
 
 local function build()
-	win = CreateFrame("Frame", "Buffeteria_Prefs", UIParent, "PortraitFrameTemplate")
+	win = CreateFrame("Frame", ns.globalPrefix .. "_Prefs", UIParent, "PortraitFrameTemplate")
 	win:SetSize(WIDTH, HEIGHT)
 	win:SetPoint("CENTER")
 	win:SetMovable(true)
@@ -76,8 +76,8 @@ local function build()
 	win:SetScript("OnDragStart", win.StartMoving)
 	win:SetScript("OnDragStop", win.StopMovingOrSizing)
 	win:SetFrameStrata("DIALOG")
-	tinsert(UISpecialFrames, "Buffeteria_Prefs")
-	win:SetTitle("Buffeteria")
+	tinsert(UISpecialFrames, ns.globalPrefix .. "_Prefs")
+	win:SetTitle(ns.title)
 	win:SetPortraitToAsset(ns.UI.ICON)
 	win.CloseButton = win.CloseButton or CreateFrame("Button", nil, win, "UIPanelCloseButton")
 	win.CloseButton:SetScript("OnClick", function() win:Hide() end)
@@ -132,10 +132,10 @@ end
 function Options.RegisterSettings()
 	if not (Settings and Settings.RegisterCanvasLayoutCategory) then return end
 	panel = CreateFrame("Frame")
-	panel.name = "Buffeteria"
+	panel.name = ns.title
 	local title = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
 	title:SetPoint("TOPLEFT", 16, -16)
-	title:SetText("Buffeteria")
+	title:SetText(ns.title)
 	local sub = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
 	sub:SetText("The raid buff buffet. Unlimited refills.")
@@ -148,7 +148,7 @@ function Options.RegisterSettings()
 	panel:SetScript("OnSizeChanged", function()
 		if content and content:GetParent() == panel then layout() end
 	end)
-	local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, panel, "Buffeteria")
+	local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, panel, ns.title)
 	if ok and category then
 		Settings.RegisterAddOnCategory(category)
 		Options.category = category

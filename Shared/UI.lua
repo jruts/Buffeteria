@@ -1,6 +1,6 @@
 -- Controls and textures used by more than one feature.
 local _, ns = ...
-local UI = { ICON = "Interface\\AddOns\\Buffeteria\\Media\\Icon" }
+local UI = { ICON = ns.mediaPath .. "Icon" }
 ns.UI = UI
 local icons = {}
 

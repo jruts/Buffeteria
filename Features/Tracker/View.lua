@@ -104,9 +104,9 @@ end
 
 local function sizeCard()
 	local card = ns.UI.Card(panel, "Size", "Interface\\Icons\\INV_Misc_Spyglass_02")
-	sizeSlider, sizeValue = slider(card, "Buffeteria_IconSize", "Clickable head", -38, 32, 128, 4,
+	sizeSlider, sizeValue = slider(card, ns.globalPrefix .. "_IconSize", "Clickable head", -38, 32, 128, 4,
 		function(value) ns.db.iconSize = value end)
-	iconSizeSlider, iconSizeValue = slider(card, "Buffeteria_StatusIconSize", "Small icons", -86, 16, 64, 1,
+	iconSizeSlider, iconSizeValue = slider(card, ns.globalPrefix .. "_StatusIconSize", "Small icons", -86, 16, 64, 1,
 		function(value) ns.db.statusIconSize = value end)
 	ns.UI.Text(card, "GameFontDisableSmall", 14, -124, nil, "Head size applies after combat.")
 	return card

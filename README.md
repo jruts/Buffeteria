@@ -171,10 +171,40 @@ in [RELEASING.md](RELEASING.md).
 
 ## Development checks
 
+Local development installs as **Buffeteria-Dev**, alongside the published
+**Buffeteria** copy from CurseForge. Enable one version at a time in the game's
+AddOns menu to compare them. Live uses `/buff`; Dev uses `/buffdev` (or
+`/buffeteriadev`), with the same subcommands, such as `/buffdev preview` and
+`/buffdev settings`. Dev's Settings page and key bindings are labeled
+**Buffeteria-Dev**. Each version keeps its own character settings; Dev starts
+with defaults and does not change Live's preferences.
+
+After every workspace change, run:
+
+```text
+python tests/test_addon.py
+python tools/deploy_dev.py
+```
+
+The deployment command installs to
+`C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\Buffeteria-Dev`,
+backs up overwritten files under `.release/local-backups/`, and checks installed
+SHA-256 hashes. It leaves the published `Buffeteria` folder and saved variables
+untouched. The source TOC remains `Buffeteria.toc` for release packaging; deployment
+generates `Buffeteria-Dev.toc` and separate Dev bindings. Lua and artwork are copied
+unchanged. This does not publish a release or update CurseForge.
+
+Use `/reload` to load subsequent changes with Dev enabled. If the new Dev folder
+does not appear in the AddOns menu after the first install, restart the client.
+Dev uses the normal Buffeteria group messages so you can test it with release
+users; keep only one version enabled to avoid sending conflicting preferences.
+
 Run `python tests/test_addon.py` with `lupa` installed. The tests use Lua 5.1 and a
 mock WoW environment to check assignments, synchronization, saved data, editor
 navigation, tracker decisions, and startup in the manifest's actual load order
-for all nine classes. Layout and protected casting still need an in-game check.
+for all nine classes, plus Dev identity, separate settings, and deployment with
+backups and release-file preservation. Layout and protected casting still need
+an in-game check.
 
 ## Code organization
 

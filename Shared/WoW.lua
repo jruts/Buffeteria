@@ -3,7 +3,7 @@ local _, ns = ...
 ns.WoW = {}
 
 function ns.WoW.Print(msg)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffBuffeteria|r: " .. tostring(msg))
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff" .. ns.title .. "|r: " .. tostring(msg))
 end
 
 ------------------------------------------------------------------------

@@ -26,7 +26,7 @@ App:SetScript("OnEvent", function(_, event, arg1)
 		ns.Minimap.Init()
 		ns.Options.RegisterSettings()
 		ns.Assignments.Resolve()
-		ns.WoW.Print("open for business. /buff to pick your buffs.")
+		ns.WoW.Print("open for business. " .. ns.command .. " to pick your buffs.")
 	elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" or event == "SPELLS_CHANGED"
 		or event == "PLAYER_ROLES_ASSIGNED" or event == "ROLE_CHANGED_INFORM" then
 		ns.Comm.Announce()

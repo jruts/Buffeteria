@@ -14,9 +14,9 @@ local BORDER = 2
 local LABEL_HEIGHT = 12
 local SCREEN_MARGIN = 4
 local MOOD_TEXTURES = {
-	happy = "Interface\\AddOns\\Buffeteria\\Media\\OrcHappy",
-	grumpy = "Interface\\AddOns\\Buffeteria\\Media\\OrcGrumpy",
-	angry = "Interface\\AddOns\\Buffeteria\\Media\\OrcAngry",
+	happy = ns.mediaPath .. "OrcHappy",
+	grumpy = ns.mediaPath .. "OrcGrumpy",
+	angry = ns.mediaPath .. "OrcAngry",
 }
 local colorOf = ns.Status.Color
 local keyIcon = ns.UI.BuffIcon
@@ -28,7 +28,7 @@ end
 
 local function showTooltip(owner)
 	GameTooltip:SetOwner(owner, "ANCHOR_BOTTOMRIGHT")
-	GameTooltip:AddLine("Buffeteria" .. (ns.Preview.active and " |cffff9900(preview)|r" or ""))
+	GameTooltip:AddLine(ns.title .. (ns.Preview.active and " |cffff9900(preview)|r" or ""))
 	local s = lastSummary
 	if not s or not s.any then
 		GameTooltip:AddLine("Nothing on the menu yet.", 0.7, 0.7, 0.7)
@@ -95,14 +95,14 @@ local function startMoving()
 end
 
 local function build()
-	frame = CreateFrame("Frame", "Buffeteria_Tracker", UIParent)
+	frame = CreateFrame("Frame", ns.globalPrefix .. "_Tracker", UIParent)
 	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2 + LABEL_HEIGHT)
 	frame:SetPoint("CENTER", UIParent, "CENTER", 0, -180)
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 
 	-- The big secure cast button.
-	castBtn = CreateFrame("Button", "Buffeteria_CastButton", frame, "SecureActionButtonTemplate")
+	castBtn = CreateFrame("Button", ns.globalPrefix .. "_CastButton", frame, "SecureActionButtonTemplate")
 	castBtn:SetSize(MAIN, MAIN)
 	castBtn:SetPoint("TOPLEFT", BORDER, -BORDER)
 	castBtn:SetFrameLevel(frame:GetFrameLevel() + 2)
@@ -176,7 +176,7 @@ local function build()
 	frame.tag:Hide()
 
 	-- Secure "remove unwanted buff from me" button (e.g. Salvation on a tank), top-right corner.
-	cancelBtn = CreateFrame("Button", "Buffeteria_CancelButton", frame, "SecureActionButtonTemplate")
+	cancelBtn = CreateFrame("Button", ns.globalPrefix .. "_CancelButton", frame, "SecureActionButtonTemplate")
 	cancelBtn:SetSize(14, 14)
 	cancelBtn:SetPoint("CENTER", castBtn, "TOPRIGHT", -2, -2)
 	cancelBtn:SetFrameLevel(castBtn:GetFrameLevel() + 3)
@@ -412,7 +412,7 @@ local function buildEditOverlay()
 	o.label = o:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
 	-- The tracker is too narrow for the system name inside the selection.
 	o.label:SetPoint("BOTTOM", o, "TOP", 0, 10)
-	o.label:SetText("Buffeteria")
+	o.label:SetText(ns.title)
 	o:RegisterForDrag("LeftButton")
 	o:RegisterForClicks("LeftButtonUp")
 	o:SetScript("OnMouseDown", function(self) self.dragged = false end)

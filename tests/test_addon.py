@@ -1,16 +1,22 @@
 """Run with python tests/test_addon.py (requires lupa with its Lua 5.1 runtime)."""
 from pathlib import Path
 import struct
+import shutil
+import sys
+import tempfile
 import unittest
 
 from lupa.lua51 import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from deploy_dev import DEV_NAME, deploy, dev_toc, digest, runtime_sources
 
 
-def runtime():
+def runtime(addon_name="Buffeteria"):
     lua = LuaRuntime(unpack_returned_tuples=True)
-    lua.execute("ns = {}; function loadAddon(source, name) assert(loadstring(source, name))('Buffeteria', ns) end")
+    lua.globals().ADDON_NAME = addon_name
+    lua.execute("ns = {}; function loadAddon(source, name) assert(loadstring(source, name))(ADDON_NAME, ns) end")
     return lua
 
 
@@ -23,19 +29,102 @@ def addon_files():
             if line.strip().endswith(".lua") and not line.startswith("#")]
 
 
-def full_addon(player_class="PALADIN", login=True):
-    lua = runtime()
+def full_addon(player_class="PALADIN", login=True, addon_name="Buffeteria"):
+    lua = runtime(addon_name)
     lua.execute((ROOT / "tests/wow_mock.lua").read_text(encoding="utf-8"))
     lua.globals().PLAYER_CLASS = player_class
     for name in addon_files():
         load(lua, name)
-    lua.execute("ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')")
+    lua.execute("ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', ADDON_NAME)")
     if login:
         lua.execute("ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()")
     return lua
 
 
 class AddonTests(unittest.TestCase):
+    def test_dev_identity_and_settings_are_independent_for_every_class(self):
+        for player_class in ("WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "PALADIN", "SHAMAN"):
+            with self.subTest(player_class=player_class):
+                lua = full_addon(player_class, login=False, addon_name=DEV_NAME)
+                lua.execute(r"""
+                    BuffeteriaCharDB = {sentinel=true, iconSize=37}
+                    local liveDB = BuffeteriaCharDB
+                    ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria-Dev')
+                    ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+                    assert(ns.db == BuffeteriaDevCharDB and ns.db ~= liveDB)
+                    assert(ns.db.iconSize == 64 and liveDB.iconSize == 37)
+                    assert(BuffeteriaCharDB == liveDB and liveDB.sentinel)
+                    assert(ns.UI.ICON == 'Interface\\AddOns\\Buffeteria-Dev\\Media\\Icon')
+                    assert(BuffeteriaDev_CastButton.icon.texture:find('Buffeteria%-Dev'))
+                    assert(not Buffeteria_CastButton and not Buffeteria_MinimapButton)
+                    assert(BuffeteriaDev_MinimapButton and BuffeteriaDev_Tracker)
+                    assert(SLASH_BUFFETERIADEV1 == '/buffeteriadev' and SLASH_BUFFETERIADEV2 == '/buffdev')
+                    assert(not SlashCmdList.BUFFETERIA and not SLASH_BUFFETERIA2)
+                    assert(BINDING_HEADER_BUFFETERIADEV == 'Buffeteria-Dev')
+                    assert(_G['BINDING_NAME_CLICK BuffeteriaDev_CastButton:LeftButton'] == 'Cast next buff')
+                    assert(settingsPage.name == 'Buffeteria-Dev')
+                    SlashCmdList.BUFFETERIADEV(''); assert(BuffeteriaDev_Prefs:IsShown())
+                    assert(UISpecialFrames[1] == 'BuffeteriaDev_Prefs')
+                    BuffeteriaDev_OnAddonCompartmentClick(nil, 'RightButton'); assert(openedCategory == 1)
+                    SlashCmdList.BUFFETERIADEV('hide'); assert(not ns.db.showTracker)
+                    ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria-Dev')
+                    assert(not ns.db.showTracker and BuffeteriaCharDB == liveDB)
+                    SlashCmdList.BUFFETERIADEV('preview'); assert(ns.Preview.active)
+                    assert(ns.Protocol.PREFIX == 'BUFFETERIA') -- works with release users in the group
+                """)
+
+    def test_dev_deployment_build_backup_and_live_preservation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            repo = base / "repo"
+            repo.mkdir()
+            for relative, source in runtime_sources(ROOT).items():
+                target = repo / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+            shutil.copy2(ROOT / "Buffeteria.toc", repo / "Buffeteria.toc")
+            addons = base / "Interface" / "AddOns"
+            live = addons / "Buffeteria"
+            live.mkdir(parents=True)
+            (live / "Buffeteria.toc").write_bytes(b"CurseForge release sentinel")
+            (live / "Bindings.xml").write_bytes(b"Live bindings sentinel")
+            live_hashes = {p.name: digest(p) for p in live.iterdir()}
+            destination, _, count = deploy(addons, repo)
+            self.assertEqual(destination.name, DEV_NAME)
+            self.assertEqual(count, len(runtime_sources(repo)) + 1)
+            self.assertFalse((destination / "Buffeteria.toc").exists())
+            toc = (destination / (DEV_NAME + ".toc")).read_text()
+            self.assertEqual(toc, dev_toc((repo / "Buffeteria.toc").read_text()))
+            self.assertIn("## SavedVariablesPerCharacter: BuffeteriaDevCharDB", toc)
+            bindings = (destination / "Bindings.xml").read_text()
+            self.assertIn('name="CLICK BuffeteriaDev_CastButton:LeftButton"', bindings)
+            self.assertIn('header="BUFFETERIADEV"', bindings)
+            self.assertFalse((destination / "tests").exists())
+            self.assertFalse((destination / "tools").exists())
+            # Load the actual installed Dev manifest and source, including its asset paths.
+            lua = runtime(DEV_NAME)
+            lua.execute((ROOT / "tests/wow_mock.lua").read_text())
+            for line in toc.splitlines():
+                if line.strip().endswith(".lua") and not line.startswith("#"):
+                    lua.globals().loadAddon((destination / line.strip()).read_text(), line)
+            lua.execute("ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', ADDON_NAME); ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()")
+            self.assertIsNotNone(lua.globals().BuffeteriaDev_CastButton)
+            metadata = dict(line[3:].split(": ", 1) for line in toc.splitlines()
+                            if line.startswith("## "))
+            self.assertEqual(metadata["IconTexture"], lua.globals().ns.UI.ICON)
+            self.assertIsNotNone(lua.globals()[metadata["AddonCompartmentFunc"]])
+            self.assertEqual(metadata["SavedVariablesPerCharacter"], lua.globals().ns.savedVariable)
+            old = b"previous development file"
+            (destination / "App" / "State.lua").write_bytes(old)
+            _, backup, _ = deploy(addons, repo)
+            self.assertEqual((backup / DEV_NAME / "App" / "State.lua").read_bytes(), old)
+            for relative, source in runtime_sources(repo).items():
+                if relative != Path("Bindings.xml"):
+                    self.assertEqual(digest(source), digest(destination / relative))
+            self.assertEqual(live_hashes, {p.name: digest(p) for p in live.iterdir()})
+            with self.assertRaises(FileNotFoundError):
+                deploy(base / "missing", repo)
+
     def test_icon_grid_uses_chosen_side_and_row_width_without_moving_head(self):
         lua = full_addon()
         lua.execute("""

@@ -38,7 +38,7 @@ end
 
 local function showTooltip(self)
 	GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-	GameTooltip:AddLine("Buffeteria")
+	GameTooltip:AddLine(ns.title)
 	local c, s = statusColor()
 	local text = ({ ok = "Everyone is fed.", warn = "Buffs running low.", bad = "Buffs missing!", idle = "Nothing to track." })[(s and s.overall) or "idle"]
 	GameTooltip:AddLine(text, c[1], c[2], c[3])
@@ -59,7 +59,7 @@ function MinimapButton.Refresh()
 end
 
 function MinimapButton.Init()
-	btn = CreateFrame("Button", "Buffeteria_MinimapButton", Minimap)
+	btn = CreateFrame("Button", ns.globalPrefix .. "_MinimapButton", Minimap)
 	btn:SetSize(31, 31)
 	btn:SetFrameStrata("MEDIUM")
 	btn:SetFrameLevel(8)

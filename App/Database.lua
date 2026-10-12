@@ -17,8 +17,8 @@ local LEGACY_ORDER = {
 }
 
 function ns.Database.Init()
-	BuffeteriaCharDB = BuffeteriaCharDB or {}
-	local db = BuffeteriaCharDB
+	_G[ns.savedVariable] = _G[ns.savedVariable] or {}
+	local db = _G[ns.savedVariable]
 	local _, class = UnitClass("player")
 	db.order = Buffs.NormalizeOrder(db.order or Buffs.DEFAULT_ORDER[class], class)
 	-- Untouched rankings from before the class-specific defaults move to the new ones.

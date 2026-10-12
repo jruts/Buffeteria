@@ -1,9 +1,9 @@
 -- User entry points; feature logic lives in Features/.
 local _, ns = ...
 
-SLASH_BUFFETERIA1 = "/buffeteria"
-SLASH_BUFFETERIA2 = "/buff"
-SlashCmdList.BUFFETERIA = function(msg)
+_G["SLASH_" .. ns.commandKey .. "1"] = ns.isDev and "/buffeteriadev" or "/buffeteria"
+_G["SLASH_" .. ns.commandKey .. "2"] = ns.command
+SlashCmdList[ns.commandKey] = function(msg)
 	msg = (msg or ""):lower():match("^%s*(.-)%s*$")
 	if msg == "announce" then ns.Assignments.Announce()
 	elseif msg == "show" then ns.db.showTracker = true; ns.Tracker.Refresh()
@@ -21,17 +21,17 @@ SlashCmdList.BUFFETERIA = function(msg)
 	elseif msg == "minimap" then
 		ns.db.minimap.hide = not ns.db.minimap.hide; ns.Minimap.Refresh()
 	elseif msg == "help" then
-		ns.WoW.Print("/buff (options), /buff settings, /buff who, /buff announce, /buff show|hide, /buff lock, /buff minimap, /buff preview, /buff reset")
+		ns.WoW.Print(ns.command .. " (options), " .. ns.command .. " settings, " .. ns.command .. " who, " .. ns.command .. " announce, " .. ns.command .. " show|hide, " .. ns.command .. " lock, " .. ns.command .. " minimap, " .. ns.command .. " preview, " .. ns.command .. " reset")
 	else
 		ns.Options.Toggle()
 	end
 end
 
 -- Key binding labels
-BINDING_HEADER_BUFFETERIA = "Buffeteria"
-_G["BINDING_NAME_CLICK Buffeteria_CastButton:LeftButton"] = "Cast next buff"
+_G["BINDING_HEADER_" .. ns.commandKey] = ns.title
+_G["BINDING_NAME_CLICK " .. ns.globalPrefix .. "_CastButton:LeftButton"] = "Cast next buff"
 
 -- Addon compartment (the puzzle-piece menu by the minimap)
-function Buffeteria_OnAddonCompartmentClick(_, button)
+_G[ns.globalPrefix .. "_OnAddonCompartmentClick"] = function(_, button)
 	if button == "RightButton" then ns.Options.OpenSettings() else ns.Options.Toggle() end
 end
