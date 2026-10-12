@@ -504,10 +504,14 @@ class AddonTests(unittest.TestCase):
             s.perKey.INT.bad = 2
             assert(mood(s) == 'angry')
             s.perKey.INT = {bad = 1, warn = 0, total = 2, unknown = 1}
-            assert(mood(s) == 'grumpy') -- unreadable is not missing
+            assert(mood(s) == 'angry') -- every readable pair is missing
+            s.perKey.INT.bad = 0
+            assert(mood(s) == 'grumpy')
             s.overall = 'ok'
             s.perKey = {FORT = {bad = 0, warn = 0, total = 2, unknown = 2}}
-            assert(mood(s) == 'grumpy') -- unreadable is not fully buffed
+            assert(mood(s) == 'idle') -- nothing readable: can't judge
+            s.perKey.FORT.unknown = 1
+            assert(mood(s) == 'happy') -- out-of-range players don't upset him
             s.perKey.FORT.unknown = 0
             assert(mood(s) == 'happy')
             s.overall = 'warn'; s.perKey.FORT.warn = 1
@@ -537,14 +541,59 @@ class AddonTests(unittest.TestCase):
             ns.Preview.Set(false)
         """)
 
-    def test_unreadable_observations_keep_orc_grumpy(self):
+    def test_unreadable_observations_do_not_count_toward_mood(self):
         lua = full_addon(login=False)
         lua.execute("""
             UnitIsVisible = function() return false end
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
-            assert(ns.Tracker.Summary().any)
-            assert(ns.Status.Mood(ns.Tracker.Summary()) == 'grumpy')
-            assert(Buffeteria_CastButton.icon.texture:find('OrcGrumpy$'))
+            local s = ns.Tracker.Summary()
+            assert(s.any and s.perKey.KINGS.unknown == s.perKey.KINGS.total)
+            assert(ns.Status.Mood(s) == 'angry') -- only my own missing aura is readable
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='player'} end
+            end
+            ns.Tracker.Refresh()
+            assert(ns.Status.Mood(ns.Tracker.Summary()) == 'happy') -- the rest is out of range
+            assert(#ns.Tracker.Summary().unreadable == 2)
+        """)
+
+    def test_out_of_range_member_is_listed_but_does_not_upset_orc(self):
+        lua = full_addon()
+        lua.execute("""
+            local me, far = 'A-Realm', 'B-Realm'
+            -- Give me every buff I'm expected to have, with my aura cast by me.
+            local mine = {}
+            for key in pairs(ns.result.expected[me]) do mine[#mine + 1] = ns.Buffs.byKey[key].ids[1] end
+            for _, key in pairs(ns.result.auras or {}) do mine[#mine + 1] = ns.Buffs.byKey[key].ids[1] end
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'player' and mine[i] then
+                    return {name=tostring(mine[i]), expirationTime=0, sourceUnit='player'}
+                end
+            end
+            -- B was read in range once (missing everything), then walked away.
+            ns.Tracker.Refresh()
+            assert(ns.Status.Mood(ns.Tracker.Summary()) ~= 'happy')
+            UnitIsVisible = function(unit) return unit == 'player' end
+            ns.Tracker.Refresh()
+            local s = ns.Tracker.Summary()
+            assert(#s.unreadable == 1 and s.unreadable[1] == far)
+            for _, p in ipairs(s.problems) do assert(p.who ~= far) end -- no stale read
+            assert(ns.Status.Mood(s) == 'happy')
+            assert(Buffeteria_CastButton.icon.texture:find('OrcHappy$'))
+            local lines = {}
+            local add = GameTooltip.AddDoubleLine
+            GameTooltip.AddDoubleLine = function(_, l, r) lines[#lines + 1] = r end
+            Buffeteria_CastButton:GetScript('OnEnter')(Buffeteria_CastButton)
+            GameTooltip.AddDoubleLine = add
+            assert(table.concat(lines, ';'):find('out of range', 1, true))
+            -- Back in range without his buffs: orange again, naming what he misses.
+            UnitIsVisible = function() return true end
+            ns.Tracker.Refresh()
+            s = ns.Tracker.Summary()
+            assert(#s.unreadable == 0 and ns.Status.Mood(s) == 'grumpy')
+            local named = false
+            for _, p in ipairs(s.problems) do if p.who == far and p.status == 'bad' then named = true end end
+            assert(named)
         """)
 
     def test_preview_and_combat_preserve_secure_button_behavior(self):

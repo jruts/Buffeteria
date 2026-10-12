@@ -125,7 +125,9 @@ Existing tracker visibility and display choices are preserved.
   orange and grumpy when some are missing or running low, and red and furious
   when all tracked buffs are missing across the group. With nothing to track,
   he is grey and grumpy.
-  Unreadable buff observations also keep him grumpy until they can be checked.
+  Players whose buffs can't be read (usually because they are out of range) don't
+  change his mood; hovering lists them as out of range, and they count again once
+  they are back in range. If nobody's buffs can be read, he is grey.
   His invisible click area is rectangular. The next recipient appears below him;
   hover to see the next spell and targets.
 - **Small icons by the head:** which buffs need attention and how many players are

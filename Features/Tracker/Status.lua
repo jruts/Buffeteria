@@ -8,17 +8,18 @@ ns.Status = Status
 function Status.Color(status) return Status.COLORS[status] or Status.COLORS.idle end
 
 -- Count expected buff/recipient pairs, rather than treating any missing buff
--- as an empty menu. Unknown observations must never count as fully buffed.
+-- as an empty menu. Unreadable pairs (e.g. players out of range) are left out:
+-- they neither upset nor satisfy him. With nothing readable he stays idle.
 function Status.Mood(summary)
 	if not summary or not summary.any then return "idle" end
-	local total, missing, unknown = 0, 0, 0
+	local readable, missing = 0, 0
 	for _, counts in pairs(summary.perKey or {}) do
-		total = total + counts.total
+		readable = readable + counts.total - (counts.unknown or 0)
 		missing = missing + counts.bad
-		unknown = unknown + (counts.unknown or 0)
 	end
-	if total > 0 and missing == total then return "angry" end
-	if summary.overall == "ok" and total > 0 and unknown == 0 then return "happy" end
+	if readable <= 0 then return "idle" end
+	if missing == readable then return "angry" end
+	if summary.overall == "ok" then return "happy" end
 	return "grumpy"
 end
 

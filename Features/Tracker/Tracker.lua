@@ -33,8 +33,13 @@ local function showTooltip(owner)
 	if not s or not s.any then
 		GameTooltip:AddLine("Nothing on the menu yet.", 0.7, 0.7, 0.7)
 	elseif #s.problems == 0 then
-		if ns.Status.Mood(s) == "happy" then
-			GameTooltip:AddLine("Everyone is stuffed. All buffs up.", unpack(ns.Status.COLORS.ok))
+		local mood = ns.Status.Mood(s)
+		if mood == "happy" then
+			local unread = #(s.unreadable or {}) > 0
+			GameTooltip:AddLine(unread and "Everyone in range has their buffs." or "Everyone is stuffed. All buffs up.",
+				unpack(ns.Status.COLORS.ok))
+		elseif mood == "idle" then
+			GameTooltip:AddLine("Nobody's buffs can be checked right now.", 0.7, 0.7, 0.7)
 		else
 			GameTooltip:AddLine("Waiting for readable buff information.", unpack(ns.Status.COLORS.warn))
 		end
@@ -56,11 +61,20 @@ local function showTooltip(owner)
 			end
 		end
 	end
+	if s and s.unreadable and #s.unreadable > 0 then
+		GameTooltip:AddLine(" ")
+		for _, full in ipairs(s.unreadable) do
+			local m = ns.roster.members[full]
+			local who = m and ns.WoW.ClassColorName(full, m.class) or ns.WoW.Short(full)
+			GameTooltip:AddDoubleLine(who, "out of range", 1, 1, 1, 0.6, 0.6, 0.6)
+		end
+	end
 	if s and s.next then
 		GameTooltip:AddLine(" ")
 		GameTooltip:AddLine(("Click: %s on %s"):format(s.next.spell, s.next.label), 0.4, 0.8, 1)
 	end
-	GameTooltip:AddLine("Right-click: options. Move it in Edit Mode, or unlock it in options and drag.", 0.6, 0.6, 0.6)
+	GameTooltip:AddLine("Right-click: options", 0.6, 0.6, 0.6)
+	GameTooltip:AddLine("Move: Edit Mode, or unlock and drag", 0.6, 0.6, 0.6)
 	GameTooltip:Show()
 end
 

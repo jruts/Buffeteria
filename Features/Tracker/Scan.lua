@@ -68,12 +68,16 @@ function Scan.Update()
 	local roster, res = ns.roster, ns.result
 	for full, m in pairs(roster.members) do
 		if not m.dead then
-			local auras = readAuras(m.unit)
-			if auras then cache[full] = auras end -- keep the last good read when hidden
+			if not UnitIsVisible(m.unit) then
+				cache[full] = nil -- out of range: an old read would be stale
+			else
+				local auras = readAuras(m.unit)
+				if auras then cache[full] = auras end -- keep the last good read when hidden
+			end
 		end
 	end
 
-	local summary = { overall = "ok", perKey = {}, problems = {}, any = false }
+	local summary = { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false }
 	for full, exp in pairs(res.expected or {}) do
 		local m = roster.members[full]
 		if m and not m.dead then
@@ -83,7 +87,10 @@ function Scan.Update()
 				local pk = summary.perKey[key] or { bad = 0, warn = 0, total = 0 }
 				summary.perKey[key] = pk
 				pk.total = pk.total + 1
-				if st == "unknown" then pk.unknown = (pk.unknown or 0) + 1 end
+				if st == "unknown" then
+					pk.unknown = (pk.unknown or 0) + 1
+					if summary.unreadable[#summary.unreadable] ~= full then table.insert(summary.unreadable, full) end
+				end
 				if st == "bad" or st == "warn" then
 					pk[st] = pk[st] + 1
 					table.insert(summary.problems, { who = full, key = key, status = st, rem = rem })
@@ -113,6 +120,7 @@ function Scan.Update()
 	end
 	if not summary.any then summary.overall = "idle" end
 	table.sort(summary.problems, ns.Status.CompareProblems)
+	table.sort(summary.unreadable)
 	summary.next = ns.Actions.Next(now, warnSec)
 	summary.cancel = Scan.UnwantedOnMe()
 	return summary
