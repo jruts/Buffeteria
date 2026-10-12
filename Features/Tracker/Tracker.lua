@@ -462,7 +462,7 @@ local function onCast(spellID)
 		castBtn.lastCast = n
 	end
 	local key = Tracker.Scan.SelfBuffKey(spellID)
-	if not key and fromButton and hidden and Buffs.byKey[n.key].combat then key = n.key end
+	if not key and fromButton and hidden and (Buffs.byKey[n.key] or {}).combat then key = n.key end
 	if key then Tracker.Scan.SelfCast(key, now) end
 	if fromButton or key then Tracker.Refresh() end
 	updateShade()
@@ -487,7 +487,8 @@ function Tracker.Compute()
 	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
 	local s = Tracker.Scan.Update(now, warnSec)
 	local combat = InCombatLockdown()
-	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura(), combat, ns.db.helpOthers)
+	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura(), combat, ns.db.helpOthers,
+		ns.db.resurrect)
 	-- In combat the button casts only what it was armed with as combat began.
 	if combat and s.next and s.next.spell ~= castBtn:GetAttribute("spell") then s.next = nil end
 	s.cancel = Tracker.Scan.UnwantedOnMe()

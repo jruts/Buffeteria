@@ -25,12 +25,13 @@ local COMMANDS = {
 		if not ns.WoW.IsPaladin() then ns.WoW.Print("The Paladins assignment editor is available to paladins.") end
 		ns.Options.OpenTab("PALADIN")
 	end,
+	extra = function() ns.Options.OpenTab("EXTRA") end,
 	preview = function() ns.Tracker.Preview.Toggle() end,
 	minimap = function() ns.Minimap.Toggle() end,
 	help = function()
 		local c = ns.command
-		ns.WoW.Print(("%s (options), %s preferences, %s paladins, %s settings, %s who, %s announce, %s sync, %s show|hide, %s lock, %s minimap, %s preview, %s reset")
-			:format(c, c, c, c, c, c, c, c, c, c, c, c))
+		ns.WoW.Print(("%s (options), %s preferences, %s paladins, %s settings, %s extra, %s who, %s announce, %s sync, %s show|hide, %s lock, %s minimap, %s preview, %s reset")
+			:format(c, c, c, c, c, c, c, c, c, c, c, c, c))
 	end,
 }
 COMMANDS.config, COMMANDS.test = COMMANDS.settings, COMMANDS.preview

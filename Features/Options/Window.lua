@@ -13,6 +13,7 @@ local TABS = {
 	{ key = "PERSONAL", label = "My preferences", view = ns.Preferences.View },
 	{ key = "PALADIN", label = "Paladins", view = ns.Paladins.View, paladinOnly = true },
 	{ key = "SETTINGS", label = "Settings", view = ns.Tracker.View },
+	{ key = "EXTRA", label = "Extra", view = ns.Extra.View },
 }
 
 local function visibleTabs()
@@ -48,7 +49,9 @@ local function layout()
 end
 
 local function showTab(selected)
-	if selected ~= "PERSONAL" and selected ~= "PALADIN" and selected ~= "SETTINGS" then selected = "PERSONAL" end
+	local known
+	for _, tab in ipairs(TABS) do known = known or tab.key == selected end
+	if not known then selected = "PERSONAL" end
 	if selected == "PALADIN" and not ns.WoW.IsPaladin() then selected = "PERSONAL" end
 	ns.db.optionsTab = selected
 	for _, tab in ipairs(TABS) do

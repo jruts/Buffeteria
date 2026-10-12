@@ -9,15 +9,6 @@ local pendingUntil = {} -- ["name:key"] = expiry; wait for a cast's aura to arri
 -- each helper ahead of me, so two helpers don't cast the same buff at once.
 local HELP_GRACE, HELP_STAGGER = 30, 10
 
-local function inRange(spell, unit)
-	if C_Spell and C_Spell.IsSpellInRange then
-		local ok, r = pcall(C_Spell.IsSpellInRange, spell, unit)
-		return not (ok and r == false)
-	end
-	if IsSpellInRange then return IsSpellInRange(spell, unit) ~= 0 end
-	return true
-end
-
 local function hasReagent(list)
 	for _, id in ipairs(list or EMPTY) do if ns.WoW.ItemCount(id) > 0 then return true end end
 	return false
@@ -34,6 +25,7 @@ local function groupVersion(buff) return ns.WoW.KnowsAny(buff.groupIds) and hasR
 
 -- A cast landed: everyone it covers stops counting as needy until the auras arrive.
 function Actions.MarkCast(cast)
+	if cast.resurrect then return ns.Extra.Resurrect.Offered(cast.who) end
 	local untilTime = GetTime() + 3
 	for _, full in ipairs(cast.covers or { cast.who }) do pendingUntil[full .. ":" .. cast.key] = untilTime end
 end
@@ -109,7 +101,7 @@ local function newSearch(now, warnSec)
 		if not spell then return end
 		for _, full in ipairs(needy) do
 			local unit = ctx.roster.units[full]
-			if unit and inRange(spell, unit) then
+			if unit and ns.WoW.SpellInRange(spell, unit) then
 				return ctx.add(buff, spell, icon, id, unit, full, worst, big, big and label or nil, big and needy or nil)
 			end
 		end
@@ -117,7 +109,7 @@ local function newSearch(now, warnSec)
 	function ctx.addSingle(buff, full, status, onSelf)
 		local spell, icon, id = spellFor(buff.ids)
 		local unit = onSelf and "player" or ctx.roster.units[full]
-		if spell and unit and (onSelf or inRange(spell, unit)) then ctx.add(buff, spell, icon, id, unit, full, status, false) end
+		if spell and unit and (onSelf or ns.WoW.SpellInRange(spell, unit)) then ctx.add(buff, spell, icon, id, unit, full, status, false) end
 	end
 	return ctx
 end
@@ -207,8 +199,13 @@ end
 -- combat self buffs (Battle Shout, Inner Fire) are worth interrupting for.
 -- With help and nothing of my own to cast, I cover group buffs and Thorns for
 -- another caster (never blessings: a paladin's new blessing replaces their last).
-function Actions.Next(now, warnSec, missingAura, combat, help)
+-- With resurrect, a dead group member comes before any buff.
+function Actions.Next(now, warnSec, missingAura, combat, help, resurrect)
 	local ctx = newSearch(now, warnSec)
+	if resurrect and not combat then
+		local rez = ns.Extra.Resurrect.Next(ctx.roster, now)
+		if rez then return rez end
+	end
 	if combat then
 		singleBuffs(ctx, true)
 	else

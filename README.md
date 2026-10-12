@@ -76,6 +76,20 @@ tracker and cast button as other buffs. Updated casters need Buffeteria's tank-b
 support to serve these requests; druids without the addon are named in the plan but
 must cast manually. `/buff who` and **Announce to group** still list the group's plan.
 
+## Extra: resurrect
+
+The **Extra** tab in `/buff` (or `/buff extra`) holds conveniences beyond buffs.
+**Resurrect with the head** is on by default for every class: priests
+(Resurrection), paladins (Redemption), shamans (Ancestral Spirit) and druids
+(Rebirth) see the head demand **GIEF** their resurrection when a group member is
+dead, and a click casts it, before any buff. Other classes have nothing to cast.
+Players who can resurrect are picked first, then the rest by name. Only bodies in
+range count; released ghosts, feigning hunters and players someone else is
+already resurrecting are skipped, and after your resurrection lands the player
+gets a minute to accept. It waits while you're out of mana or reagents, and while
+Rebirth is on cooldown. Combat keeps the head on your combat buff, so resurrecting
+waits until combat ends.
+
 ## Paladin assignments
 
 Paladins have a **Paladins** tab in `/buff` and Settings > AddOns > Buffeteria.
@@ -268,7 +282,8 @@ see the exact plan and whether it goes to Raid, Party or your local chat.
 The tab bar sits below the native title bar. `/buff preferences` opens personal
 preferences directly; `/buff paladins` opens the paladin-only assignment editor.
 `/buff settings` selects Settings, including when another tab was remembered.
-Dev uses `/buffdev preferences`, `/buffdev paladins`, and `/buffdev settings`.
+`/buff extra` opens Extra.
+Dev uses `/buffdev preferences`, `/buffdev paladins`, `/buffdev settings`, and `/buffdev extra`.
 
 ## Commands
 
@@ -356,6 +371,7 @@ Each feature owns its logic and, when needed, its view:
 | `Features/Sync` | Wire format (`Protocol`), transport, and retry queue |
 | `Features/Tracker` | Aura observations, next-cast selection, status, icon layout, tooltips, secure buttons, Edit Mode, and preview |
 | `Features/Minimap` | Minimap button and positioning |
+| `Features/Extra` | Extra conveniences: resurrecting with the head, and the Extra tab |
 | `Features/Options` | Window and Settings page hosting the feature views |
 
 `App` initializes saved variables, routes WoW events, wires feature notifications

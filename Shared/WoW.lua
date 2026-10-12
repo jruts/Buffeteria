@@ -64,6 +64,16 @@ function ns.WoW.SpellCooldown(spell)
 	return start, duration
 end
 
+-- False only when the client says the unit is out of the spell's range.
+function ns.WoW.SpellInRange(spell, unit)
+	if C_Spell and C_Spell.IsSpellInRange then
+		local ok, r = pcall(C_Spell.IsSpellInRange, spell, unit)
+		return not (ok and r == false)
+	end
+	if IsSpellInRange then return IsSpellInRange(spell, unit) ~= 0 end
+	return true
+end
+
 function ns.WoW.ItemCount(id)
 	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) or 0 end
 	return GetItemCount and GetItemCount(id) or 0

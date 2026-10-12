@@ -1530,7 +1530,7 @@ class AddonTests(unittest.TestCase):
             ns.Paladins.Init(); ns.Assignments.roster = ns.Roster.Build(); ns.Assignments.result = ns.Solver.Solve(ns.Assignments.roster)
             ns.Tracker.Preview = {active=false}; ns.Tracker.Refresh = function() end
         """)
-        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Extra/Resurrect.lua", "Features/Extra/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("""
             ns.Options.Toggle()
@@ -1692,7 +1692,7 @@ class AddonTests(unittest.TestCase):
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
             ns.Assignments.roster = ns.Roster.Build(); ns.Tracker.Preview = {active=false}
         """)
-        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Extra/Resurrect.lua", "Features/Extra/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("ns.Options.Toggle(); assert(not findWidget('Paladins').parent:IsVisible())")
 
@@ -2238,6 +2238,7 @@ class AddonTests(unittest.TestCase):
             ns.WoW.SpellIcon = function(id) return id end
             ns.WoW.KnowsAny = function(ids) return true, ids[#ids] end
             ns.WoW.ItemCount = function() return 10 end
+            ns.WoW.SpellInRange = function() return true end
             ns.db = {warnMinutes=5}
             ns.Assignments.roster = {members={R={class='ROGUE',unit='party1'}, C={class='ROGUE',unit='party2'}},
                 units={R='party1', C='party2'}}
@@ -2312,14 +2313,22 @@ class AddonTests(unittest.TestCase):
             ns.WoW.KnowsAny = function(ids) if #ids == 0 then return false end return true, ids[#ids] end
             ns.WoW.ItemCount = function() return 10 end
             ns.WoW.SpellUsable = function() return true end
+            ns.WoW.SpellCooldown = function() return 0, 0 end
+            ns.WoW.PlayerClass = function() return CLASS or 'PRIEST' end
+            ns.WoW.SpellInRange = function(spell, unit)
+                if IsSpellInRange then return IsSpellInRange(spell, unit) ~= 0 end
+                return true
+            end
+            function UnitIsConnected() return true end
         """)
         lua.execute(setup)
+        load(lua, "Features/Extra/Resurrect.lua")
         load(lua, "Features/Tracker/Scan.lua")
         load(lua, "Features/Tracker/Actions.lua")
         lua.execute("""
-            function nextCast(help)
+            function nextCast(help, resurrect)
                 ns.Tracker.Scan.Update(NOW, 300)
-                return ns.Tracker.Actions.Next(NOW, 300, nil, false, help)
+                return ns.Tracker.Actions.Next(NOW, 300, nil, false, help, resurrect)
             end
         """)
         return lua
@@ -2344,6 +2353,81 @@ class AddonTests(unittest.TestCase):
             NOW = NOW + 4
             assert(nextCast().big)
         """)
+
+    def test_head_resurrects_dead_members_before_buffs(self):
+        for player_class, spell in (("PRIEST", "20770"), ("PALADIN", "20773"), ("SHAMAN", "20777"),
+                                    ("DRUID", "20748"), ("MAGE", None)):
+            with self.subTest(player_class=player_class):
+                lua = self.tracker_actions(f"""
+                    CLASS = '{player_class}'
+                    ns.Assignments.roster = {{members={{Me={{class=CLASS, group=1, unit='player'}},
+                        R={{class='ROGUE', group=1, unit='party1'}}, S={{class='SHAMAN', group=1, unit='party2'}},
+                        W={{class='WARRIOR', group=1, unit='party3'}}}},
+                        units={{Me='player', R='party1', S='party2', W='party3'}}}}
+                    ns.Assignments.result = {{groups={{}}, auras={{}}, pally={{}}, expected={{}}, overrides={{}}}}
+                """)
+                lua.execute(f"""
+                    local SPELL = {'nil' if spell is None else repr(spell)}
+                    assert(nextCast(false, true) == nil)
+                    DEAD.party1 = true; DEAD.party2 = true
+                    local cast = nextCast(false, true)
+                    if not SPELL then assert(cast == nil) return end
+                    -- Off means off; on, someone who can resurrect goes first.
+                    assert(nextCast(false, false) == nil)
+                    assert(cast.spell == SPELL and cast.who == 'S' and cast.unit == 'party2' and cast.label == 'S')
+                    -- In combat the head can't retarget, so it waits.
+                    ns.Tracker.Scan.Update(NOW, 300)
+                    assert(ns.Tracker.Actions.Next(NOW, 300, nil, true, false, true) == nil)
+                    -- Out of range or already being resurrected by someone else: next body.
+                    IsSpellInRange = function(_, unit) return unit == 'party2' and 0 or 1 end
+                    assert(nextCast(false, true).who == 'R')
+                    IsSpellInRange = nil
+                    UnitHasIncomingResurrection = function(unit) return unit == 'party2' end
+                    assert(nextCast(false, true).who == 'R')
+                    UnitHasIncomingResurrection = nil
+                    -- Once my resurrection lands, they get time to accept.
+                    ns.Tracker.Actions.MarkCast(cast)
+                    assert(nextCast(false, true).who == 'R')
+                    NOW = NOW + 61
+                    assert(nextCast(false, true).who == 'S')
+                    -- Released ghosts, feigning hunters and my own death are skipped.
+                    UnitIsGhost = function(unit) return unit == 'party2' end
+                    UnitIsFeignDeath = function(unit) return unit == 'party1' end
+                    assert(nextCast(false, true) == nil)
+                    UnitIsGhost, UnitIsFeignDeath = nil, nil
+                    DEAD.player = true
+                    assert(nextCast(false, true) == nil)
+                    DEAD.player = nil
+                    -- No mana or reagent, or a long cooldown (Rebirth), doesn't hold up the head.
+                    IsUsableSpell = function() return false end
+                    assert(nextCast(false, true) == nil)
+                    IsUsableSpell = nil
+                    ns.WoW.SpellCooldown = function() return NOW - 10, 1800 end
+                    assert(nextCast(false, true) == nil)
+                    ns.WoW.SpellCooldown = function() return NOW, 1.5 end
+                    assert(nextCast(false, true).who == 'S')
+                """)
+
+    def test_extra_tab_toggles_resurrect_for_every_class(self):
+        for player_class in ("PRIEST", "ROGUE"):
+            with self.subTest(player_class=player_class):
+                lua = full_addon(player_class)
+                lua.execute("""
+                    assert(ns.db.resurrect == true)
+                    SlashCmdList.BUFFETERIA('extra')
+                    assert(ns.db.optionsTab == 'EXTRA' and findWidget('Resurrect'):IsVisible())
+                    assert(not findWidget('Tracker settings'):IsVisible())
+                    local box = findWidget('Resurrect with the head').parent
+                    assert(box:GetChecked())
+                    box:SetChecked(false); box:GetScript('OnClick')(box)
+                    assert(ns.db.resurrect == false and not box:GetChecked())
+                    local label = PLAYER_CLASS == 'PRIEST' and 'Your spell: |cffffffff2006|r'
+                        or "|cff808080Your class can't resurrect.|r"
+                    findWidget(label)
+                    local settings = findWidget('Settings').parent
+                    settings:GetScript('OnClick')(settings)
+                    assert(not findWidget('Resurrect'):IsVisible())
+                """)
 
     def test_cover_for_another_caster_after_grace_or_when_away(self):
         lua = self.tracker_actions("""

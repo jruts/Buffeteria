@@ -42,6 +42,7 @@ function ns.Database.Init()
 	if db.showTracker == nil then db.showTracker = true end
 	db.locked = db.locked or false
 	if db.helpOthers == nil then db.helpOthers = true end
+	if db.resurrect == nil then db.resurrect = true end
 	db.minimap = db.minimap or { angle = 200, hide = false }
 	-- onlyProblems is the setting's pre-buffDisplay form.
 	if db.onlyProblems == false and db.buffDisplay == nil then db.buffDisplay = "ALL" end

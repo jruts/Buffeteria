@@ -22,6 +22,7 @@ Features/Assignments/Solver.lua
 Features/Assignments/Assignments.lua
 Features/Paladins/Plan.lua
 Features/Sync/Comm.lua
+Features/Extra/Resurrect.lua
 Features/Tracker/Status.lua
 Features/Tracker/Art.lua
 Features/Tracker/Scan.lua
@@ -37,6 +38,7 @@ Features/Minimap/Minimap.lua
 Features/Preferences/RankList.lua
 Features/Preferences/View.lua
 Features/Paladins/View.lua
+Features/Extra/View.lua
 Features/Options/Window.lua
 App/Commands.lua
 App/Bootstrap.lua
