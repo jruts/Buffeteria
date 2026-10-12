@@ -13,7 +13,8 @@ for _, method in ipairs({ "ClearAllPoints", "SetMovable", "EnableMouse", "Regist
 	"SetFrameStrata", "SetAllPoints", "SetTexCoord", "SetTexture", "SetDesaturated", "SetColorTexture", "SetJustifyH",
 	"SetJustifyV", "RegisterForClicks", "RegisterEvent", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen",
 	"SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "SetHighlightTexture", "SetPushedTexture",
-	"SetWordWrap", "SetNormalTexture", "SetVertexColor", "SetOwner", "AddLine", "AddDoubleLine" }) do W[method] = function() end end
+	"SetWordWrap", "SetNormalTexture", "SetVertexColor", "SetOwner", "AddLine", "AddDoubleLine",
+	"SetOrientation", "SetValueStep", "EnableMouseWheel" }) do W[method] = function() end end
 function W:SetSize(width, height) self.width, self.height = width, height end
 function W:SetWidth(width) self.width = width end
 function W:SetHeight(height) self.height = height end
@@ -38,7 +39,18 @@ function W:StartMoving()
 end
 function W:StopMovingOrSizing() self.moving = false end
 function W:SetText(text) self.label = text end
+function W:GetText() return self.label end
 function W:SetParent(parent) self.parent = parent end
+function W:GetParent() return self.parent end
+function W:SetScrollChild(child) self.scrollChild = child end
+function W:SetHorizontalScroll(value) self.horizontalScroll = value end
+function W:SetMinMaxValues(minimum, maximum) self.minimum, self.maximum = minimum, maximum end
+function W:SetValue(value)
+	self.value = math.max(self.minimum, math.min(value, self.maximum))
+	if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, self.value) end
+end
+function W:SetThumbTexture() self.thumb = widget("Texture", nil, self) end
+function W:GetThumbTexture() return self.thumb end
 function W:SetChecked(value) self.checked = value end
 function W:GetChecked() return self.checked end
 function W:SetEnabled(value) self.enabled = value end
@@ -57,6 +69,7 @@ function W:CreateFontString() return widget("FontString", nil, self) end
 function W:CreateTexture() return widget("Texture", nil, self) end
 function CreateFrame(kind, name, parent, template) return widget(kind, name, parent, template) end
 UIParent = widget("Frame")
+UIParent:SetSize(1920, 1080)
 Minimap = widget("Frame")
 GameTooltip = widget("Frame")
 function GameTooltip_Hide() GameTooltip:Hide() end

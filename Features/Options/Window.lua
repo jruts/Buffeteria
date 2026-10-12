@@ -3,10 +3,25 @@ local _, ns = ...
 local Options = {}
 ns.Options = Options
 local win, content, panel, personal, paladinPanel, personalTab, paladinTab
+local paladinSelected = false
+
+local function layout()
+	local width = 340
+	if paladinSelected then
+		local available = content:GetParent() == win and UIParent:GetWidth() - 48 or panel:GetWidth() - 32
+		width = math.min(ns.Paladins.View.GetPreferredWidth(), math.max(340, available))
+	end
+	content:SetWidth(width)
+	win:SetWidth(width)
+	win.Border:SetShown(not paladinSelected)
+	win.PaladinBorder:SetShown(paladinSelected)
+	ns.Paladins.View.Layout(width)
+end
 
 local function selectTab(isPaladin)
 	local _, class = UnitClass("player")
 	isPaladin = isPaladin and class == "PALADIN"
+	paladinSelected = isPaladin and true or false
 	personal:SetShown(not isPaladin)
 	paladinPanel:SetShown(isPaladin)
 	personalTab:SetEnabled(isPaladin)
@@ -18,6 +33,7 @@ function Options.Refresh()
 	if not content then return end
 	ns.Preferences.View.Refresh()
 	ns.Paladins.View.Refresh()
+	layout()
 end
 
 local function build()
@@ -25,6 +41,7 @@ local function build()
 	win:SetSize(340, 714)
 	win:SetPoint("CENTER")
 	win:SetMovable(true)
+	win:SetClampedToScreen(true)
 	win:EnableMouse(true)
 	win:RegisterForDrag("LeftButton")
 	win:SetScript("OnDragStart", win.StartMoving)
@@ -34,6 +51,15 @@ local function build()
 	-- Match Forever's Edit Mode dialog: translucent fill and native nine-slice border.
 	win.Border = CreateFrame("Frame", nil, win, "DialogBorderTranslucentTemplate")
 	win.Border:SetAllPoints()
+	win.PaladinBorder = CreateFrame("Frame", nil, win, "BackdropTemplate")
+	win.PaladinBorder:SetFrameLevel(win:GetFrameLevel())
+	win.PaladinBorder:SetAllPoints()
+	win.PaladinBorder:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+		edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 24,
+		insets = { left = 5, right = 5, top = 5, bottom = 5 } })
+	win.PaladinBorder:SetBackdropColor(0.1, 0.075, 0.04, 1)
+	win.PaladinBorder:SetBackdropBorderColor(0.85, 0.68, 0.36, 1)
+	win.PaladinBorder:Hide()
 	win.TitleText = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 	win.TitleText:SetPoint("TOP", 0, -16)
 	win.TitleText:SetText("Buffeteria")
@@ -70,6 +96,9 @@ local function build()
 	ns.Events.On("AssignmentsChanged", refreshVisible)
 	ns.Events.On("PaladinPlanChanged", refreshVisible)
 	ns.Events.On("PreviewChanged", refreshVisible)
+	win:RegisterEvent("DISPLAY_SIZE_CHANGED")
+	win:RegisterEvent("UI_SCALE_CHANGED")
+	win:SetScript("OnEvent", refreshVisible)
 end
 
 function Options.Toggle()
@@ -94,6 +123,9 @@ function Options.RegisterSettings()
 		win:Hide()
 		content:SetParent(panel); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -56); content:Show()
 		Options.Refresh()
+	end)
+	panel:SetScript("OnSizeChanged", function()
+		if content and content:GetParent() == panel then layout() end
 	end)
 	local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, panel, "Buffeteria")
 	if ok and category then

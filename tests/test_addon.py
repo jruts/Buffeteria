@@ -214,17 +214,17 @@ class AddonTests(unittest.TestCase):
             tab:GetScript('OnClick')(tab)
             local heading = findWidget('Class blessing assignments')
             assert(heading:IsVisible())
+            local columns = heading.parent.columns
+            assert(#columns == 2 and columns[1].paladin == 'A-Realm' and columns[2].paladin == 'B-Realm')
             local rows = 0
-            for _, w in ipairs(widgets) do
-                if w.kind == 'Button' and w.parent == heading.parent and w:GetScript('OnClick')
-                    and w.label ~= '<' and w.label ~= '>' and w.label ~= 'Announce to group' then
-                    rows = rows + 1
-                    w:GetScript('OnClick')(w, 'RightButton') -- Auto -> None
-                end
+            for _, w in pairs(columns[1].rows) do
+                rows = rows + 1
+                w:GetScript('OnClick')(w, 'RightButton') -- Auto -> None
             end
             assert(rows == 9)
             runTimers()
             for _, class in ipairs(ns.Buffs.CLASS_KEYS) do assert(ns.Paladins.Get('A-Realm',class) == 'NONE') end
+            assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'AUTO')
             ns.Options.RegisterSettings()
             settingsPage:GetScript('OnShow')(settingsPage)
             assert(heading:IsVisible() and not Buffeteria_Prefs:IsShown())
@@ -235,6 +235,87 @@ class AddonTests(unittest.TestCase):
             local override = findWidget('Override the Paladins class plan').parent
             override:SetChecked(true); override:GetScript('OnClick')(override)
             assert(ns.db.blessingsOverride)
+        """)
+
+    def test_paladin_columns_follow_roster_and_scroll_in_both_hosts(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.Options.Toggle()
+            local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
+            local panel = findWidget('Class blessing assignments').parent
+            assert(#panel.columns == 2 and Buffeteria_Prefs:GetWidth() == 534)
+            assert(not panel.scrollbar:IsShown())
+            -- Add paladins through the real roster -> solver -> refresh event path.
+            function UnitFullName(unit)
+                if unit == 'player' then return 'A', 'Realm' end
+                return 'Party' .. unit:match('%d+'), 'Realm'
+            end
+            GROUP_SIZE = 2
+            ns.Assignments.Resolve(); runTimers()
+            assert(#panel.columns == 3 and Buffeteria_Prefs:GetWidth() == 788)
+            assert(panel.columns[2].paladin == 'Party1-Realm')
+            assert(panel.columns[3].paladin == 'Party2-Realm')
+            -- Screen width caps the host without dropping any columns.
+            UIParent:SetWidth(900); GROUP_SIZE = 9
+            ns.Assignments.Resolve(); runTimers()
+            assert(#panel.columns == 10 and Buffeteria_Prefs:GetWidth() == 852)
+            assert(panel.scrollbar:IsShown())
+            for _, column in ipairs(panel.columns) do assert(column:IsVisible()) end
+            panel.viewport:GetScript('OnMouseWheel')(panel.viewport, -1)
+            assert(panel.viewport.horizontalScroll > 0)
+            panel.scrollbar:SetValue(panel.scrollbar.maximum)
+            assert(panel.viewport.horizontalScroll == panel.scrollbar.maximum)
+            -- Settings uses the same controls, capped to its own available width.
+            settingsPage:SetSize(650, 800)
+            settingsPage:GetScript('OnShow')(settingsPage)
+            assert(panel:GetParent():GetParent() == settingsPage)
+            assert(panel:GetParent():GetWidth() == 618 and panel.scrollbar:IsShown())
+            settingsPage:SetWidth(800); settingsPage:GetScript('OnSizeChanged')(settingsPage)
+            assert(panel:GetParent():GetWidth() == 768)
+            -- Remove everyone else: the host shrinks and stale columns stop accepting edits.
+            GROUP_SIZE = 0
+            ns.Assignments.Resolve(); runTimers()
+            assert(panel.columns[1].paladin == 'A-Realm')
+            assert(panel:GetParent():GetWidth() == 340 and not panel.scrollbar:IsShown())
+            assert(panel.viewport.horizontalScroll == 0)
+            for i = 2, #panel.columns do
+                assert(not panel.columns[i]:IsShown() and panel.columns[i].paladin == nil)
+            end
+            ns.Options.Toggle()
+            assert(Buffeteria_Prefs:GetWidth() == 340)
+            GROUP_SIZE = 2
+            ns.Assignments.Resolve(); runTimers()
+            assert(Buffeteria_Prefs:GetWidth() == 788)
+            local mine = findWidget('My preferences'); mine:GetScript('OnClick')(mine)
+            assert(Buffeteria_Prefs:GetWidth() == 340 and not panel:IsVisible())
+        """)
+
+    def test_each_paladin_column_edits_its_own_capabilities_and_handles_empty_roster(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.Options.Toggle()
+            local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
+            local panel = findWidget('Class blessing assignments').parent
+            ns.roster.members['A-Realm'].caps = {WISDOM=true}
+            ns.roster.members['B-Realm'].hasAddon = false
+            ns.Events.Emit('AssignmentsChanged')
+            local a, b = panel.columns[1].rows.ROGUE, panel.columns[2].rows.ROGUE
+            a:GetScript('OnClick')(a, 'LeftButton')
+            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'WISDOM')
+            assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'AUTO')
+            b:GetScript('OnClick')(b, 'LeftButton')
+            assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
+            a:GetScript('OnEnter')(a)
+            assert(GameTooltip:GetText() == 'A - ROGUE')
+            a:GetScript('OnLeave')(a); assert(not GameTooltip:IsShown())
+            ns.roster.members = {}
+            ns.Events.Emit('AssignmentsChanged')
+            assert(findWidget('No paladins in the group'):IsVisible())
+            for _, column in ipairs(panel.columns) do assert(not column:IsShown()) end
+            -- Pooled controls cannot edit a departed paladin.
+            b:GetScript('OnClick')(b, 'LeftButton')
+            assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
+            assert(Buffeteria_Prefs:GetWidth() == 340)
         """)
 
     def test_non_paladins_do_not_see_assignment_tab(self):

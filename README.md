@@ -24,9 +24,12 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
 ## Paladin assignments
 
 Paladins have a **Paladins** tab in `/buff` and Settings > AddOns > Buffeteria.
-Use the arrows to select a paladin, then click each class's blessing to cycle through
-the choices; right-click cycles backward. You can also assign paladins without the
-addon. For those paladins, choose blessings you know they can cast.
+The talent-style panel shows one column per paladin, with class blessing icons under
+each name. It grows as paladins join and shrinks when they leave. Larger groups can
+scroll horizontally with the mouse wheel or the scrollbar. Click each class's
+blessing to cycle through the choices; right-click cycles backward. You can also
+assign paladins without the addon. For those paladins, choose blessings you know they
+can cast.
 
 - **Auto** uses Buffeteria's normal class assignment solver.
 - A **specific blessing** sets that paladin's class assignment.
