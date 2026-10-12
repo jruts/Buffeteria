@@ -24,6 +24,9 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
   same preferences. Players without the add-on get sensible class defaults.
 
+Blessing rankings use larger rows. While dragging, the lifted row follows your
+cursor, an outlined slot marks where it will land, and the other rows slide aside.
+
 New installs start from a class default ranking: warriors and rogues want Might
 first; mages, warlocks, priests, druids, paladins, and shamans want Wisdom first;
 hunters want Kings first (Might doesn't raise ranged attack power). Kings and

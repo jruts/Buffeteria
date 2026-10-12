@@ -1,5 +1,12 @@
 # Buffeteria
 
+## v0.6.1
+
+- Fixed personal preferences and Paladins-tab edits arriving before players appear in the roster. Assignments now survive a paladin briefly going offline or entering a loading screen, and clear when you leave the group.
+- Normalized realm names across roster and group messages, and prevented rejected messages from blocking the synchronization queue.
+- Enlarged blessing ranking rows and added drag animations: the lifted row follows the cursor, an outlined slot marks its destination, and neighboring rows slide into place.
+- Added a separate Buffeteria-Dev installation for local testing, with its own settings, commands, bindings, and visible DEV tracker label.
+
 ## v0.6.0
 
 Update Buffeteria together with your group: this release changes the assignment message format.
