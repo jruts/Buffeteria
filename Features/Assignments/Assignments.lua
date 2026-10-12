@@ -1,34 +1,41 @@
 -- Recompute and present the current buff plan.
 local _, ns = ...
-local Buffs, Solver = ns.Buffs, ns.Solver
-ns.Assignments = {}
+local Buffs, Solver, sortedKeys = ns.Buffs, ns.Solver, ns.Util.SortedKeys
+-- The latest roster read and the solver's answer for it. Replaced on every
+-- resolve; other features read them and never write.
+local Assignments = {
+	roster = { members = {}, units = {} },
+	result = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, expected = {} },
+}
+ns.Assignments = Assignments
 
 local pending = false
-function ns.Assignments.Resolve()
+function Assignments.Resolve()
 	if pending then return end
 	pending = true
 	C_Timer.After(0.5, function()
 		pending = false
-		ns.roster = ns.Roster.Build()
-		ns.Paladins.Attach(ns.roster)
-		local ok, res = pcall(Solver.Solve, ns.roster)
-		if ok then ns.result = res else ns.WoW.Print("solver error: " .. tostring(res)) end
+		local roster = ns.Roster.Build()
+		ns.Paladins.Attach(roster)
+		Assignments.roster = roster
+		local ok, res = pcall(Solver.Solve, roster)
+		if ok then Assignments.result = res else ns.WoW.Print("solver error: " .. tostring(res)) end
 		ns.Events.Emit("AssignmentsChanged")
 	end)
 end
 
 -- What a member should receive: buff key -> caster.
-function ns.Assignments.Served(member) return ns.result.expected[member] or {} end
+function Assignments.Served(member) return Assignments.result.expected[member] or {} end
 
 -- The blessing a paladin gives a class, and a paladin's aura, as solved now.
-function ns.Assignments.ClassBlessing(class, paladin) return (ns.result.pally[class] or {})[paladin] end
-function ns.Assignments.Aura(paladin) return ns.result.auras[paladin] end
+function Assignments.ClassBlessing(class, paladin) return (Assignments.result.pally[class] or {})[paladin] end
+function Assignments.Aura(paladin) return Assignments.result.auras[paladin] end
 
 local function sorted(list) table.sort(list); return list end
 
 -- Plain-text summary of the current assignments.
-function ns.Assignments.Lines(withColor)
-	local lines, r = {}, ns.result
+function Assignments.Lines(withColor)
+	local lines, r = {}, Assignments.result
 	local nm = withColor and ns.Roster.Name or ns.WoW.Short
 	-- Paladins: aura, then blessing -> classes, per paladin.
 	local perPal = {}
@@ -40,16 +47,16 @@ function ns.Assignments.Lines(withColor)
 		end
 	end
 	for p in pairs(r.auras) do perPal[p] = perPal[p] or {} end
-	for _, p in ipairs(Solver.SortedKeys(perPal)) do
+	for _, p in ipairs(sortedKeys(perPal)) do
 		local parts = {}
 		if r.auras[p] then parts[1] = Buffs.byKey[r.auras[p]].label end
-		for _, b in ipairs(Solver.SortedKeys(perPal[p])) do
+		for _, b in ipairs(sortedKeys(perPal[p])) do
 			parts[#parts + 1] = Buffs.byKey[b].label .. " (" .. table.concat(sorted(perPal[p][b]), ", ") .. ")"
 		end
 		lines[#lines + 1] = nm(p) .. ": " .. table.concat(parts, "; ")
 	end
-	for _, member in ipairs(Solver.SortedKeys(r.overrides)) do
-		for _, p in ipairs(Solver.SortedKeys(r.overrides[member])) do
+	for _, member in ipairs(sortedKeys(r.overrides)) do
+		for _, p in ipairs(sortedKeys(r.overrides[member])) do
 			local b = r.overrides[member][p]
 			lines[#lines + 1] = ("  %s -> %s: %s instead"):format(nm(p), nm(member), b and Buffs.byKey[b].label or "nothing")
 		end
@@ -73,9 +80,9 @@ function ns.Assignments.Lines(withColor)
 	return lines
 end
 
-function ns.Assignments.Announce()
+function Assignments.Announce()
 	local chan = IsInRaid() and "RAID" or (IsInGroup() and "PARTY") or nil
-	for _, l in ipairs(ns.Assignments.Lines(false)) do
+	for _, l in ipairs(Assignments.Lines(false)) do
 		if chan then pcall(SendChatMessage, "[" .. ns.title .. "] " .. l, chan) else ns.WoW.Print(l) end
 	end
 end

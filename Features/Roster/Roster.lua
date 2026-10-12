@@ -1,6 +1,7 @@
--- Live members, preferences and spell capabilities.
+-- Live members, preferences and spell capabilities, including the state
+-- message that shares mine and records everyone else's.
 local _, ns = ...
-local Buffs = ns.Buffs
+local Buffs, Protocol = ns.Buffs, ns.Protocol
 ns.Roster = { peers = {} }
 
 -- What I can cast: plain key = single version, "g"..key = group/Greater version.
@@ -16,6 +17,21 @@ function ns.Roster.Capabilities()
 	end
 	return caps
 end
+
+-- S|2|wants|ranking|excluded|caps|override: my preferences and spellbook.
+ns.Events.On("BroadcastRequested", function()
+	local p = ns.Preferences.Get()
+	ns.Comm.Send(Protocol.Encode("S", Protocol.SetString(p.wants), table.concat(p.ranking, ","),
+		Protocol.SetString(p.excluded), Protocol.SetString(ns.Roster.Capabilities()), p.blessingsOverride and "1" or "0"))
+end)
+
+-- Keep state even if the sender isn't in our roster yet (they just joined or
+-- haven't loaded); Build only uses peers who are in the group.
+ns.Events.On("Received:S", function(sender, wants, ranking, excluded, caps, override)
+	ns.Roster.peers[sender] = { wants = Protocol.Set(wants), ranking = Protocol.List(ranking),
+		excluded = Protocol.Set(excluded), caps = Protocol.Set(caps), blessingsOverride = override == "1" }
+	ns.Events.Emit("PeersChanged")
+end)
 
 local function eachGroupUnit(fn)
 	if IsInRaid() then
@@ -75,7 +91,7 @@ end
 -- Sorted full names of the roster's paladins.
 function ns.Roster.Paladins(roster)
 	local out = {}
-	for full, member in pairs((roster or ns.roster).members) do
+	for full, member in pairs((roster or ns.Assignments.roster).members) do
 		if member.class == "PALADIN" then out[#out + 1] = full end
 	end
 	table.sort(out)
@@ -84,6 +100,6 @@ end
 
 -- A short name in class color (the given class, else the member's), or plain.
 function ns.Roster.Name(full, class)
-	class = class or (ns.roster.members[full] or {}).class
+	class = class or (ns.Assignments.roster.members[full] or {}).class
 	return class and ns.WoW.ClassColorName(full, class) or ns.WoW.Short(full)
 end

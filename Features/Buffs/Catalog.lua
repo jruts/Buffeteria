@@ -6,12 +6,13 @@ ns.Buffs = Buffs
 
 -- Single-source "group" buffs. Each class splits the raid groups between its casters.
 -- ids = every rank of the single-target spell, groupIds = every rank of the party version.
+-- want = class default: true for everyone, "mana" for mana users, false for nobody.
 Buffs.GROUP_BUFFS = {
-	{ key = "FORT",   class = "PRIEST", label = "Fortitude",         ids = {1243,1244,1245,2791,10937,10938}, groupIds = {21562,21564}, reagents = {17028,17029} },
-	{ key = "SPIRIT", class = "PRIEST", label = "Divine Spirit",     ids = {14752,14818,14819,27841},         groupIds = {27681},       reagents = {17029} },
-	{ key = "SHADOW", class = "PRIEST", label = "Shadow Protection", ids = {976,10957,10958},                 groupIds = {27683},       reagents = {17029} },
-	{ key = "MOTW",   class = "DRUID",  label = "Mark of the Wild",  ids = {1126,5232,6756,5234,8907,9884,9885}, groupIds = {21849,21850}, reagents = {17021,17026} },
-	{ key = "INT",    class = "MAGE",   label = "Arcane Intellect",  ids = {1459,1460,1461,10156,10157},      groupIds = {23028},       reagents = {17020} },
+	{ key = "FORT",   class = "PRIEST", label = "Fortitude",         ids = {1243,1244,1245,2791,10937,10938}, groupIds = {21562,21564}, reagents = {17028,17029}, want = true },
+	{ key = "SPIRIT", class = "PRIEST", label = "Divine Spirit",     ids = {14752,14818,14819,27841},         groupIds = {27681},       reagents = {17029}, want = "mana" },
+	{ key = "SHADOW", class = "PRIEST", label = "Shadow Protection", ids = {976,10957,10958},                 groupIds = {27683},       reagents = {17029}, want = false },
+	{ key = "MOTW",   class = "DRUID",  label = "Mark of the Wild",  ids = {1126,5232,6756,5234,8907,9884,9885}, groupIds = {21849,21850}, reagents = {17021,17026}, want = true },
+	{ key = "INT",    class = "MAGE",   label = "Arcane Intellect",  ids = {1459,1460,1461,10156,10157},      groupIds = {23028},       reagents = {17020}, want = "mana" },
 }
 
 -- Tank requests are single-target buffs; Righteous Fury can only be self-cast.
@@ -55,6 +56,11 @@ for _, b in ipairs(Buffs.SELF_BUFFS) do b.kind = "self"; Buffs.byKey[b.key] = b 
 for _, b in ipairs(Buffs.BLESSINGS) do b.kind = "blessing"; b.reagents = { Buffs.BLESSING_REAGENT }; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey[b.key] = b end
 
+-- Single-target buffs the tracker casts one player at a time.
+Buffs.SINGLE_BUFFS = {}
+for _, b in ipairs(Buffs.TANK_BUFFS) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
+for _, b in ipairs(Buffs.SELF_BUFFS) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
+
 Buffs.BLESSING_KEYS = {}
 for _, b in ipairs(Buffs.BLESSINGS) do Buffs.BLESSING_KEYS[#Buffs.BLESSING_KEYS + 1] = b.key end
 Buffs.AURA_KEYS = {}
@@ -96,11 +102,14 @@ function Buffs.Wantable(class)
 end
 
 function Buffs.DefaultWants(class)
-	local mana = Buffs.MANA_CLASSES[class] or false
-	local wants = { FORT = true, SPIRIT = mana, SHADOW = false, MOTW = true, INT = mana }
+	local mana, wants = Buffs.MANA_CLASSES[class] or false, {}
+	for _, buff in ipairs(Buffs.GROUP_BUFFS) do wants[buff.key] = buff.want == true or (buff.want == "mana" and mana) end
 	for _, buff in ipairs(Buffs.SELF_BUFFS) do wants[buff.key] = buff.class == class end
 	return wants
 end
+
+-- Whether capabilities include the single or the group/Greater version of a spell.
+function Buffs.CanCast(caps, key) return caps ~= nil and (caps[key] or caps["g" .. key]) or false end
 
 -- What we assume a player WITHOUT the add-on can cast (talents unknown, so be conservative).
 Buffs.ASSUMED_CAPS = {

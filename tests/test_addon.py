@@ -130,7 +130,7 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
             local s = ns.Tracker.Preview.Summary()
-            ns.Tracker.Scan.Update = function() return s end
+            ns.Tracker.Compute = function() return s end
             ns.db.buffDisplay = 'ALL'
             local function check(side, columns, expectedCount)
                 ns.db.iconPosition, ns.db.iconsPerRow = side, columns
@@ -233,7 +233,7 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
-            ns.Tracker.Scan.Update = ns.Tracker.Preview.Summary
+            ns.Tracker.Compute = ns.Tracker.Preview.Summary
             ns.db.iconPosition, ns.db.buffDisplay = 'AUTO', 'ALL'
             local headScale = 1
             head.GetEffectiveScale = function() return headScale end
@@ -448,7 +448,7 @@ class AddonTests(unittest.TestCase):
                 FORT={bad=1, warn=2, total=4}, INT={bad=0, warn=1, total=4},
                 MOTW={bad=0, warn=0, total=4}, RFURY={bad=1, warn=0, total=1},
             }}
-            ns.Tracker.Scan.Update = function() return s end
+            ns.Tracker.Compute = function() return s end
             -- Cover center, bottom and top saved anchors: changing rows must
             -- never alter the frame's size or its anchor, keeping the face fixed.
             for _, anchor in ipairs({'CENTER', 'BOTTOM', 'TOPLEFT'}) do
@@ -515,7 +515,7 @@ class AddonTests(unittest.TestCase):
                 INT={bad=1, warn=0, total=2, casters={['B-Realm']=true}},
                 KINGS={bad=1, warn=0, total=2, casters={['A-Realm']=true}},
             }}
-            ns.Tracker.Scan.Update = function() return s end
+            ns.Tracker.Compute = function() return s end
             ns.db.buffDisplay = 'ALL'; ns.Tracker.Refresh()
             assert(not head.glow:IsShown() and not head.halo:IsShown())
             assert(not frame.gief:IsShown() and frame.tag.point[2] == frame)
@@ -559,7 +559,7 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             local frame = Buffeteria_Tracker
             local s = {any=true, overall='bad', problems={}, perKey={}}
-            ns.Tracker.Scan.Update = function() return s end
+            ns.Tracker.Compute = function() return s end
             local keys = {'CONC', 'DEVO', 'FORT', 'INT', 'KINGS'}
             -- Reuse every icon across healthy, expiring, and missing states.
             for _, status in ipairs({'ok', 'warn', 'bad', 'ok'}) do
@@ -614,8 +614,8 @@ class AddonTests(unittest.TestCase):
             with self.subTest(player_class=player_class):
                 lua = full_addon(player_class)
                 lua.execute("""
-                    assert(ns.roster.members['A-Realm'].class == PLAYER_CLASS)
-                    assert(ns.result.expected['A-Realm'])
+                    assert(ns.Assignments.roster.members['A-Realm'].class == PLAYER_CLASS)
+                    assert(ns.Assignments.result.expected['A-Realm'])
                     assert(ns.Tracker.Summary().any)
                     assert(#tickers == 2) -- comm retry and tracker; the minimap listens for summaries
                     for _, message in ipairs(delivered) do assert(#message <= 255) end
@@ -640,8 +640,9 @@ class AddonTests(unittest.TestCase):
             ns.Preferences.View.Refresh = function() refreshes = refreshes + 1; refresh() end
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
             assert(refreshes > 0 and ns.Tracker.Summary().any)
+            ns.Preferences.Changed() -- refreshes the open view at once
             refreshes = 0
-            ns.Preferences.Changed(); ns.Assignments.Resolve(); ns.Assignments.Resolve()
+            ns.Assignments.Resolve(); ns.Assignments.Resolve()
             assert(#timers == 1) -- resolving repeated changes is debounced
             runTimers()
             assert(refreshes == 1 and ns.Tracker.Summary().any)
@@ -720,8 +721,8 @@ class AddonTests(unittest.TestCase):
             local me, far = 'A-Realm', 'B-Realm'
             -- Give me every buff I'm expected to have, with my aura cast by me.
             local mine = {}
-            for key in pairs(ns.result.expected[me]) do mine[#mine + 1] = ns.Buffs.byKey[key].ids[1] end
-            for _, key in pairs(ns.result.auras or {}) do mine[#mine + 1] = ns.Buffs.byKey[key].ids[1] end
+            for key in pairs(ns.Assignments.result.expected[me]) do mine[#mine + 1] = ns.Buffs.byKey[key].ids[1] end
+            for _, key in pairs(ns.Assignments.result.auras or {}) do mine[#mine + 1] = ns.Buffs.byKey[key].ids[1] end
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and mine[i] then
                     return {name=tostring(mine[i]), expirationTime=0, sourceUnit='player'}
@@ -947,6 +948,7 @@ class AddonTests(unittest.TestCase):
     def solver(self, code):
         lua = runtime()
         load(lua, "Features/Buffs/Catalog.lua")
+        load(lua, "Shared/Util.lua")
         load(lua, "Features/Assignments/Solver.lua")
         lua.execute("""
             function member(class, caps, override, order)
@@ -963,7 +965,7 @@ class AddonTests(unittest.TestCase):
         lua.execute((ROOT / "tests/wow_mock.lua").read_text(encoding="utf-8"))
         lua.globals().PLAYER_CLASS = player_class
         for name in (
-            "App/State.lua", "Shared/Events.lua", "Shared/WoW.lua", "Features/Buffs/Catalog.lua",
+            "App/State.lua", "Shared/Util.lua", "Shared/Events.lua", "Shared/WoW.lua", "Features/Buffs/Catalog.lua",
             "Shared/UI.lua", "Features/Sync/Protocol.lua", "Features/Tracker/Status.lua",
             "App/Database.lua", "Features/Preferences/Model.lua", "Features/Roster/Roster.lua",
             "Features/Assignments/Solver.lua", "Features/Assignments/Assignments.lua",
@@ -996,7 +998,7 @@ class AddonTests(unittest.TestCase):
         lua = self.core_runtime()
         lua.execute("""
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
-            ns.Paladins.Init(); ns.roster = ns.Roster.Build(); ns.result = ns.Solver.Solve(ns.roster)
+            ns.Paladins.Init(); ns.Assignments.roster = ns.Roster.Build(); ns.Assignments.result = ns.Solver.Solve(ns.Assignments.roster)
             ns.Tracker.Preview = {active=false}; ns.Tracker.Refresh = function() end
         """)
         for name in ("Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
@@ -1132,8 +1134,8 @@ class AddonTests(unittest.TestCase):
             ns.Options.Toggle()
             local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
             local panel = findWidget('Blessings and auras').parent
-            ns.roster.members['A-Realm'].caps = {WISDOM=true}
-            ns.roster.members['B-Realm'].hasAddon = false
+            ns.Assignments.roster.members['A-Realm'].caps = {WISDOM=true}
+            ns.Assignments.roster.members['B-Realm'].hasAddon = false
             ns.Events.Emit('AssignmentsChanged')
             local a, b = panel.columns[1].rows.ROGUE, panel.columns[2].rows.ROGUE
             a:GetScript('OnClick')(a, 'LeftButton')
@@ -1144,7 +1146,7 @@ class AddonTests(unittest.TestCase):
             a:GetScript('OnEnter')(a)
             assert(GameTooltip:GetText() == 'A - ROGUE')
             a:GetScript('OnLeave')(a); assert(not GameTooltip:IsShown())
-            ns.roster.members = {}
+            ns.Assignments.roster.members = {}
             ns.Events.Emit('AssignmentsChanged')
             assert(findWidget('No paladins in the group'):IsVisible())
             for _, column in ipairs(panel.columns) do assert(not column:IsShown()) end
@@ -1158,7 +1160,7 @@ class AddonTests(unittest.TestCase):
         lua = self.core_runtime("ROGUE")
         lua.execute("""
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
-            ns.roster = ns.Roster.Build(); ns.Tracker.Preview = {active=false}
+            ns.Assignments.roster = ns.Roster.Build(); ns.Tracker.Preview = {active=false}
         """)
         for name in ("Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
@@ -1252,10 +1254,10 @@ class AddonTests(unittest.TestCase):
             ns.WoW.FullName = function() return 'A-Realm' end
             ns.db = {paladinBlessings={}}
             ns.Assignments.Resolve = function() ns.solves = (ns.solves or 0) + 1 end
-            ns.roster = {members={['A-Realm']={class='PALADIN', hasAddon=true, caps={KINGS=true,MIGHT=true}},
+            ns.Assignments.roster = {members={['A-Realm']={class='PALADIN', hasAddon=true, caps={KINGS=true,MIGHT=true}},
                 ['B-Realm']={class='PALADIN', hasAddon=true, caps={KINGS=true,MIGHT=true}},
                 ['C-Realm']={class='PALADIN', caps={}}, ['R-Realm']={class='ROGUE', caps={}}}}
-            ns.Roster.Build = function() return ns.roster end
+            ns.Roster.Build = function() return ns.Assignments.roster end
             sent = {}; ns.Comm = {Send=function(msg) table.insert(sent,msg) end}
         """)
         load(lua, "Features/Paladins/Plan.lua")
@@ -1271,8 +1273,8 @@ class AddonTests(unittest.TestCase):
             ns.Paladins.Set('B-Realm', 'ROGUE', 'SANCT')
             assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
             ns.Paladins.Set('C-Realm', 'ROGUE', 'SANCT')
-            assert(ns.Paladins.Assignments(ns.roster).ROGUE['C-Realm'] == 'SANCT')
-            assert(ns.roster.members['C-Realm'].caps.SANCT)
+            local blessings, _, assumed = ns.Paladins.Assignments(ns.Assignments.roster)
+            assert(blessings.ROGUE['C-Realm'] == 'SANCT' and assumed['C-Realm'].SANCT)
             ns.Paladins.Set('A-Realm', 'ROGUE', 'AUTO')
             assert(ns.db.paladinBlessings.ROGUE == 'AUTO')
             for _, msg in ipairs(sent) do assert(#msg <= 255) end
@@ -1302,12 +1304,12 @@ class AddonTests(unittest.TestCase):
             local a = ns.Paladins
             a.Receive('A-Realm', 'A-Realm', '2', 'KINGS', '2000', 'A-Realm')
             a.Receive('B-Realm', 'B-Realm', '2', 'KINGS', '2000', 'B-Realm')
-            local assignments = a.Assignments(ns.roster)
+            local assignments = a.Assignments(ns.Assignments.roster)
             assert(assignments.ROGUE['A-Realm'] == 'NONE' and assignments.ROGUE['B-Realm'] == 'KINGS')
             a.cells = {}
             a.Receive('B-Realm', 'B-Realm', '2', 'KINGS', '2000', 'B-Realm')
             a.Receive('A-Realm', 'A-Realm', '2', 'KINGS', '2000', 'A-Realm')
-            assignments = a.Assignments(ns.roster)
+            assignments = a.Assignments(ns.Assignments.roster)
             assert(assignments.ROGUE['A-Realm'] == 'NONE' and assignments.ROGUE['B-Realm'] == 'KINGS')
         """)
 
@@ -1327,16 +1329,17 @@ class AddonTests(unittest.TestCase):
             a.Receive('B-Realm', 'A-Realm', '2', 'FORT', '3000', 'B-Realm')
             a.Receive('B-Realm', 'A-Realm', '2', 'KINGS', '-1', 'B-Realm')
             assert(a.Get('A-Realm','ROGUE') == 'MIGHT')
-            ns.roster.members['B-Realm'] = nil; a.Prune(ns.roster)
+            ns.Assignments.roster.members['B-Realm'] = nil; a.Prune(ns.Assignments.roster)
             assert(a.Get('A-Realm','ROGUE') == 'MIGHT') -- editor leaving keeps the plan
             a.Set('A-Realm','ROGUE','KINGS')
             assert(a.Get('A-Realm','ROGUE') == 'KINGS') -- observed clock advances
-            ns.roster.members['A-Realm'] = nil; a.Prune(ns.roster)
+            ns.Assignments.roster.members['A-Realm'] = nil; a.Prune(ns.Assignments.roster)
             assert(a.Get('A-Realm','ROGUE') == 'AUTO')
         """)
 
     def test_message_retry_keeps_every_cell_and_latest_state(self):
         lua = self.plan_runtime()
+        load(lua, "Features/Roster/Roster.lua")
         lua.execute("""
             ns.Preferences.Get = function() return {wants={},ranking={'KINGS'},excluded={},blessingsOverride=true} end
             ns.Roster.Capabilities = function() return {KINGS=true} end
@@ -1407,8 +1410,8 @@ class AddonTests(unittest.TestCase):
             assert(ns.Paladins.Get('Pal-Realm', 'ROGUE') == 'AUTO')
             GROUP_SIZE = 2
             ns.Assignments.Resolve(); runTimers()
-            local r, pal = ns.result, 'Pal-Realm'
-            assert(ns.roster.members[pal].hasAddon)
+            local r, pal = ns.Assignments.result, 'Pal-Realm'
+            assert(ns.Assignments.roster.members[pal].hasAddon)
             assert(ns.Paladins.Get(pal, 'ROGUE') == 'MIGHT' and ns.Paladins.Get(pal, 'WARRIOR') == 'KINGS')
             assert(r.pally.ROGUE[pal] == 'MIGHT' and r.pally.WARRIOR[pal] == 'KINGS')
             -- The rogue's explicit ranking beats the preset; the warrior follows it.
@@ -1419,7 +1422,7 @@ class AddonTests(unittest.TestCase):
             assert(ns.Paladins.Get(pal, 'ROGUE') == 'MIGHT')
             GROUP_SIZE = 2; NAMES.party1 = 'Pal'; CLASSES.party1 = 'PALADIN'
             ns.Assignments.Resolve(); runTimers()
-            assert(ns.result.pally.ROGUE[pal] == 'MIGHT')
+            assert(ns.Assignments.result.pally.ROGUE[pal] == 'MIGHT')
             -- Leaving the group clears other paladins' cells.
             GROUP_SIZE = 0; IsInGroup = function() return false end; ns.Assignments.Resolve(); runTimers()
             assert(ns.Paladins.Get(pal, 'ROGUE') == 'AUTO')
@@ -1433,15 +1436,15 @@ class AddonTests(unittest.TestCase):
             a.Receive('X-Realm', 'C-Realm', '2', 'KINGS', '2000', 'X-Realm')
             a.Receive('E-Realm', 'E-Realm', '2', 'MIGHT', '2000', 'E-Realm')
             assert(a.Get('D-Realm', 'ROGUE') == 'AUTO')
-            ns.roster.members['D-Realm'] = {class='PALADIN', caps={}}
-            ns.roster.members['X-Realm'] = {class='ROGUE', caps={}}
-            assert(a.Replay(ns.roster))
+            ns.Assignments.roster.members['D-Realm'] = {class='PALADIN', caps={}}
+            ns.Assignments.roster.members['X-Realm'] = {class='ROGUE', caps={}}
+            assert(a.Replay(ns.Assignments.roster))
             assert(a.Get('D-Realm', 'ROGUE') == 'KINGS')
             assert(a.Get('C-Realm', 'ROGUE') == 'AUTO') -- non-paladin editors stay rejected
             function GetTime() return 1000 end
-            a.Replay(ns.roster)
-            ns.roster.members['E-Realm'] = {class='PALADIN', caps={}}
-            a.Replay(ns.roster)
+            a.Replay(ns.Assignments.roster)
+            ns.Assignments.roster.members['E-Realm'] = {class='PALADIN', caps={}}
+            a.Replay(ns.Assignments.roster)
             assert(a.Get('E-Realm', 'ROGUE') == 'AUTO') -- expired before E appeared
         """)
 
@@ -1575,10 +1578,12 @@ class AddonTests(unittest.TestCase):
     def test_tracker_uses_singles_around_personal_overrides(self):
         lua = runtime()
         load(lua, "Features/Buffs/Catalog.lua")
-        lua.execute("ns.WoW = {}; ns.Preferences = {}; ns.Roster = {}; ns.Assignments = {}")
+        load(lua, "Shared/Util.lua")
+        lua.execute("ns.WoW = {}; ns.Preferences = {}; ns.Roster = {}")
         load(lua, "Shared/Events.lua")
         load(lua, "Features/Sync/Protocol.lua")
         load(lua, "Features/Tracker/Status.lua")
+        load(lua, "Features/Assignments/Assignments.lua")
         lua.execute("""
             function GetTime() return 100 end
             function UnitIsVisible() return true end
@@ -1591,32 +1596,33 @@ class AddonTests(unittest.TestCase):
             ns.WoW.KnowsAny = function(ids) return true, ids[#ids] end
             ns.WoW.ItemCount = function() return 10 end
             ns.db = {warnMinutes=5}
-            ns.roster = {members={R={class='ROGUE',unit='party1'}, C={class='ROGUE',unit='party2'}},
+            ns.Assignments.roster = {members={R={class='ROGUE',unit='party1'}, C={class='ROGUE',unit='party2'}},
                 units={R='party1', C='party2'}}
-            ns.result = {groups={}, auras={}, pally={ROGUE={Pal='KINGS'}},
+            ns.Assignments.result = {groups={}, auras={}, pally={ROGUE={Pal='KINGS'}},
                 expected={R={KINGS='Pal'}, C={MIGHT='Pal'}}, overrides={C={Pal='MIGHT'}}}
         """)
         load(lua, "Features/Tracker/Scan.lua")
         load(lua, "Features/Tracker/Actions.lua")
         lua.execute("""
-            local summary = ns.Tracker.Scan.Update()
-            assert(summary.next and not summary.next.big)
-            assert(summary.next.spell == '20217')
-            ns.result.overrides = {}; ns.result.expected.C = {KINGS='Pal'}
-            summary = ns.Tracker.Scan.Update()
-            assert(summary.next.big and summary.next.spell == '25898')
-            ns.result.overrides = {C={Pal=false}}; ns.result.expected.C = {}
-            assert(not ns.Tracker.Scan.Update().next.big)
+            local function nextCast() ns.Tracker.Scan.Update(100, 300); return ns.Tracker.Actions.Next(100, 300) end
+            local action = nextCast()
+            assert(action and not action.big)
+            assert(action.spell == '20217')
+            ns.Assignments.result.overrides = {}; ns.Assignments.result.expected.C = {KINGS='Pal'}
+            action = nextCast()
+            assert(action.big and action.spell == '25898')
+            ns.Assignments.result.overrides = {C={Pal=false}}; ns.Assignments.result.expected.C = {}
+            assert(not nextCast().big)
             ns.WoW.FullName = function() return 'R' end
-            ns.roster.members.R.excluded = {WISDOM=true}
-            ns.result.expected.R = {WISDOM='Pal'}
+            ns.Assignments.roster.members.R.excluded = {WISDOM=true}
+            ns.Assignments.result.expected.R = {WISDOM='Pal'}
             C_UnitAuras.GetAuraDataByIndex = function(_, i)
                 if i == 1 then return {name='25290', expirationTime=0} end
             end
-            summary = ns.Tracker.Scan.Update()
-            assert(not summary.cancel and not ns.Tracker.Scan.UnwantedOnMe())
+            local summary = ns.Tracker.Scan.Update(100, 300)
+            assert(not ns.Tracker.Scan.UnwantedOnMe())
             for _, problem in ipairs(summary.problems) do assert(problem.status ~= 'unwanted') end
-            ns.result.expected.R = {}
+            ns.Assignments.result.expected.R = {}
             assert(ns.Tracker.Scan.UnwantedOnMe() == '25290')
         """)
 
@@ -1643,7 +1649,7 @@ class AddonTests(unittest.TestCase):
     def test_aura_slot_syncs_persists_and_stays_unique(self):
         lua = self.plan_runtime()
         lua.execute("""
-            ns.roster.members['A-Realm'].caps.DEVO = true; ns.roster.members['B-Realm'].caps.DEVO = true
+            ns.Assignments.roster.members['A-Realm'].caps.DEVO = true; ns.Assignments.roster.members['B-Realm'].caps.DEVO = true
             ns.Paladins.Set('A-Realm', 'AURA', 'DEVO')
             assert(ns.db.paladinBlessings.AURA == 'DEVO')
             assert(sent[#sent]:match('^P|2|A%-Realm|10|DEVO|'))
@@ -1653,9 +1659,9 @@ class AddonTests(unittest.TestCase):
             ns.Paladins.Set('B-Realm', 'AURA', 'DEVO')
             assert(ns.Paladins.Get('A-Realm', 'AURA') == 'NONE' and ns.Paladins.Get('B-Realm', 'AURA') == 'DEVO')
             ns.Paladins.Set('C-Realm', 'AURA', 'SANCTITY')
-            local blessings, auras = ns.Paladins.Assignments(ns.roster)
+            local blessings, auras, assumed = ns.Paladins.Assignments(ns.Assignments.roster)
             assert(auras['C-Realm'] == 'SANCTITY' and auras['B-Realm'] == 'DEVO' and blessings.AURA == nil)
-            assert(ns.roster.members['C-Realm'].caps.SANCTITY)
+            assert(assumed['C-Realm'].SANCTITY)
             ns.Paladins.Receive('B-Realm', 'A-Realm', '10', 'RETRI', '9999', 'B-Realm')
             assert(ns.Paladins.Get('A-Realm', 'AURA') == 'RETRI')
             ns.Paladins.Receive('B-Realm', 'A-Realm', '10', 'MIGHT', '99999', 'B-Realm')
@@ -1673,7 +1679,7 @@ class AddonTests(unittest.TestCase):
             local panel = findWidget('Blessings and auras').parent
             -- B has no add-on, so only baseline auras are assumed: it gets Devotion,
             -- and A takes Concentration, which only A knows.
-            assert(ns.result.auras['B-Realm'] == 'DEVO' and ns.result.auras['A-Realm'] == 'CONC')
+            assert(ns.Assignments.result.auras['B-Realm'] == 'DEVO' and ns.Assignments.result.auras['A-Realm'] == 'CONC')
             local aura = panel.columns[1].aura
             assert(aura.state == 'green' and panel.columns[1].note:GetText():find('Concentration Aura'))
             ns.Paladins.Set('A-Realm', 'ROGUE', 'NONE'); runTimers()
@@ -1708,7 +1714,7 @@ class AddonTests(unittest.TestCase):
             assert(not ns.Preferences.Get().wants.RFURY and not ns.Preferences.Get().wants.THORNS)
             role = 'TANK'
             ns.App:GetScript('OnEvent')(ns.App, 'ROLE_CHANGED_INFORM'); runTimers()
-            assert(ns.result.expected['A-Realm'].RFURY == 'A-Realm')
+            assert(ns.Assignments.result.expected['A-Realm'].RFURY == 'A-Realm')
             assert(ns.Preferences.Get().wants.THORNS)
             local message = delivered[#delivered]
             assert(message:match('^S|2|') and message:find('RFURY') and message:find('THORNS'))
@@ -1720,13 +1726,13 @@ class AddonTests(unittest.TestCase):
             assert(not ns.Preferences.Get().wants.THORNS)
             role = 'HEALER'
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_ROLES_ASSIGNED'); runTimers()
-            assert(not ns.result.expected['A-Realm'].RFURY)
+            assert(not ns.Assignments.result.expected['A-Realm'].RFURY)
             assert(ns.db.tankBuffs.RFURY and not ns.db.tankBuffs.THORNS)
             panel.tankRole:GetScript('OnClick')(); runTimers() -- Auto -> Tank
-            assert(ns.result.expected['A-Realm'].RFURY == 'A-Realm')
+            assert(ns.Assignments.result.expected['A-Realm'].RFURY == 'A-Realm')
             panel.tankRole:GetScript('OnClick')(); runTimers() -- Tank -> Not tank
             assert(not ns.Preferences.Get().wants.RFURY)
-            ns.Database.Init() -- keep choices on reload
+            ns.Database.Init(); ns.Preferences.Init() -- keep choices on reload
             assert(ns.db.tankRole == 'OFF' and not ns.db.tankBuffs.THORNS)
             ns.Preferences.Reset(); runTimers()
             assert(ns.db.tankRole == 'AUTO' and ns.db.tankBuffs.THORNS)
@@ -1798,12 +1804,12 @@ class AddonTests(unittest.TestCase):
         lua = full_addon('WARRIOR')
         lua.execute("""
             assert(ns.db.wants.BSHOUT and ns.Preferences.Get().wants.BSHOUT)
-            ns.db.wants.BSHOUT = nil; ns.Database.Init() -- older saved wants enable it
+            ns.db.wants.BSHOUT = nil; ns.Database.Init(); ns.Preferences.Init() -- older saved wants enable it
             assert(ns.db.wants.BSHOUT == true)
             ns.Preferences.Changed(); runTimers()
-            assert(ns.result.expected['A-Realm'].BSHOUT == 'A-Realm')
+            assert(ns.Assignments.result.expected['A-Realm'].BSHOUT == 'A-Realm')
             assert(ns.Roster.Capabilities().BSHOUT)
-            ns.result.pally = {}; ns.result.auras = {}
+            ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {}
             ns.Tracker.Refresh()
             local button = Buffeteria_CastButton
             assert(button:GetAttribute('spell') == '25289' and button:GetAttribute('unit') == 'player')
@@ -1826,8 +1832,8 @@ class AddonTests(unittest.TestCase):
             local shout = panel.wants.BSHOUT
             assert(shout:IsShown())
             shout:GetScript('OnClick')(shout); runTimers()
-            assert(not ns.db.wants.BSHOUT and not ns.result.expected['A-Realm'].BSHOUT)
-            ns.Database.Init()
+            assert(not ns.db.wants.BSHOUT and not ns.Assignments.result.expected['A-Realm'].BSHOUT)
+            ns.Database.Init(); ns.Preferences.Init()
             assert(ns.db.wants.BSHOUT == false) -- skip survives reload
             ns.Preferences.Reset(); runTimers()
             assert(ns.db.wants.BSHOUT)
@@ -1856,15 +1862,15 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             function UnitGroupRolesAssigned(unit) return unit == 'party1' and 'TANK' or 'HEALER' end
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_ROLES_ASSIGNED'); runTimers()
-            assert(ns.roster.members['B-Realm'].wants.THORNS)
-            assert(ns.result.expected['B-Realm'].THORNS == 'A-Realm')
+            assert(ns.Assignments.roster.members['B-Realm'].wants.THORNS)
+            assert(ns.Assignments.result.expected['B-Realm'].THORNS == 'A-Realm')
             assert(not ns.Preferences.Get().wants.RFURY)
             assert(ns.Roster.Capabilities().THORNS and not ns.Roster.Capabilities().RFURY)
             ns.Options.Toggle()
             assert(not findWidget('Your buffet').parent.tankButtons.RFURY:IsShown())
             ns.db.wants = {}
             ns.Comm.OnMessage('BUFFETERIA', 'S|2|THORNS|KINGS||MIGHT|0', 'PARTY', 'B-Realm'); runTimers()
-            ns.result.pally = {}; ns.result.auras = {} -- isolate the tank cast
+            ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {} -- isolate the tank cast
             ns.Tracker.Refresh()
             assert(Buffeteria_CastButton:GetAttribute('spell') == '9910')
             assert(Buffeteria_CastButton:GetAttribute('unit') == 'party1')
@@ -1877,7 +1883,7 @@ class AddonTests(unittest.TestCase):
             IsSpellInRange = function() return 0 end
             assert(not ns.Tracker.Actions.Next(WOW_TIME, 300))
             ns.Comm.OnMessage('BUFFETERIA', 'S|2||KINGS||MIGHT|0', 'PARTY', 'B-Realm'); runTimers()
-            assert(not ns.result.expected['B-Realm'].THORNS) -- explicit peer opt-out beats role default
+            assert(not ns.Assignments.result.expected['B-Realm'].THORNS) -- explicit peer opt-out beats role default
         """)
 
     def test_tracker_turns_on_my_missing_aura(self):

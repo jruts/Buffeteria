@@ -64,8 +64,7 @@ local function slider(card, key, name, label, y)
 	bar:SetMinMaxValues(minimum, maximum); bar:SetValueStep(step)
 	if bar.SetObeyStepOnDrag then bar:SetObeyStepOnDrag(true) end
 	bar:SetScript("OnValueChanged", function(_, raw)
-		if refreshing then return end
-		set(key, math.max(minimum, math.min(maximum, math.floor(raw / step + 0.5) * step)))
+		if not refreshing then set(key, raw) end
 	end)
 	local low = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	low:SetPoint("RIGHT", bar, "LEFT", -6, 0); low:SetText(minimum)
@@ -122,10 +121,7 @@ local function showCard()
 	ns.UI.Text(card, "GameFontHighlight", 14, -166, nil, "Expiring below")
 	ns.UI.Text(card, "GameFontDisableSmall", 14, -190, 160,
 		"A buff is expiring when anyone has less time left than this.")
-	local minimum, maximum = unpack(ns.Database.RANGES.warnMinutes)
-	local function step(delta)
-		set("warnMinutes", math.max(minimum, math.min(maximum, ns.db.warnMinutes + delta)))
-	end
+	local function step(delta) set("warnMinutes", ns.db.warnMinutes + delta) end
 	local plus = ns.UI.Chip(card, "+", 24, function() step(1) end)
 	plus:SetPoint("TOPRIGHT", -14, -162)
 	local box = ns.UI.ValueBox(card, 54, 22, "GameFontHighlight")
@@ -171,15 +167,10 @@ local function legend()
 	end
 end
 
-function View.Create(parent)
-	panel = CreateFrame("Frame", nil, parent)
-	panel:SetPoint("TOPLEFT", 0, -34); panel:SetPoint("BOTTOMRIGHT")
+function View.Create(host)
+	panel = host
 	sliders = {}
-	local band = ns.UI.Band(panel, "Tracker settings",
-		"Tune the clickable head and the buff icons around it. Changes apply instantly.")
-	band.box:Hide(); band.countLabel:Hide()
-	band.help:SetPoint("RIGHT", band, "RIGHT", -16, 0)
+	ns.UI.Band(panel, "Tracker settings", "Tune the clickable head and the buff icons around it. Changes apply instantly.")
 	cards = { trackerCard(), sizeCard(), showCard(), layoutCard() }
 	legend()
-	return panel
 end

@@ -5,15 +5,16 @@ ns.Options = Options
 local win, content, panel
 -- The /buff window matches the native talent panel: three trees side by side.
 local WIDTH, HEIGHT, CONTENT_H = 652, 528, 498
--- Tabs in order; Paladins only exists for paladins.
+local TAB_BAR_H = 34
+-- Tabs in order; Paladins only exists for paladins. Each view fills a panel below the tab bar.
 local TABS = {
-	{ key = "PERSONAL", label = "My preferences", view = function() return ns.Preferences.View end },
-	{ key = "PALADIN", label = "Paladins", view = function() return ns.Paladins.View end, paladinOnly = true },
-	{ key = "SETTINGS", label = "Settings", view = function() return ns.Tracker.View end },
+	{ key = "PERSONAL", label = "My preferences", view = ns.Preferences.View },
+	{ key = "PALADIN", label = "Paladins", view = ns.Paladins.View, paladinOnly = true },
+	{ key = "SETTINGS", label = "Settings", view = ns.Tracker.View },
 }
 
 local function visibleTabs()
-	local out, paladin = {}, ns.WoW.PlayerClass() == "PALADIN"
+	local out, paladin = {}, ns.WoW.IsPaladin()
 	for _, tab in ipairs(TABS) do
 		if paladin or not tab.paladinOnly then out[#out + 1] = tab end
 	end
@@ -32,11 +33,11 @@ local function layout()
 		else tab.button:SetPoint("TOPLEFT", inWindow and 64 or 16, -4) end
 		previous = tab.button
 	end
-	for _, tab in ipairs(TABS) do tab.view().Layout(width) end
+	for _, tab in ipairs(TABS) do tab.view.Layout(width) end
 end
 
 local function showTab(selected)
-	if selected == "PALADIN" and ns.WoW.PlayerClass() ~= "PALADIN" then selected = "PERSONAL" end
+	if selected == "PALADIN" and not ns.WoW.IsPaladin() then selected = "PERSONAL" end
 	for _, tab in ipairs(TABS) do
 		local on = tab.key == selected
 		tab.panel:SetShown(on)
@@ -47,7 +48,7 @@ end
 
 function Options.Refresh()
 	if not content then return end
-	for _, tab in ipairs(TABS) do tab.view().Refresh() end
+	for _, tab in ipairs(TABS) do tab.view.Refresh() end
 	layout()
 end
 
@@ -79,13 +80,17 @@ local function build()
 	content = CreateFrame("Frame", nil, win)
 	content:SetSize(WIDTH, CONTENT_H)
 	content:SetPoint("TOPLEFT", 0, -26)
-	local paladin = ns.WoW.PlayerClass() == "PALADIN"
+	local paladin = ns.WoW.IsPaladin()
 	for _, tab in ipairs(TABS) do
 		-- Talent-panel style top tab ("Primary" / "Secondary").
 		tab.button = ns.UI.Chip(content, tab.label, 150, function() showTab(tab.key); Options.Refresh() end, "GameFontNormal")
 		tab.button:SetShown(paladin or not tab.paladinOnly)
 	end
-	for _, tab in ipairs(TABS) do tab.panel = tab.view().Create(content) end
+	for _, tab in ipairs(TABS) do
+		tab.panel = CreateFrame("Frame", nil, content)
+		tab.panel:SetPoint("TOPLEFT", 0, -TAB_BAR_H); tab.panel:SetPoint("BOTTOMRIGHT")
+		tab.view.Create(tab.panel)
+	end
 	showTab("PERSONAL")
 	win:SetScript("OnShow", function() attach(win, -26) end)
 	win:Hide()
@@ -93,7 +98,7 @@ local function build()
 	local function refreshVisible()
 		if content:IsVisible() then Options.Refresh() end
 	end
-	for _, event in ipairs({ "AssignmentsChanged", "PaladinPlanChanged", "PreviewChanged", "SettingsChanged" }) do
+	for _, event in ipairs({ "AssignmentsChanged", "PaladinPlanChanged", "PreferencesChanged", "PreviewChanged", "SettingsChanged" }) do
 		ns.Events.On(event, refreshVisible)
 	end
 	win:RegisterEvent("DISPLAY_SIZE_CHANGED")

@@ -7,6 +7,3 @@ ns.savedVariable = ns.globalPrefix .. "CharDB"
 ns.commandKey = ns.isDev and "BUFFETERIADEV" or "BUFFETERIA"
 ns.command = ns.isDev and "/buffdev" or "/buff"
 ns.mediaPath = "Interface\\AddOns\\" .. ADDON .. "\\Media\\"
--- Current snapshots, shared by assignments and their consumers.
-ns.result = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, expected = {} }
-ns.roster = { members = {}, units = {} }

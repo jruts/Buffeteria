@@ -12,6 +12,7 @@ local SPEC_ICONS = { "Interface\\Icons\\Spell_Holy_HolyBolt", "Interface\\Icons\
 	"Interface\\Icons\\Spell_Holy_AuraOfLight" }
 local columnWidth, contentWidth, scrollOffset, paladinCount = MIN_COLUMN, 0, 0, 0
 local AURA = ns.Paladins.AURA
+local GREY = ns.UI.COLOR.GREY
 
 -- slot is a class, or AURA for the paladin's own aura.
 local function cycle(column, slot, mouseButton)
@@ -27,14 +28,15 @@ end
 local function tooltip(button)
 	local column, class = button.column, button.class
 	local name = column.paladin
-	if not name or not ns.roster.members[name] then return end
+	local member = name and ns.Assignments.roster.members[name]
+	if not member then return end
 	GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
 	local aura = class == AURA
 	local thing = aura and "aura" or "blessing"
 	GameTooltip:SetText(ns.WoW.Short(name) .. " - " .. (aura and "Aura" or ns.WoW.ClassName(class)))
 	GameTooltip:AddLine(button.detail, unpack(ns.UI.GOLD))
 	if button.duplicate then GameTooltip:AddLine("Another paladin already has this " .. thing .. " assigned.", 1, 0.35, 0.2, true) end
-	if not ns.roster.members[name].hasAddon then
+	if not member.hasAddon then
 		GameTooltip:AddLine("Without Buffeteria: choose " .. thing .. "s this paladin can cast.", 0.8, 0.8, 0.8, true)
 	end
 	GameTooltip:AddLine("Left-click: next " .. thing .. ". Right-click: previous.", 1, 1, 1, true)
@@ -147,7 +149,7 @@ function View.Refresh()
 	empty:SetShown(paladinCount == 0)
 	for i, name in ipairs(pals) do
 		if not columns[i] then columns[i] = createColumn() end
-		local column, member = columns[i], ns.roster.members[name]
+		local column, member = columns[i], ns.Assignments.roster.members[name]
 		local spec = (i - 1) % 3 + 1
 		column.paladin = name; column:Show()
 		column:SetArt(ns.UI.TREE_ART.PALADIN[spec])
@@ -163,7 +165,7 @@ function View.Refresh()
 		local auraText = ("|cff%02x%02x%02x%s|r"):format(color[1] * 255, color[2] * 255, color[3] * 255,
 			aura and aura.label or (auraKey == "NONE" and "No aura" or "Aura: Auto"))
 		column:SetHeader(SPEC_ICONS[spec], ns.WoW.ClassColorName(name, "PALADIN"),
-			auraText .. (member.hasAddon and "" or " |cff808080(no add-on)|r"), covered)
+			auraText .. (member.hasAddon and "" or " " .. GREY .. "(no add-on)|r"), covered)
 	end
 	for i = paladinCount + 1, #columns do columns[i].paladin = nil; columns[i]:Hide() end
 	seats[1] = seats[1] or createSeat()
@@ -171,11 +173,10 @@ function View.Refresh()
 	seats[1]:SetShown(paladinCount == 0)
 end
 
-function View.Create(parent)
-	panel = CreateFrame("Frame", nil, parent)
-	panel:SetPoint("TOPLEFT", 0, -34); panel:SetPoint("BOTTOMRIGHT")
+function View.Create(host)
+	panel = host
 	band = ns.UI.Band(panel, "Blessings and auras",
-		"One tree per paladin: aura top right, a blessing per class. Click cycles; right-click reverses.")
+		"One tree per paladin: aura top right, a blessing per class. Click cycles; right-click reverses.", true)
 	-- PallyPower-style shortcuts: lock in what Auto picked, or start over.
 	local clear = ns.UI.Button(band, "Clear", 64, function() ns.Paladins.Clear() end,
 		"Set every blessing and aura back to Auto.")
@@ -208,12 +209,11 @@ function View.Create(parent)
 	end)
 	local legend = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	legend:SetPoint("BOTTOMLEFT", 16, 15)
-	legend:SetText("|cffffd100Gold|r assigned  |cff19ff19Green|r auto  |cff808080Grey|r none")
+	legend:SetText("|cffffd100Gold|r assigned  |cff19ff19Green|r auto  " .. GREY .. "Grey|r none")
 	local priority = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	priority:SetPoint("BOTTOMRIGHT", -16, 9); priority:SetWidth(200); priority:SetJustifyH("RIGHT")
 	priority:SetText("Personal overrides take priority. Your own tree is saved.")
 	ns.UI.Button(panel, "Announce to group", 160, function() ns.Assignments.Announce() end):SetPoint("BOTTOM", 0, 10)
 	panel.columns, panel.seats, panel.viewport, panel.scrollbar = columns, seats, viewport, scrollbar
 	panel.fill, panel.clear = fill, clear
-	return panel
 end

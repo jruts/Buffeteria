@@ -13,12 +13,12 @@ local COMMANDS = {
 		for _, l in ipairs(ns.Assignments.Lines(true)) do ns.WoW.Print(l) end
 	end,
 	reset = function()
-		ns.Preferences.Reset(); ns.Options.Refresh()
+		ns.Preferences.Reset()
 		ns.WoW.Print("preferences reset to class defaults")
 	end,
 	settings = function() ns.Options.OpenSettings() end,
 	preview = function() ns.Tracker.Preview.Toggle() end,
-	minimap = function() ns.Minimap.SetShown(ns.db.minimap.hide) end,
+	minimap = function() ns.Minimap.Toggle() end,
 	help = function()
 		local c = ns.command
 		ns.WoW.Print(("%s (options), %s settings, %s who, %s announce, %s show|hide, %s lock, %s minimap, %s preview, %s reset")

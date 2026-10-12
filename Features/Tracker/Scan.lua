@@ -5,7 +5,7 @@ local Buffs, Status = ns.Buffs, ns.Tracker.Status
 local Scan = {}
 ns.Tracker.Scan = Scan
 
-local EMPTY = {}
+local EMPTY = ns.Util.EMPTY
 local isSecret = issecretvalue or function() return false end
 local nameToKey = {}
 local cache = {}          -- [fullName] = { [key] = { exp = number, name = string } }
@@ -85,13 +85,12 @@ local function readGroup(roster)
 	end
 end
 
--- Scans the group and returns a summary used by the tracker.
-function Scan.Update()
-	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
-	local roster, res, me = ns.roster, ns.result, ns.WoW.Me()
+-- Scans the group and returns the observed part of the tracker summary
+-- (everything but next and cancel; see Status.NewSummary).
+function Scan.Update(now, warnSec)
+	local roster, res, me = ns.Assignments.roster, ns.Assignments.result, ns.WoW.Me()
 	readGroup(roster)
-	-- yours: keys I have to cast; needs: what I'm missing and who should cast it.
-	local summary = { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false, yours = {}, needs = {} }
+	local summary = Status.NewSummary()
 	local function problem(full, key, status, rem, caster)
 		table.insert(summary.problems, { who = full, key = key, status = status, rem = rem, caster = caster })
 		summary.overall = Status.Worst(summary.overall, status == "unwanted" and "warn" or status)
@@ -102,7 +101,7 @@ function Scan.Update()
 			for key, caster in pairs(exp) do
 				summary.any = true
 				local st, rem = Scan.Rate(full, key, now, warnSec)
-				local pk = summary.perKey[key] or { bad = 0, warn = 0, total = 0, unknown = 0, casters = {} }
+				local pk = summary.perKey[key] or Status.NewCounts()
 				summary.perKey[key] = pk
 				pk.total = pk.total + 1
 				summary.overall = Status.Worst(summary.overall, st)
@@ -127,7 +126,9 @@ function Scan.Update()
 	local aura, missingAura = res.auras[me], Scan.MissingAura()
 	if aura and roster.members[me] and not roster.members[me].dead then
 		summary.any = true
-		summary.perKey[aura] = { bad = missingAura and 1 or 0, warn = 0, total = 1, casters = { [me] = true } }
+		local pk = Status.NewCounts()
+		pk.bad, pk.total, pk.casters[me] = missingAura and 1 or 0, 1, true
+		summary.perKey[aura] = pk
 		if missingAura then
 			summary.yours[aura] = true
 			problem(me, aura, "bad", nil, me)
@@ -137,14 +138,12 @@ function Scan.Update()
 	table.sort(summary.problems, Status.CompareProblems)
 	table.sort(summary.unreadable)
 	table.sort(summary.needs, Status.CompareProblems)
-	summary.next = ns.Tracker.Actions.Next(now, warnSec, missingAura)
-	summary.cancel = Scan.UnwantedOnMe()
 	return summary
 end
 
 -- My assigned aura when I am not running it, or nil (none assigned, or auras hidden).
 function Scan.MissingAura()
-	local key = ns.result.auras[ns.WoW.Me()]
+	local key = ns.Assignments.Aura(ns.WoW.Me())
 	if not key then return nil end
 	local running = false
 	local readable = eachAura("player", function(a)
@@ -158,9 +157,9 @@ end
 -- An excluded blessing sitting on me -> the aura name to cancel.
 function Scan.UnwantedOnMe()
 	local me = ns.WoW.Me()
-	local m, auras = ns.roster.members[me], cache[me]
+	local m, auras = ns.Assignments.roster.members[me], cache[me]
 	if not m or not auras then return nil end
 	for key in pairs(m.excluded or EMPTY) do
-		if not (ns.result.expected[me] or EMPTY)[key] and auras[key] then return auras[key].name, key end
+		if not ns.Assignments.Served(me)[key] and auras[key] then return auras[key].name, key end
 	end
 end

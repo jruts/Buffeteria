@@ -1,4 +1,5 @@
--- Buffeteria: addon messages. Preferences, capabilities and class plans travel;
+-- Buffeteria: addon message transport. Features share their state on
+-- "BroadcastRequested" and handle "Received:<kind>" (sender, fields...);
 -- every client computes the assignments itself.
 local _, ns = ...
 local Comm = {}
@@ -9,18 +10,13 @@ local PREFIX, VERSION = Protocol.PREFIX, Protocol.VERSION
 local queued = {}           -- keep every class edit through lockdown/throttle
 local lastSent, lastReq = 0, 0
 local announcePending, replyPending = false, false
+local sendWarned, versionWarned = false, false
 
 local function channel()
 	if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return "INSTANCE_CHAT" end
 	if IsInRaid() then return "RAID" end
 	if IsInGroup() then return "PARTY" end
 	return nil
-end
-
-local function stateMessage()
-	local p = ns.Preferences.Get()
-	return Protocol.Encode("S", Protocol.SetString(p.wants), table.concat(p.ranking, ","),
-		Protocol.SetString(p.excluded), Protocol.SetString(ns.Roster.Capabilities()), p.blessingsOverride and "1" or "0")
 end
 
 local function send(msg)
@@ -30,7 +26,7 @@ local function send(msg)
 	-- A message the client rejects outright would never send; drop it so it
 	-- cannot hold back every later edit in the queue.
 	if not ok then
-		if not Comm.sendWarned then Comm.sendWarned = true; ns.WoW.Print("could not send an addon message: " .. tostring(res)) end
+		if not sendWarned then sendWarned = true; ns.WoW.Print("could not send an addon message: " .. tostring(res)) end
 		return true
 	end
 	-- Older clients return a bool, Mainline returns Enum.SendAddonMessageResult (0 = Success).
@@ -47,10 +43,7 @@ function Comm.Send(msg)
 	queued[#queued + 1] = msg
 end
 
-local function broadcastState()
-	Comm.Send(stateMessage())
-	ns.Paladins.Broadcast()
-end
+local function broadcast() ns.Events.Emit("BroadcastRequested") end
 
 -- Broadcast my state. force = skip the anti-spam window (e.g. after a prefs change).
 -- Calls inside the window collapse into one broadcast when it ends.
@@ -65,7 +58,7 @@ function Comm.Announce(force)
 		return
 	end
 	lastSent = now
-	broadcastState()
+	broadcast()
 	if now - lastReq > 10 then lastReq = now; Comm.Send(Protocol.Encode("R")) end
 end
 
@@ -77,31 +70,29 @@ function Comm.Flush()
 	end
 end
 
+local function dispatch(sender, kind, ver, ...)
+	if ver ~= VERSION then
+		if not versionWarned then
+			versionWarned = true
+			ns.WoW.Print(ns.WoW.Short(sender) .. " runs a different Buffeteria version. Assignments may disagree.")
+		end
+		return
+	end
+	if kind == "R" then
+		-- Everyone answers a state request, spread out to avoid a burst.
+		if replyPending then return end
+		replyPending = true
+		C_Timer.After(0.5 + math.random() * 2, function() replyPending = false; broadcast() end)
+	else
+		ns.Events.Emit("Received:" .. tostring(kind), sender, ...)
+	end
+end
+
 function Comm.OnMessage(prefix, msg, _, sender)
 	if prefix ~= PREFIX or not msg then return end
 	local full = ns.WoW.NormalizeName(sender)
 	if not full or full == ns.WoW.Me() then return end
-
-	local kind, ver, a, b, c, d, e = Protocol.Decode(msg)
-	if kind == "S" then
-		if ver ~= VERSION then
-			if not Comm.warned then Comm.warned = true; ns.WoW.Print(ns.WoW.Short(full) .. " runs a different Buffeteria version. Assignments may disagree.") end
-			return
-		end
-		-- Keep state even if the sender isn't in our roster yet (they just joined or
-		-- haven't loaded); Roster.Build only uses peers who are in the group.
-		ns.Roster.peers[full] = { wants = Protocol.Set(a), ranking = Protocol.List(b), excluded = Protocol.Set(c),
-			caps = Protocol.Set(d), blessingsOverride = e == "1" }
-		ns.Assignments.Resolve()
-	elseif kind == "P" and ver == VERSION then
-		ns.Paladins.Receive(full, a, b, c, d, e)
-	elseif kind == "R" and ver == VERSION and not replyPending then
-		replyPending = true
-		C_Timer.After(0.5 + math.random() * 2, function()
-			replyPending = false
-			broadcastState()
-		end)
-	end
+	dispatch(full, Protocol.Decode(msg))
 end
 
 function Comm.Init()

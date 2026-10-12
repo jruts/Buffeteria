@@ -83,6 +83,8 @@ function ns.WoW.PlayerClass()
 	return class
 end
 
+function ns.WoW.IsPaladin() return ns.WoW.PlayerClass() == "PALADIN" end
+
 function ns.WoW.Short(full) return (full and full:match("^[^-]+")) or full or "?" end
 
 -- Assigned combat roles, with the Classic raid main-tank assignment as fallback.

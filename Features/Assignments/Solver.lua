@@ -1,7 +1,7 @@
 -- Buffeteria: the assignment solver.
 -- Pure Lua, no WoW API: every client runs it on the same roster and gets the same answer.
 local _, ns = ...
-local Buffs = ns.Buffs
+local Buffs, EMPTY, sortedKeys = ns.Buffs, ns.Util.EMPTY, ns.Util.SortedKeys
 
 local Solver = {}
 ns.Solver = Solver
@@ -25,21 +25,12 @@ Output:
 	expected[member][buffKey] = caster   (what the tracker checks)
 ]]
 
-local EMPTY = {}
 local NB = #Buffs.BLESSING_KEYS
 local globalIndex = {}
 for i, k in ipairs(Buffs.BLESSING_KEYS) do globalIndex[k] = i end
 
-local function sortedKeys(t)
-	local out = {}
-	for k in pairs(t) do out[#out + 1] = k end
-	table.sort(out)
-	return out
-end
-Solver.SortedKeys = sortedKeys
-
 local function can(member, key) return (member.caps or EMPTY)[key] end
-local function canAny(member, key) return can(member, key) or can(member, "g" .. key) end
+local function canAny(member, key) return Buffs.CanCast(member.caps, key) end
 
 local function countKnown(p, keys, knows)
 	local count = 0
@@ -279,8 +270,8 @@ end
 
 -- Tank and self buffs are single-target: self-only ones are cast by the member
 -- who wants them, the rest rotate through the class's casters.
-local function solveSingleBuffs(roster, names, buffs, out)
-	for _, buff in ipairs(buffs) do
+local function solveSingleBuffs(roster, names, out)
+	for _, buff in ipairs(Buffs.SINGLE_BUFFS) do
 		local casters, nextCaster = {}, 1
 		for _, n in ipairs(names) do
 			local m = roster.members[n]
@@ -311,7 +302,6 @@ function Solver.Solve(roster)
 	solvePaladins(roster, names, paladins, out)
 	solveAuras(roster, paladins, out)
 	solveGroupBuffs(roster, names, out)
-	solveSingleBuffs(roster, names, Buffs.TANK_BUFFS, out)
-	solveSingleBuffs(roster, names, Buffs.SELF_BUFFS, out)
+	solveSingleBuffs(roster, names, out)
 	return out
 end

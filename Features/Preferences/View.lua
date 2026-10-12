@@ -6,17 +6,12 @@ local View = {}
 ns.Preferences.View = View
 local personal, band, trees, list, wants, overrideCheck, tip, tankButtons, roleButton, roleText, tankTip
 local EDGE, GAP, BOARD_H = 8, 2, 360
-local GREY, RED = "|cff808080", "|cffff5040"
+local GREY, RED = ns.UI.COLOR.GREY, ns.UI.COLOR.RED
 local ROLE_LABELS = { AUTO = "Auto", TANK = "Tank", OFF = "Not tank" }
 local NEXT_ROLE = { AUTO = "TANK", TANK = "OFF", OFF = "AUTO" }
 
 -- What the solver expects you to receive: buff key -> caster.
 local function served() return ns.Assignments.Served(ns.WoW.Me()) end
-
-local function changed()
-	ns.Preferences.Changed()
-	View.Refresh()
-end
 
 -- A wanted buff's caption: who casts it, or why nobody does.
 local function casterText(buff, on, caster, missing)
@@ -123,39 +118,34 @@ local function tankTooltip(button)
 end
 
 -- A talent button toggling one key of a saved set, captioned with its caster.
-local function toggleButton(tree, buff, settings, onEnter)
+local function toggleButton(tree, buff, set, onEnter)
 	local button = ns.UI.TalentButton(tree)
 	button.key = buff.key
 	button.caster = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	button.caster:SetWordWrap(false)
 	button:SetScript("OnClick", function(self)
-		local saved = ns.db[settings]
-		saved[self.key] = not saved[self.key]
-		changed()
+		ns.Preferences.Toggle(set, self.key)
 		if GameTooltip:IsOwned(self) then onEnter(self) end
 	end)
 	button:SetScript("OnEnter", onEnter); button:SetScript("OnLeave", GameTooltip_Hide)
 	return button
 end
 
-function View.Create(parent)
-	personal = CreateFrame("Frame", nil, parent)
-	personal:SetPoint("TOPLEFT", 0, -34); personal:SetPoint("BOTTOMRIGHT")
-	band = ns.UI.Band(personal, "Your buffet", "Rank your blessings and pick your buffs, including tank buffs.")
+function View.Create(host)
+	personal = host
+	band = ns.UI.Band(personal, "Your buffet", "Rank your blessings and pick your buffs, including tank buffs.", true)
 	trees = { ns.UI.Tree(personal), ns.UI.Tree(personal), ns.UI.Tree(personal) }
 
 	-- 1) Blessing ranking, with the paladin serving each ranked blessing
 	local blessings = trees[1]
 	list = ns.Preferences.RankList.Create(blessings, served, function()
-		ns.db.blessingsOverride = true
-		changed()
+		ns.Preferences.Set("blessingsOverride", true)
 	end)
 	list:SetPoint("TOPLEFT", 10, -80)
 	tip = ns.UI.Text(blessings, "GameFontDisableSmall", 14, -84 - list:GetHeight(), nil,
 		"#1 with one paladin, #1 and #2 with two. Tanks: drag Salvation below the line.")
 	overrideCheck = ns.UI.Checkbox(blessings, "Override the Paladins class plan", 10, -322, function(value)
-		ns.db.blessingsOverride = value
-		changed()
+		ns.Preferences.Set("blessingsOverride", value)
 	end)
 	overrideCheck.text:SetJustifyH("LEFT")
 
@@ -169,8 +159,7 @@ function View.Create(parent)
 	-- 3) Tank buffs, with an automatic role and an override for unassigned groups.
 	local tanks = trees[3]
 	roleButton = ns.UI.Button(tanks, "", 120, function()
-		ns.db.tankRole = NEXT_ROLE[ns.db.tankRole]
-		changed()
+		ns.Preferences.Set("tankRole", NEXT_ROLE[ns.db.tankRole])
 	end)
 	roleButton:SetPoint("TOPLEFT", 14, -84)
 	roleText = ns.UI.Text(tanks, "GameFontHighlightSmall", 14, -114)
@@ -190,5 +179,4 @@ function View.Create(parent)
 	ns.UI.Button(personal, "Announce to group", 160, function() ns.Assignments.Announce() end):SetPoint("BOTTOM", 0, 10)
 	personal.wants, personal.tankButtons, personal.tankRole = wants, tankButtons, roleButton
 	personal.rankList, personal.rankRows, personal.rankGhost = list, list.rows, list.ghost
-	return personal
 end

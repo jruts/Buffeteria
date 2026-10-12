@@ -243,33 +243,47 @@ Each feature owns its logic and, when needed, its view:
 | Directory | Responsibility |
 | --- | --- |
 | `Features/Buffs` | Spell catalog and class defaults |
-| `Features/Preferences` | Personal buff choices, reset behavior, the drag-and-drop ranking, and preference controls |
-| `Features/Roster` | Group members, peer preferences, spell capabilities, and member names |
+| `Features/Preferences` | Personal buff choices, their defaults and migrations, reset behavior, the drag-and-drop ranking, and preference controls |
+| `Features/Roster` | Group members, peer preferences (the `S` message), spell capabilities, and member names |
 | `Features/Assignments` | Pure assignment solver, recomputation, summaries, and announcements |
 | `Features/Paladins` | Shared class plans and their editor |
 | `Features/Sync` | Wire format (`Protocol`), transport, and retry queue |
-| `Features/Tracker` | Aura observations, next-cast selection, status, icon layout, tooltips, secure buttons, and preview |
+| `Features/Tracker` | Aura observations, next-cast selection, status, icon layout, tooltips, secure buttons, Edit Mode, and preview |
 | `Features/Minimap` | Minimap button and positioning |
 | `Features/Options` | Window and Settings page hosting the feature views |
 
-`App` initializes the runtime snapshots and saved variables, routes WoW events,
-and exposes commands. `App/Database.lua` validates saved settings against one
-table of ranges and choices, which the settings controls also read. `Shared`
-contains the WoW compatibility helpers, reused UI controls, and internal
-notifications; it never depends on a feature. The existing saved-variable keys
-and version 2 message format are preserved.
+`App` initializes saved variables, routes WoW events, wires feature notifications
+to re-solving, and exposes commands. `App/Database.lua` validates display settings
+against one table of ranges and choices, which the settings controls also read;
+`ns.Database.Set` normalizes a value and emits `SettingsChanged` so the tracker,
+minimap button, and open controls follow. `Shared` contains plain table helpers,
+the WoW compatibility helpers, reused UI controls, and internal notifications; it
+never depends on a feature. The existing saved-variable keys and version 2
+message format are preserved.
+
+Each feature owns its saved data and writes it through its own API. Preferences
+owns personal choices and their migrations (`ns.Preferences.Set`, `Toggle`,
+`Reset`, which emit `PreferencesChanged`); Paladins owns its plan cells
+(`PaladinPlanChanged`); Roster owns peer state (`PeersChanged`). Bootstrap
+re-solves after any of these.
 
 Each roster read flows one way: `Assignments.Resolve` builds the roster, lets
-`Paladins.Attach` add the shared class plan, runs the pure solver, and emits
-`AssignmentsChanged`. Views read the result through `ns.Assignments` accessors.
-Change a display setting with `ns.Database.Set`, which emits `SettingsChanged`
-so the tracker, minimap button, and open controls follow. The tracker emits
-`SummaryChanged` after each scan. Tracker modules live under `ns.Tracker`
-(`ns.Tracker.Scan`, `ns.Tracker.Actions`, and so on).
+`Paladins.Attach` add the shared class plan and the spells it implies, runs the
+pure solver, and emits `AssignmentsChanged`. Assignments owns the snapshots:
+read `ns.Assignments.roster` and `ns.Assignments.result` (or the accessors
+`Served`, `ClassBlessing`, and `Aura`) and never write them. `Tracker.Compute`
+combines the observed group (`Scan`) with the next cast (`Actions`), and the
+tracker emits `SummaryChanged` after each refresh. Tracker modules live under
+`ns.Tracker` (`ns.Tracker.Scan`, `ns.Tracker.Actions`, and so on).
+
+`Sync/Comm` is only the transport. A feature shares its state when
+`BroadcastRequested` fires and handles its own message kind from
+`Received:<kind>` (sender, fields...): Roster sends and receives `S`, Paladins
+`P`. The Options window creates each tab's panel and the feature's view fills it.
 
 Keep new behavior in its owning feature. Use its namespace (`ns.Preferences`,
 `ns.Paladins`, etc.) for public operations; keep implementation helpers local.
-Use `ns.Events.On` and `ns.Events.Emit` for refresh notifications instead of
-replacing another feature's callbacks. Extract shared code only when multiple
+Use `ns.Events.On` and `ns.Events.Emit` for notifications instead of calling
+or replacing another feature's functions. Extract shared code only when multiple
 features actually need it. Update `Buffeteria.toc` when adding a runtime file;
 the manifest lists dependencies before their consumers and loads bootstrap last.

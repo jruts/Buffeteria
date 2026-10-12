@@ -2,6 +2,8 @@
 local _, ns = ...
 local UI = { ICON = ns.mediaPath .. "Icon", WHITE = "Interface\\Buttons\\WHITE8X8", GOLD = { 1, 0.82, 0 } }
 ns.UI = UI
+-- Inline color codes for font strings.
+UI.COLOR = { GREY = "|cff808080", RED = "|cffff5040" }
 local icons = {}
 
 -- Talent tree backgrounds per class, in talent-tab order.
@@ -260,9 +262,25 @@ function UI.Tree(parent)
 	return tree
 end
 
--- The band under the tabs: a title and help line, plus a talent-panel style
--- counter box on the right, like "Unspent Talents [0]".
-function UI.Band(parent, title, help)
+-- Dim `icon` while the button is pressed. `button.dragged` resets on every
+-- press so release handlers can ignore the click that ends a drag.
+function UI.PressFeedback(button, icon, onDown)
+	button:SetScript("OnMouseDown", function(self)
+		self.dragged = false
+		if icon then icon:SetVertexColor(0.75, 0.75, 0.75) end
+		if onDown then onDown(self) end
+	end)
+	if not icon then return end
+	button:SetScript("OnMouseUp", function() icon:SetVertexColor(1, 1, 1) end)
+	button:SetScript("OnLeave", function()
+		icon:SetVertexColor(1, 1, 1)
+		GameTooltip_Hide()
+	end)
+end
+
+-- The band under the tabs: a title and help line, plus (withCount) a talent-panel
+-- style counter box on the right, like "Unspent Talents [0]".
+function UI.Band(parent, title, help, withCount)
 	local band = CreateFrame("Frame", nil, parent)
 	band:SetPoint("TOPLEFT", 0, 0); band:SetPoint("TOPRIGHT", 0, 0); band:SetHeight(44)
 	local shade = band:CreateTexture(nil, "BACKGROUND")
@@ -272,7 +290,12 @@ function UI.Band(parent, title, help)
 	-- The heading belongs to the parent so a feature view can be found by it.
 	band.title = UI.Text(parent, "GameFontNormal", 16, -7, nil, title)
 	band.help = UI.Text(parent, "GameFontHighlightSmall", 16, -25, nil, help)
-	band.help:SetPoint("RIGHT", band, "RIGHT", -170, 0); band.help:SetWordWrap(false)
+	band.help:SetWordWrap(false)
+	if not withCount then
+		band.help:SetPoint("RIGHT", band, "RIGHT", -16, 0)
+		return band
+	end
+	band.help:SetPoint("RIGHT", band, "RIGHT", -170, 0)
 	band.box = UI.ValueBox(band, 34, 24, "GameFontHighlightLarge")
 	band.box:SetPoint("RIGHT", -14, 0)
 	band.countLabel = band:CreateFontString(nil, "OVERLAY", "GameFontNormal")

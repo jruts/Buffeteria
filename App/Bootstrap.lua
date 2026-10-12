@@ -3,10 +3,11 @@ local ADDON, ns = ...
 local App = CreateFrame("Frame")
 ns.App = App
 
-ns.Events.On("PreferencesChanged", function()
-	ns.Comm.Announce(true)
-	ns.Assignments.Resolve()
-end)
+-- Share my preference changes, and re-solve after anything the plan depends on.
+ns.Events.On("PreferencesChanged", function() ns.Comm.Announce(true) end)
+for _, event in ipairs({ "PreferencesChanged", "PeersChanged", "PaladinPlanChanged" }) do
+	ns.Events.On(event, function() ns.Assignments.Resolve() end)
+end
 
 App:RegisterEvent("ADDON_LOADED")
 App:RegisterEvent("PLAYER_LOGIN")
@@ -19,6 +20,7 @@ App:RegisterEvent("PLAYER_REGEN_ENABLED")
 App:SetScript("OnEvent", function(_, event, arg1)
 	if event == "ADDON_LOADED" and arg1 == ADDON then
 		ns.Database.Init()
+		ns.Preferences.Init()
 	elseif event == "PLAYER_LOGIN" then
 		ns.Paladins.Init()
 		ns.Comm.Init()

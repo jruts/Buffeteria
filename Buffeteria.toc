@@ -9,6 +9,7 @@
 ## IconTexture: Interface\AddOns\Buffeteria\Media\Icon
 
 App/State.lua
+Shared/Util.lua
 Shared/Events.lua
 Shared/WoW.lua
 Features/Buffs/Catalog.lua
@@ -27,6 +28,7 @@ Features/Tracker/Actions.lua
 Features/Tracker/Preview.lua
 Features/Tracker/Layout.lua
 Features/Tracker/Tooltip.lua
+Features/Tracker/EditMode.lua
 Features/Tracker/Tracker.lua
 Features/Tracker/View.lua
 Features/Minimap/Minimap.lua

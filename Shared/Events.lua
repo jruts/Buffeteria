@@ -8,6 +8,7 @@ function ns.Events.On(event, callback)
 	table.insert(listeners[event], callback)
 end
 
-function ns.Events.Emit(event)
-	for _, callback in ipairs(listeners[event] or {}) do callback() end
+-- Extra arguments are passed to every listener.
+function ns.Events.Emit(event, ...)
+	for _, callback in ipairs(listeners[event] or {}) do callback(...) end
 end

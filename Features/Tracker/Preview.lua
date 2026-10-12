@@ -2,7 +2,7 @@
 -- that cycles through "empty", "missing", "running low" and "all fed" so you can see
 -- how it looks. Nothing is cast and nothing is sent to other players.
 local _, ns = ...
-local Buffs = ns.Buffs
+local Buffs, Status = ns.Buffs, ns.Tracker.Status
 
 local Preview = { active = false }
 ns.Tracker.Preview = Preview
@@ -31,8 +31,12 @@ function Preview.Summary()
 	local phaseIndex = math.floor(GetTime() / PHASE_SECONDS) % #PHASES
 	local empty = PHASES[phaseIndex + 1] == "empty"
 	local phase = empty and "bad" or PHASES[phaseIndex + 1]
-	local s = { overall = phase, perKey = {}, problems = {}, any = true, yours = {}, needs = {} }
-	for _, key in ipairs(KEYS) do s.perKey[key] = { bad = 0, warn = 0, total = #FAKE } end
+	local s = Status.NewSummary()
+	s.overall, s.any = phase, true
+	for _, key in ipairs(KEYS) do
+		s.perKey[key] = Status.NewCounts()
+		s.perKey[key].total = #FAKE
+	end
 
 	if phase ~= "ok" then
 		for i, who in ipairs(FAKE) do
@@ -52,7 +56,7 @@ function Preview.Summary()
 		if phase == "bad" then
 			table.insert(s.problems, { who = "Shieldwalla", class = "WARRIOR", key = "SALV", status = "unwanted" })
 		end
-		table.sort(s.problems, ns.Tracker.Status.CompareProblems)
+		table.sort(s.problems, Status.CompareProblems)
 		local key = CLASS_CAST[ns.WoW.PlayerClass()]
 		if key then
 			local b = Buffs.byKey[key]

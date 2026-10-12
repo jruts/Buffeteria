@@ -6,7 +6,6 @@ local Status, Layout, Tooltip = Tracker.Status, Tracker.Layout, Tracker.Tooltip
 
 local frame, castBtn, cancelBtn, lastSummary, pulse
 local statusIcons = {}
-local editing = false
 local MAIN = 64                                  -- current clickable head size
 local GAP = Layout.GAP
 local BORDER = 2
@@ -29,9 +28,11 @@ local DISPLAY = {
 	PROBLEMS = function(pk) return pk.bad + pk.warn > 0, pk.bad + pk.warn end,
 }
 
+local function editing() return Tracker.EditMode.active end
+
 -- Room above the face for the GIEF call-out, the DEV/preview tag and Edit Mode's label.
 local function topGap()
-	local gap = (ns.isDev or Tracker.Preview.active or editing) and 24 or GAP
+	local gap = (ns.isDev or Tracker.Preview.active or editing()) and 24 or GAP
 	if frame.gief:IsShown() then gap = gap + ns.db.shoutSize + 2 end
 	return gap
 end
@@ -116,20 +117,21 @@ local function layoutStatusIcons(s)
 	for i = #keys + 1, #statusIcons do statusIcons[i]:Hide() end
 end
 
-local function savePos()
-	frame:StopMovingOrSizing()
-	frame:SetScript("OnUpdate", nil)
-	local p, _, rp, x, y = frame:GetPoint()
-	ns.db.pos = { p, rp, x, y }
-	Tracker.Refresh()
-end
-
-local function startMoving()
+function Tracker.StartMoving()
 	frame:StartMoving()
 	-- Reposition Auto during dragging without rescanning or changing the head.
 	frame:SetScript("OnUpdate", function()
 		if ns.db.iconPosition == "AUTO" and lastSummary then layoutStatusIcons(lastSummary) end
 	end)
+end
+
+-- Finish a drag and save where the tracker landed.
+function Tracker.StopMoving()
+	frame:StopMovingOrSizing()
+	frame:SetScript("OnUpdate", nil)
+	local p, _, rp, x, y = frame:GetPoint()
+	ns.db.pos = { p, rp, x, y }
+	Tracker.Refresh()
 end
 
 local function buildCastButton()
@@ -160,17 +162,10 @@ local function buildCastButton()
 	castBtn.glow:SetBlendMode("ADD")
 	castBtn.glow:Hide()
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
-	castBtn:SetScript("OnMouseDown", function(self)
-		self.dragged = false
+	ns.UI.PressFeedback(castBtn, castBtn.icon, function(self)
 		if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
-		self.icon:SetVertexColor(0.75, 0.75, 0.75)
 	end)
-	castBtn:SetScript("OnMouseUp", function(self) self.icon:SetVertexColor(1, 1, 1) end)
 	castBtn:SetScript("OnEnter", function(self) Tooltip.Head(self, lastSummary) end)
-	castBtn:SetScript("OnLeave", function(self)
-		self.icon:SetVertexColor(1, 1, 1)
-		GameTooltip_Hide()
-	end)
 	castBtn:SetScript("PostClick", function(self, button, down)
 		if down or self.dragged then return end
 		if button == "RightButton" then
@@ -188,12 +183,12 @@ local function buildCastButton()
 		self:SetAttribute("*type1", "")
 		self.icon:SetVertexColor(1, 1, 1)
 		GameTooltip_Hide()
-		startMoving()
+		Tracker.StartMoving()
 	end)
 	castBtn:SetScript("OnDragStop", function(self)
 		if not self.dragging then return end
 		self.dragging = false
-		savePos()
+		Tracker.StopMoving()
 		self.icon:SetVertexColor(1, 1, 1)
 		-- Keep the release suppressed through this input event. Restore on the
 		-- next frame even if the client doesn't send a click after the drag.
@@ -273,7 +268,7 @@ local function showShout(turn, n)
 		frame.gief:SetFont(frame.giefFont, ns.db.shoutSize, "OUTLINE")
 		frame.giefSize = ns.db.shoutSize
 	end
-	frame.gief:SetShown(turn and not editing)
+	frame.gief:SetShown(turn and not editing())
 	if n then
 		local buff = n.key and Buffs.byKey[n.key]
 		frame.gief:SetText("GIEF " .. (buff and buff.label or n.spell) .. "!")
@@ -281,7 +276,7 @@ local function showShout(turn, n)
 	local preview = Tracker.Preview.active
 	frame.tag:SetText(ns.isDev and (preview and "|cffff9900DEV / PREVIEW|r" or "|cffff9900DEV|r") or "|cffff9900PREVIEW|r")
 	-- Edit Mode already displays the full add-on name above this same head.
-	frame.tag:SetShown((ns.isDev and not editing) or (not ns.isDev and preview))
+	frame.tag:SetShown((ns.isDev and not editing()) or (not ns.isDev and preview))
 	frame.tag:ClearAllPoints()
 	if frame.gief:IsShown() then
 		frame.tag:SetPoint("BOTTOM", frame.gief, "TOP", 0, 1)
@@ -326,15 +321,25 @@ local function applySecure(s)
 	cancelBtn:SetShown(s.cancel ~= nil)
 end
 
+-- The full summary: the observed group, my next cast, and what to cancel on me.
+function Tracker.Compute()
+	if Tracker.Preview.active then return Tracker.Preview.Summary() end
+	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
+	local s = Tracker.Scan.Update(now, warnSec)
+	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura())
+	s.cancel = Tracker.Scan.UnwantedOnMe()
+	return s
+end
+
 function Tracker.Refresh()
 	if not frame then return end
 	local preview = Tracker.Preview.active
-	if not editing and not preview and (not ns.db.showTracker or not next(ns.roster.members)) then
+	if not editing() and not preview and (not ns.db.showTracker or not next(ns.Assignments.roster.members)) then
 		if not InCombatLockdown() then frame:Hide() end
 		return
 	end
-	if editing or not InCombatLockdown() then frame:Show() end
-	local s = preview and Tracker.Preview.Summary() or Tracker.Scan.Update()
+	if editing() or not InCombatLockdown() then frame:Show() end
+	local s = Tracker.Compute()
 	lastSummary = s
 	local mood = Status.Mood(s)
 	local face = MOOD_TEXTURES[mood] or MOOD_TEXTURES.grumpy
@@ -349,80 +354,10 @@ end
 
 function Tracker.Summary() return lastSummary end
 
-------------------------------------------------------------------------
--- Blizzard Edit Mode: show + highlight the tracker so it can be moved
--- together with the rest of the HUD.
-------------------------------------------------------------------------
--- Same atlas layout as Blizzard's EditModeSystemSelectionBaseMixin. Use only
--- its artwork; the system mixin requires a registered Blizzard HUD system.
-local EDIT_SELECTION_LAYOUT = {
-	TopRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = 8 },
-	TopLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = 8 },
-	BottomLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = -8 },
-	BottomRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = -8 },
-	TopEdge = { atlas = "_%s-NineSlice-EdgeTop" },
-	BottomEdge = { atlas = "_%s-NineSlice-EdgeBottom" },
-	LeftEdge = { atlas = "!%s-NineSlice-EdgeLeft" },
-	RightEdge = { atlas = "!%s-NineSlice-EdgeRight" },
-	Center = { atlas = "%s-NineSlice-Center", x = -8, y = 8, x1 = 8, y1 = -8 },
-}
-
-local function buildEditOverlay()
-	local o = CreateFrame("Button", nil, frame)
-	o:SetAllPoints()
-	o:SetFrameLevel(frame:GetFrameLevel() + 20)
-	o.Selection = CreateFrame("Frame", nil, o)
-	o.Selection:SetAllPoints()
-	o.Selection:SetFrameLevel(o:GetFrameLevel())
-	local function selectArtwork(selected)
-		NineSliceUtil.ApplyLayout(o.Selection, EDIT_SELECTION_LAYOUT,
-			selected and "editmode-actionbar-selected" or "editmode-actionbar-highlight")
-	end
-	o:SetScript("OnShow", function() selectArtwork(false) end)
-	o.label = o:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
-	-- The tracker is too narrow for the system name inside the selection.
-	o.label:SetPoint("BOTTOM", o, "TOP", 0, 10)
-	o.label:SetText(ns.title)
-	o:RegisterForDrag("LeftButton")
-	o:RegisterForClicks("LeftButtonUp")
-	o:SetScript("OnMouseDown", function(self) self.dragged = false end)
-	o:SetScript("OnDragStart", function(self)
-		if InCombatLockdown() then return end
-		self.dragged = true
-		selectArtwork(true)
-		startMoving()
-	end)
-	o:SetScript("OnDragStop", savePos)
-	o:SetScript("OnClick", function(self)
-		if self.dragged or InCombatLockdown() then return end
-		selectArtwork(true)
-		ns.Options.Toggle()
-	end)
-	o:Hide()
-	return o
-end
-
-local function hookEditMode()
-	if not (EventRegistry and EventRegistry.RegisterCallback) then return end
-	local overlay = buildEditOverlay()
-	frame.editOverlay = overlay
-	EventRegistry:RegisterCallback("EditMode.Enter", function()
-		if InCombatLockdown() then return end
-		editing = true
-		Tracker.Refresh()
-		overlay:Show()
-	end, Tracker)
-	EventRegistry:RegisterCallback("EditMode.Exit", function()
-		editing = false
-		overlay:Hide()
-		Tracker.Refresh()
-	end, Tracker)
-end
-
 function Tracker.Init()
 	MAIN = ns.db.iconSize
 	build()
-	hookEditMode()
+	Tracker.EditMode.Attach(frame)
 	if ns.db.pos then
 		frame:ClearAllPoints()
 		frame:SetPoint(ns.db.pos[1], UIParent, ns.db.pos[2], ns.db.pos[3], ns.db.pos[4])

@@ -60,9 +60,12 @@ function MinimapButton.Refresh()
 end
 
 function MinimapButton.SetShown(shown)
-	ns.db.minimap.hide = not shown
-	ns.Events.Emit("SettingsChanged")
+	local minimap = ns.db.minimap
+	minimap.hide = not shown
+	ns.Database.Set("minimap", minimap)
 end
+
+function MinimapButton.Toggle() MinimapButton.SetShown(ns.db.minimap.hide) end
 
 function MinimapButton.Init()
 	btn = CreateFrame("Button", ns.globalPrefix .. "_MinimapButton", Minimap)
@@ -100,11 +103,7 @@ function MinimapButton.Init()
 	btn.ring:SetPoint("CENTER", dotBorder, "CENTER")
 	btn.ring:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 
-	btn:SetScript("OnMouseDown", function(self)
-		self.dragged = false
-		self.icon:SetVertexColor(0.75, 0.75, 0.75)
-	end)
-	btn:SetScript("OnMouseUp", function(self) self.icon:SetVertexColor(1, 1, 1) end)
+	ns.UI.PressFeedback(btn, btn.icon)
 	btn:SetScript("OnClick", function(self, button)
 		if self.dragged then return end
 		if IsShiftKeyDown() then ns.Assignments.Announce()
@@ -122,10 +121,6 @@ function MinimapButton.Init()
 		self.icon:SetVertexColor(1, 1, 1)
 	end)
 	btn:SetScript("OnEnter", showTooltip)
-	btn:SetScript("OnLeave", function(self)
-		self.icon:SetVertexColor(1, 1, 1)
-		GameTooltip_Hide()
-	end)
 
 	place()
 	MinimapButton.Refresh()

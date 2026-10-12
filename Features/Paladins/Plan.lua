@@ -23,7 +23,11 @@ local function validKey(slot, key)
 	return buff ~= nil and buff.kind == (slot == AURA and "aura" or "blessing")
 end
 
-local function isPaladin() return ns.WoW.PlayerClass() == "PALADIN" end
+-- The roster member when they are a paladin, else nil.
+local function paladinMember(roster, name)
+	local m = roster.members[name]
+	return m and m.class == "PALADIN" and m or nil
+end
 
 -- Last write wins: the higher revision, then the higher author name.
 local function newer(a, b)
@@ -48,8 +52,9 @@ local function nextRevision()
 end
 
 function Plan.Init()
+	ns.db.paladinBlessings = ns.db.paladinBlessings or {}
 	Plan.revision = math.max(Plan.revision, tonumber(ns.db.paladinRevision) or 0, time())
-	if not isPaladin() then return end
+	if not ns.WoW.IsPaladin() then return end
 	local me = ns.WoW.Me()
 	for slot, key in pairs(ns.db.paladinBlessings) do
 		if slots[slot] and validKey(slot, key) then remember(me, slot, key, nextRevision(), me) end
@@ -73,11 +78,13 @@ end
 
 -- Manual cells for the solver: class -> paladin -> blessing, and paladin -> aura.
 -- When two paladins claim the same key in a slot, the newest edit keeps it.
+-- Also returns paladin -> { key = true } for keys assigned to paladins without
+-- the add-on: the assignment supplies the spellbook they cannot broadcast.
 function Plan.Assignments(roster)
-	local out, winners = {}, {}
+	local out, winners, assumed = {}, {}, {}
 	for paladin, row in pairs(Plan.cells) do
-		local m = roster.members[paladin]
-		if m and m.class == "PALADIN" then
+		local m = paladinMember(roster, paladin)
+		if m then
 			for slot, cell in pairs(row) do
 				if cell.key ~= "AUTO" then
 					out[slot] = out[slot] or {}
@@ -91,9 +98,10 @@ function Plan.Assignments(roster)
 						else
 							out[slot][paladin] = "NONE"
 						end
-						-- A manual assignment supplies the missing spell information for
-						-- a paladin who cannot broadcast their spellbook.
-						if not m.hasAddon then m.caps[cell.key] = true end
+						if not m.hasAddon then
+							assumed[paladin] = assumed[paladin] or {}
+							assumed[paladin][cell.key] = true
+						end
 					end
 				end
 			end
@@ -101,13 +109,14 @@ function Plan.Assignments(roster)
 	end
 	local auras = out[AURA] or {}
 	out[AURA] = nil
-	return out, auras
+	return out, auras, assumed
 end
 
 -- A manual pick that lost its key to another paladin's newer edit.
 function Plan.Overruled(paladin, slot)
 	if not Buffs.byKey[Plan.Get(paladin, slot)] then return false end
-	local cells = slot == AURA and ns.roster.paladinAuras or (ns.roster.paladinAssignments or {})[slot]
+	local roster = ns.Assignments.roster
+	local cells = slot == AURA and roster.paladinAuras or (roster.paladinAssignments or {})[slot]
 	return (cells or {})[paladin] == "NONE"
 end
 
@@ -134,11 +143,15 @@ function Plan.Replay(roster)
 end
 
 -- Give a fresh roster read its plan: forget the old group's cells, apply waiting
--- edits, then hand the solver the manual cells.
+-- edits, then hand the solver the manual cells and the spells they imply.
 function Plan.Attach(roster)
 	Plan.Prune(roster)
 	Plan.Replay(roster)
-	roster.paladinAssignments, roster.paladinAuras = Plan.Assignments(roster)
+	local assumed
+	roster.paladinAssignments, roster.paladinAuras, assumed = Plan.Assignments(roster)
+	for paladin, keys in pairs(assumed) do
+		for key in pairs(keys) do roster.members[paladin].caps[key] = true end
+	end
 end
 
 local function send(paladin, slot)
@@ -151,21 +164,18 @@ local function edit(paladin, slot, key)
 	send(paladin, slot)
 end
 
-local function changed()
-	ns.Assignments.Resolve()
-	ns.Events.Emit("PaladinPlanChanged")
-end
+local function changed() ns.Events.Emit("PaladinPlanChanged") end
 
 -- Whether a paladin may be assigned a key: anything for paladins without the
 -- add-on (their spellbook is unknown), else only what they can cast.
 local function castable(m, key)
-	return not m.hasAddon or m.caps[key] or m.caps["g" .. key]
+	return not m.hasAddon or Buffs.CanCast(m.caps, key)
 end
 
 -- A slot's choices for the editor, in cycling order; empty for non-paladins.
 function Plan.Choices(paladin, slot)
-	local m = ns.roster.members[paladin]
-	if not m or m.class ~= "PALADIN" then return {} end
+	local m = paladinMember(ns.Assignments.roster, paladin)
+	if not m then return {} end
 	local choices = { "AUTO" }
 	for _, key in ipairs(slot == AURA and Buffs.AURA_KEYS or Buffs.BLESSING_KEYS) do
 		if castable(m, key) then choices[#choices + 1] = key end
@@ -175,8 +185,8 @@ function Plan.Choices(paladin, slot)
 end
 
 function Plan.Set(paladin, slot, key)
-	local m = ns.roster.members[paladin]
-	if not isPaladin() or not m or m.class ~= "PALADIN" or not slots[slot] or not validKey(slot, key) then return end
+	local m = paladinMember(ns.Assignments.roster, paladin)
+	if not ns.WoW.IsPaladin() or not m or not slots[slot] or not validKey(slot, key) then return end
 	if Buffs.byKey[key] then
 		if not castable(m, key) then return end
 		-- One caster per blessing/class and per aura. An explicit selection replaces
@@ -191,7 +201,7 @@ end
 
 -- Edit every group paladin's cell that matches; returns how many changed.
 local function editAll(matches, pick)
-	if not isPaladin() then return 0 end
+	if not ns.WoW.IsPaladin() then return 0 end
 	local count = 0
 	for _, paladin in ipairs(ns.Roster.Paladins()) do
 		for slot in pairs(slots) do
@@ -219,10 +229,10 @@ function Plan.Clear()
 end
 
 function Plan.Broadcast()
-	if not isPaladin() then return end
+	if not ns.WoW.IsPaladin() then return end
 	-- Kept cells of paladins who are away right now go out again when they return.
 	for paladin, row in pairs(Plan.cells) do
-		if (ns.roster.members[paladin] or {}).class == "PALADIN" then
+		if paladinMember(ns.Assignments.roster, paladin) then
 			for slot in pairs(row) do send(paladin, slot) end
 		end
 	end
@@ -235,9 +245,9 @@ function Plan.Receive(sender, paladin, slotIndex, key, revision, author)
 	if not sender or not paladin or not author or not slot or not validKey(slot, key)
 		or not revision or revision < 0 or revision > 9007199254740000 or revision ~= math.floor(revision) then return end
 	local edit = { sender = sender, paladin = paladin, slot = slot, key = key, revision = revision, author = author, at = GetTime() }
-	local result = apply(ns.roster, edit)
+	local result = apply(ns.Assignments.roster, edit)
 	if result then
-		ns.Assignments.Resolve()
+		changed()
 	elseif result == nil then
 		local id = paladin .. "|" .. slot
 		local old = pending[id]
@@ -248,3 +258,6 @@ function Plan.Receive(sender, paladin, slotIndex, key, revision, author)
 		end
 	end
 end
+
+ns.Events.On("BroadcastRequested", Plan.Broadcast)
+ns.Events.On("Received:P", function(...) Plan.Receive(...) end)

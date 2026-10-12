@@ -1,4 +1,4 @@
--- The blessing ranking: one row per entry of ns.db.order, including the "not
+-- The blessing ranking: one row per entry of the saved order, including the "not
 -- wanted" divider. Dragging lifts a row that follows the cursor while the others
 -- slide aside; the order is saved as it changes.
 local _, ns = ...
@@ -6,7 +6,7 @@ local Buffs, GOLD = ns.Buffs, ns.UI.GOLD
 local RankList = {}
 ns.Preferences.RankList = RankList
 local ROW_H, ICON = 30, 22
-local GREY, RED = "|cff808080", "|cffff5040"
+local GREY, RED = ns.UI.COLOR.GREY, ns.UI.COLOR.RED
 -- Drag state: the slot being moved, where the cursor grabbed it, and the lifted copy.
 local list, rows, ghost, served, onMoved
 local dragging, grabY, ghostY, dropping, moved
@@ -57,7 +57,7 @@ end
 -- Repaint every row; returns how many blessings are ranked above the divider.
 local function refreshRows()
 	local rank, below, mine = 0, false, served()
-	for i, key in ipairs(ns.db.order) do
+	for i, key in ipairs(ns.Preferences.Order()) do
 		local r = rows[i]
 		if key == "|" then below = true elseif not below then rank = rank + 1 end
 		if i == dragging then
@@ -110,10 +110,11 @@ local function animate(_, elapsed)
 	if dragging and not dropping then
 		if not IsMouseButtonDown("LeftButton") then releaseDrag()
 		else
-			ghostY = math.max(0, math.min((#ns.db.order - 1) * ROW_H, cursorY() - grabY))
+			local order = ns.Preferences.Order()
+			ghostY = math.max(0, math.min((#order - 1) * ROW_H, cursorY() - grabY))
 			local idx = math.floor((ghostY + ROW_H / 2) / ROW_H) + 1
 			if idx ~= dragging then
-				table.insert(ns.db.order, idx, table.remove(ns.db.order, dragging))
+				table.insert(order, idx, table.remove(order, dragging))
 				-- Rows passed over slide from their old slot into the new one.
 				local step = idx > dragging and -ROW_H or ROW_H
 				for i = math.min(idx, dragging), math.max(idx, dragging) do

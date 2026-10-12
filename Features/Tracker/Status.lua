@@ -1,5 +1,5 @@
--- The tracker feature: Status, Scan, Actions, Preview, Layout, Tooltip, the head
--- (Tracker.lua) and its settings View all live in ns.Tracker.
+-- The tracker feature: Status, Scan, Actions, Preview, Layout, Tooltip, EditMode,
+-- the head (Tracker.lua) and its settings View all live in ns.Tracker.
 local _, ns = ...
 ns.Tracker = {}
 local Status = {
@@ -12,6 +12,21 @@ function Status.Color(status) return Status.COLORS[status] or Status.COLORS.idle
 
 -- The more urgent of two statuses.
 function Status.Worst(a, b) return Status.PRIORITY[b] < Status.PRIORITY[a] and b or a end
+
+-- The tracker summary read by the head, tooltips and minimap button:
+--   overall   worst status; perKey  buff key -> counts (see NewCounts)
+--   problems  { who, key, status, rem, caster } worst first
+--   unreadable  members whose buffs can't be read; any  something is tracked
+--   yours     keys I have to cast; needs  { key, status, caster } I'm missing
+--   next      my next cast (Actions.Next); cancel  unwanted aura on me
+function Status.NewSummary()
+	return { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false, yours = {}, needs = {} }
+end
+
+-- Recipient counts for one buff, and who is supposed to cast it.
+function Status.NewCounts()
+	return { bad = 0, warn = 0, total = 0, unknown = 0, casters = {} }
+end
 
 -- Count expected buff/recipient pairs, rather than treating any missing buff
 -- as an empty menu. Unreadable pairs (e.g. players out of range) are left out:
