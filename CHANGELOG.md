@@ -1,5 +1,20 @@
 # Buffeteria
 
+## v0.6.10
+
+- Simplified Blessings preferences with one **Use my own order** checkbox.
+  The saved ranking greys out when unused, and the panel names the blessings
+  you receive. Hover a row to see its caster or why nobody can provide it.
+- Added the **Extra** tab and **Resurrect with the head**, enabled by default.
+  Priests, paladins, shamans and druids can resurrect nearby dead group members,
+  including players who released, before buffing and outside combat. Players
+  who can resurrect are served first; feigning hunters and players already
+  being resurrected are skipped. Mana, reagents and Rebirth cooldown are checked.
+- Added **None (clean)** to the head menu for a tracker with just small buff
+  icons and a plain cast button that appears when you have something to cast.
+  Drag a small icon when unlocked to move it, or use Edit Mode. The Settings
+  preview follows the selected style.
+
 ## v0.6.9
 
 - Fixed paladins never recognizing each other: this client names addon-message
