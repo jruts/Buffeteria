@@ -12,6 +12,7 @@ ns.Solver = S
 		name, class, group (1-8),
 		wants = { FORT=bool, ... },
 		ranking = { "KINGS", "MIGHT", ... }, excluded = { SALV=true },
+		blessingsOverride = bool, -- explicitly use my ranking over the class plan
 		caps = { KINGS=true, gKINGS=true, FORT=true, gFORT=true, ... },
 	} }
 Output:
@@ -105,10 +106,18 @@ local function solvePaladins(roster, names, out)
 		local estimate = {}
 		for i = 1, math.min(#paladins, #order) do estimate[order[i]] = true end
 
-		local b2p, p2b = {}, {}
+		local b2p, p2b, fixed = {}, {}, {}
+		local manual = (roster.paladinAssignments or {})[class] or {}
+		for _, p in ipairs(paladins) do
+			local b = manual[p]
+			if b == "NONE" then fixed[p] = true
+			elseif b and knows(p, b) and not b2p[b] then
+				fixed[p] = true; p2b[p] = b; b2p[b] = p
+			end
+		end
 		local function candidates(b)
 			local c = {}
-			for _, p in ipairs(paladins) do if knows(p, b) then c[#c + 1] = p end end
+			for _, p in ipairs(paladins) do if not fixed[p] and knows(p, b) then c[#c + 1] = p end end
 			table.sort(c, function(x, y)
 				local hx, hy = (homeOf[b] == x) and 0 or 1, (homeOf[b] == y) and 0 or 1
 				if hx ~= hy then return hx < hy end
@@ -134,28 +143,71 @@ local function solvePaladins(roster, names, out)
 		local matched = 0
 		for _, b in ipairs(order) do
 			if matched >= #paladins then break end
-			if augment(b, {}) then matched = matched + 1 end
+			if not b2p[b] and augment(b, {}) then matched = matched + 1 end
 		end
 		out.pally[class] = p2b
 
-		-- 4) Mandatory overrides: a member who excluded a blessing their class gets.
+		-- 4) Explicit personal rankings ignore the manual plan completely. Keep
+		-- matching class assignments where possible, then use single blessings
+		-- for differences (including a paladin whose class cell says None).
 		for _, n in ipairs(members) do
 			local m = roster.members[n]
 			out.expected[n] = out.expected[n] or {}
-			local provided = {}
-			for _, b in pairs(p2b) do provided[b] = true end
-			for _, p in ipairs(sortedKeys(p2b)) do
-				local b = p2b[p]
-				if m.excluded and m.excluded[b] then
-					local pick = false
-					for _, r in ipairs(m.ranking or {}) do
-						if not provided[r] and (roster.members[p].caps or {})[r] then pick = r; break end
+			if m.blessingsOverride then
+				local personal, wanted = {}, {}
+				local function personalCandidates(b)
+					local candidates = {}
+					for _, p in ipairs(paladins) do
+						local caps = roster.members[p].caps or {}
+						if (p2b[p] == b and knows(p, b)) or caps[b] then candidates[#candidates + 1] = p end
 					end
-					out.overrides[n] = out.overrides[n] or {}
-					out.overrides[n][p] = pick
-					if pick then provided[pick] = true; out.expected[n][pick] = p end
-				else
-					out.expected[n][b] = p
+					table.sort(candidates, function(x, y)
+						if (p2b[x] == b) ~= (p2b[y] == b) then return p2b[x] == b end
+						return x < y
+					end)
+					return candidates
+				end
+				local function assignPersonal(b, visited)
+					for _, p in ipairs(personalCandidates(b)) do
+						if not visited[p] then
+							visited[p] = true
+							if not personal[p] or assignPersonal(personal[p], visited) then personal[p] = b; return true end
+						end
+					end
+					return false
+				end
+				for _, b in ipairs(m.ranking or {}) do
+					if not wanted[b] and not (m.excluded or {})[b] then
+						wanted[b] = true
+						assignPersonal(b, {})
+					end
+				end
+				for _, p in ipairs(paladins) do
+					local b = personal[p]
+					if b then out.expected[n][b] = p end
+					if b ~= p2b[p] then
+						out.overrides[n] = out.overrides[n] or {}
+						out.overrides[n][p] = b or false
+					end
+				end
+			else
+				local provided = {}
+				for _, b in pairs(p2b) do provided[b] = true end
+				for _, p in ipairs(sortedKeys(p2b)) do
+					local b = p2b[p]
+					-- A manually chosen class blessing is the source of truth for
+					-- default users, even if class defaults would exclude it.
+					if not fixed[p] and m.excluded and m.excluded[b] then
+						local pick = false
+						for _, r in ipairs(m.ranking or {}) do
+							if not provided[r] and (roster.members[p].caps or {})[r] then pick = r; break end
+						end
+						out.overrides[n] = out.overrides[n] or {}
+						out.overrides[n][p] = pick
+						if pick then provided[pick] = true; out.expected[n][pick] = p end
+					else
+						out.expected[n][b] = p
+					end
 				end
 			end
 		end

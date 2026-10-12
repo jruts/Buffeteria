@@ -1,4 +1,4 @@
--- Buffeteria: addon messages. Only preferences and capabilities travel;
+-- Buffeteria: addon messages. Preferences, capabilities and class plans travel;
 -- every client computes the assignments itself.
 local _, ns = ...
 local D = ns.Data
@@ -7,8 +7,8 @@ local Comm = {}
 ns.Comm = Comm
 
 local PREFIX = "BUFFETERIA"
-local VERSION = "1"
-local queued = nil          -- a message held back by lockdown/throttle
+local VERSION = "2"
+local queued = {}           -- keep every class edit through lockdown/throttle
 local lastSent, lastReq = 0, 0
 
 local function channel()
@@ -37,10 +37,10 @@ local function toList(str)
 	return l
 end
 
--- S|version|wants|ranking|excluded|caps
+-- S|version|wants|ranking|excluded|caps|explicitBlessings
 local function stateMessage()
 	local p = ns.MyPrefs()
-	return table.concat({ "S", VERSION, keyList(p.wants), table.concat(p.ranking, ","), keyList(p.excluded), keyList(ns.MyCaps()) }, "|")
+	return table.concat({ "S", VERSION, keyList(p.wants), table.concat(p.ranking, ","), keyList(p.excluded), keyList(ns.MyCaps()), p.blessingsOverride and "1" or "0" }, "|")
 end
 
 local function send(msg)
@@ -49,8 +49,25 @@ local function send(msg)
 	local ok, res = pcall(C_ChatInfo.SendAddonMessage, PREFIX, msg, chan)
 	-- Older clients return a bool, Mainline returns Enum.SendAddonMessageResult (0 = Success).
 	if ok and (res == nil or res == true or res == 0) then return true end
-	queued = msg
 	return false
+end
+
+function Comm.Send(msg)
+	if not channel() then return end
+	if #queued == 0 and send(msg) then return end
+	local kind, _, paladin, class = strsplit("|", msg)
+	for i, old in ipairs(queued) do
+		local oldKind, _, oldPaladin, oldClass = strsplit("|", old)
+		if kind == oldKind and (kind ~= "P" or (paladin == oldPaladin and class == oldClass)) then
+			queued[i] = msg; return
+		end
+	end
+	queued[#queued + 1] = msg
+end
+
+local function broadcastState()
+	Comm.Send(stateMessage())
+	if ns.Paladins then ns.BuildRoster(); ns.Paladins.Broadcast() end
 end
 
 -- Broadcast my state. force = skip the anti-spam window (e.g. after a prefs change).
@@ -62,14 +79,15 @@ function Comm.Announce(force)
 		return
 	end
 	lastSent = now
-	send(stateMessage())
-	if now - lastReq > 10 then lastReq = now; send("R|" .. VERSION) end
+	broadcastState()
+	if now - lastReq > 10 then lastReq = now; Comm.Send("R|" .. VERSION) end
 end
 
 function Comm.Flush()
-	if queued then
-		local m = queued; queued = nil
-		send(m)
+	if not channel() then queued = {}; return end
+	while queued[1] do
+		if not send(queued[1]) then return end
+		table.remove(queued, 1)
 	end
 end
 
@@ -77,24 +95,28 @@ local replyPending = false
 local function onMessage(prefix, msg, _, sender)
 	if prefix ~= PREFIX or not msg then return end
 	local full = sender
+	if not full then return end
 	if full and not full:find("-") then
 		full = full .. "-" .. (GetNormalizedRealmName and GetNormalizedRealmName() or "")
 	end
 	if full == ns.FullName("player") then return end
 
-	local kind, ver, a, b, c, d = strsplit("|", msg)
+	local kind, ver, a, b, c, d, e = strsplit("|", msg)
 	if kind == "S" then
 		if ver ~= VERSION then
 			if not Comm.warned then Comm.warned = true; ns.Print(ns.Short(full) .. " runs a different Buffeteria version. Assignments may disagree.") end
 			return
 		end
-		ns.peers[full] = { wants = toSet(a), ranking = toList(b), excluded = toSet(c), caps = toSet(d), time = GetTime() }
+		if not ns.BuildRoster().members[full] then return end
+		ns.peers[full] = { wants = toSet(a), ranking = toList(b), excluded = toSet(c), caps = toSet(d), blessingsOverride = e == "1", time = GetTime() }
 		ns.Resolve()
-	elseif kind == "R" and not replyPending then
+	elseif kind == "P" and ver == VERSION and ns.Paladins then
+		ns.Paladins.Receive(full, a, b, c, d, e)
+	elseif kind == "R" and ver == VERSION and not replyPending then
 		replyPending = true
 		C_Timer.After(0.5 + math.random() * 2, function()
 			replyPending = false
-			send(stateMessage())
+			broadcastState()
 		end)
 	end
 end

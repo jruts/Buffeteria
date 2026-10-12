@@ -33,6 +33,8 @@ for _, b in ipairs(D.BLESSINGS) do b.kind = "blessing"; D.byKey[b.key] = b end
 D.BLESSING_KEYS = {}
 for _, b in ipairs(D.BLESSINGS) do D.BLESSING_KEYS[#D.BLESSING_KEYS + 1] = b.key end
 
+D.CLASS_KEYS = { "WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "PALADIN", "SHAMAN" }
+
 D.MANA_CLASSES = { PALADIN = true, PRIEST = true, DRUID = true, MAGE = true, WARLOCK = true, SHAMAN = true, HUNTER = true }
 
 -- Default blessing order per class. Everything after "|" is "don't want".

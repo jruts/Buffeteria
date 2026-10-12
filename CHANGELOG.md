@@ -1,5 +1,13 @@
 # Buffeteria
 
+## Unreleased
+
+- Added a Paladins-only tab for built-in, shared class blessing assignments, including assignments for players without Buffeteria.
+- Class assignments support Auto, a specific blessing, or None, and each paladin's own assignments persist between sessions.
+- Explicit personal blessing preferences take priority over the class plan; existing custom rankings are preserved as overrides.
+- Use single blessings when a Greater Blessing would overwrite a personal assignment.
+- Updated assignment synchronization and retry handling. Buffeteria users should update together.
+
 ## v0.5.0
 
 First public release.

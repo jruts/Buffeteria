@@ -6,6 +6,8 @@ local P = {}
 ns.Prefs = P
 
 local win, content, panel, rows, checks, toggles, warnText, assignText
+local personal, paladinPanel, personalTab, paladinTab, overrideCheck
+local paladinName, paladinNote, paladinRows, paladinSummary, selectedPaladin
 local ROW_H = 22
 local dragging -- index of the row being dragged
 
@@ -44,26 +46,71 @@ local function refreshAssignments()
 	assignText:SetText(table.concat(ns.AssignmentLines(true), "\n"))
 end
 
+local function paladinNames()
+	local out = {}
+	for full, m in pairs(ns.roster.members) do if m.class == "PALADIN" then out[#out + 1] = full end end
+	table.sort(out)
+	return out
+end
+
+local function refreshPaladins()
+	if not paladinPanel then return end
+	local pals = paladinNames()
+	if not selectedPaladin or not ns.roster.members[selectedPaladin] then
+		local me = ns.roster.members[ns.FullName("player")]
+		selectedPaladin = me and me.class == "PALADIN" and ns.FullName("player") or pals[1]
+	end
+	local m = selectedPaladin and ns.roster.members[selectedPaladin]
+	paladinName:SetText(m and ns.ClassColorName(selectedPaladin, "PALADIN") or "No paladins in the group")
+	paladinNote:SetText(m and (m.hasAddon and "Spellbook shared by Buffeteria" or "Without Buffeteria: assignments confirm known blessings") or "")
+	for class, button in pairs(paladinRows) do
+		local key = selectedPaladin and ns.Paladins.Get(selectedPaladin, class) or "AUTO"
+		local resolved = ((ns.result.pally or {})[class] or {})[selectedPaladin]
+		local label = key == "AUTO" and ("Auto: " .. (resolved and D.byKey[resolved].label or "none"))
+			or (key == "NONE" and "None" or D.byKey[key].label)
+		if D.byKey[key] and (((ns.roster.paladinAssignments or {})[class] or {})[selectedPaladin] == "NONE") then
+			label = D.byKey[key].label .. " (duplicate)"
+		end
+		button:SetText(label)
+		button:SetEnabled(m ~= nil)
+	end
+	paladinSummary:SetText(table.concat(ns.AssignmentLines(true), "\n"))
+end
+
+local function selectTab(isPaladin)
+	local _, class = UnitClass("player")
+	isPaladin = isPaladin and class == "PALADIN"
+	personal:SetShown(not isPaladin)
+	paladinPanel:SetShown(isPaladin)
+	personalTab:SetEnabled(isPaladin)
+	paladinTab:SetEnabled(not isPaladin)
+	P.Refresh()
+end
+
 function P.Refresh()
 	if not content then return end
 	for key, cb in pairs(checks) do cb:SetChecked(ns.db.wants[key] and true or false) end
 	for _, cb in ipairs(toggles) do cb:SetChecked(cb.get() and true or false) end
 	warnText:SetText(("Turn orange below: %d min"):format(ns.db.warnMinutes))
+	overrideCheck:SetChecked(ns.db.blessingsOverride and true or false)
 	refreshRows()
 	refreshAssignments()
+	refreshPaladins()
 end
 
 local function stopDrag(list)
 	if not dragging then return end
 	dragging = nil
+	ns.db.blessingsOverride = true
 	list:SetScript("OnUpdate", nil)
 	refreshRows()
+	P.Refresh()
 	ns.PrefsChanged()
 end
 
 local function build()
 	win = CreateFrame("Frame", "Buffeteria_Prefs", UIParent, "BasicFrameTemplateWithInset")
-	win:SetSize(340, 614)
+	win:SetSize(340, 686)
 	win:SetPoint("CENTER")
 	win:SetMovable(true)
 	win:EnableMouse(true)
@@ -81,12 +128,24 @@ local function build()
 	-- All controls live on "content", which moves between this window and the
 	-- Settings > AddOns page (whichever is showing).
 	content = CreateFrame("Frame", nil, win)
-	content:SetSize(340, 586)
+	content:SetSize(340, 658)
 	content:SetPoint("TOPLEFT", 0, -26)
+	personalTab = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+	personalTab:SetSize(148, 24); personalTab:SetPoint("TOPLEFT", 16, -4); personalTab:SetText("My preferences")
+	paladinTab = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+	paladinTab:SetSize(148, 24); paladinTab:SetPoint("LEFT", personalTab, "RIGHT", 8, 0); paladinTab:SetText("Paladins")
+	local _, playerClass = UnitClass("player")
+	paladinTab:SetShown(playerClass == "PALADIN")
+	personal = CreateFrame("Frame", nil, content)
+	personal:SetPoint("TOPLEFT", 0, -32); personal:SetPoint("BOTTOMRIGHT")
+	paladinPanel = CreateFrame("Frame", nil, content)
+	paladinPanel:SetPoint("TOPLEFT", 0, -32); paladinPanel:SetPoint("BOTTOMRIGHT")
+	personalTab:SetScript("OnClick", function() selectTab(false) end)
+	paladinTab:SetScript("OnClick", function() selectTab(true) end)
 
 	local y = -8
 	local function header(text)
-		local fs = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		local fs = personal:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		fs:SetPoint("TOPLEFT", 16, y)
 		fs:SetText(text)
 		y = y - 20
@@ -97,7 +156,7 @@ local function build()
 	header("On my plate (single-source buffs)")
 	checks = {}
 	for i, buff in ipairs(D.GROUP_BUFFS) do
-		local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+		local cb = CreateFrame("CheckButton", nil, personal, "UICheckButtonTemplate")
 		cb:SetSize(24, 24)
 		local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
 		cb:SetPoint("TOPLEFT", 14 + col * 155, y - row * 24)
@@ -115,7 +174,7 @@ local function build()
 
 	-- 2) Blessing ranking
 	header("Blessings, best first (drag to reorder)")
-	local list = CreateFrame("Frame", nil, content)
+	local list = CreateFrame("Frame", nil, personal)
 	list:SetPoint("TOPLEFT", 16, y)
 	list:SetSize(300, ROW_H * (#D.BLESSINGS + 1))
 	rows = {}
@@ -156,19 +215,29 @@ local function build()
 	end
 	y = y - ROW_H * (#D.BLESSINGS + 1) - 6
 
-	local tip = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	local tip = personal:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	tip:SetPoint("TOPLEFT", 16, y)
 	tip:SetWidth(300)
 	tip:SetJustifyH("LEFT")
-	tip:SetText("With 1 paladin you get #1, with 2 you get #1 and #2, and so on. Tanks: drag Salvation below the line.")
+	tip:SetText("Drag to set a personal override: #1 with one paladin, #1 and #2 with two. Tanks: drag Salvation below the line.")
+	y = y - 38
+	overrideCheck = CreateFrame("CheckButton", nil, personal, "UICheckButtonTemplate")
+	overrideCheck:SetSize(24, 24); overrideCheck:SetPoint("TOPLEFT", 14, y)
+	overrideCheck.text = overrideCheck.text or overrideCheck.Text or overrideCheck:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	overrideCheck.text:ClearAllPoints(); overrideCheck.text:SetPoint("LEFT", overrideCheck, "RIGHT", 2, 0)
+	overrideCheck.text:SetText("Override the Paladins class plan")
+	overrideCheck:SetScript("OnClick", function(self)
+		ns.db.blessingsOverride = self:GetChecked() and true or false
+		ns.PrefsChanged(); P.Refresh()
+	end)
 	y = y - 30
 
 	-- 3) Warning threshold
-	warnText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	warnText = personal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	warnText:SetPoint("TOPLEFT", 16, y - 4)
-	local minus = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+	local minus = CreateFrame("Button", nil, personal, "UIPanelButtonTemplate")
 	minus:SetSize(24, 20); minus:SetPoint("TOPLEFT", 210, y); minus:SetText("-")
-	local plus = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+	local plus = CreateFrame("Button", nil, personal, "UIPanelButtonTemplate")
 	plus:SetSize(24, 20); plus:SetPoint("LEFT", minus, "RIGHT", 4, 0); plus:SetText("+")
 	minus:SetScript("OnClick", function() ns.db.warnMinutes = math.max(1, ns.db.warnMinutes - 1); P.Refresh(); ns.Tracker.Refresh() end)
 	plus:SetScript("OnClick", function() ns.db.warnMinutes = math.min(15, ns.db.warnMinutes + 1); P.Refresh(); ns.Tracker.Refresh() end)
@@ -177,7 +246,7 @@ local function build()
 	-- Toggles: tracker, lock, minimap button
 	toggles = {}
 	local function toggle(label, x, rowY, get, set)
-		local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+		local cb = CreateFrame("CheckButton", nil, personal, "UICheckButtonTemplate")
 		cb:SetSize(24, 24); cb:SetPoint("TOPLEFT", x, rowY)
 		cb.text = cb.text or cb.Text or cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		cb.text:ClearAllPoints(); cb.text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
@@ -200,17 +269,72 @@ local function build()
 
 	-- 4) Current assignments
 	header("Who's cooking what")
-	assignText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	assignText = personal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	assignText:SetPoint("TOPLEFT", 16, y)
 	assignText:SetPoint("BOTTOMRIGHT", -16, 44)
 	assignText:SetJustifyH("LEFT")
 	assignText:SetJustifyV("TOP")
 
-	local announce = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+	local announce = CreateFrame("Button", nil, personal, "UIPanelButtonTemplate")
 	announce:SetSize(140, 22)
 	announce:SetPoint("BOTTOM", 0, 14)
 	announce:SetText("Announce to group")
 	announce:SetScript("OnClick", ns.Announce)
+
+	local title = paladinPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	title:SetPoint("TOPLEFT", 16, -8); title:SetText("Class blessing assignments")
+	local help = paladinPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	help:SetPoint("TOPLEFT", 16, -30); help:SetWidth(300); help:SetJustifyH("LEFT")
+	help:SetText("Choose a paladin, then click a class blessing to cycle it (right-click reverses). Auto uses the solver; None leaves the class unassigned.")
+	local prevPaladin = CreateFrame("Button", nil, paladinPanel, "UIPanelButtonTemplate")
+	prevPaladin:SetSize(26, 24); prevPaladin:SetPoint("TOPLEFT", 16, -84); prevPaladin:SetText("<")
+	local nextPaladin = CreateFrame("Button", nil, paladinPanel, "UIPanelButtonTemplate")
+	nextPaladin:SetSize(26, 24); nextPaladin:SetPoint("TOPRIGHT", -16, -84); nextPaladin:SetText(">")
+	paladinName = paladinPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	paladinName:SetPoint("LEFT", prevPaladin, "RIGHT", 8, 0); paladinName:SetPoint("RIGHT", nextPaladin, "LEFT", -8, 0)
+	local function movePaladin(delta)
+		local pals = paladinNames()
+		for i, name in ipairs(pals) do
+			if name == selectedPaladin then selectedPaladin = pals[((i - 1 + delta) % #pals) + 1]; break end
+		end
+		refreshPaladins()
+	end
+	prevPaladin:SetScript("OnClick", function() movePaladin(-1) end)
+	nextPaladin:SetScript("OnClick", function() movePaladin(1) end)
+	paladinNote = paladinPanel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	paladinNote:SetPoint("TOPLEFT", 16, -114); paladinNote:SetWidth(300); paladinNote:SetJustifyH("LEFT")
+	paladinRows = {}
+	for i, class in ipairs(D.CLASS_KEYS) do
+		local label = paladinPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		label:SetPoint("TOPLEFT", 20, -146 - (i - 1) * 30); label:SetText(ns.ClassName(class))
+		local button = CreateFrame("Button", nil, paladinPanel, "UIPanelButtonTemplate")
+		button:SetSize(152, 24); button:SetPoint("TOPLEFT", 168, -140 - (i - 1) * 30)
+		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		button:SetScript("OnClick", function(_, mouseButton)
+			local m = selectedPaladin and ns.roster.members[selectedPaladin]
+			if not m then return end
+			local choices = { "AUTO" }
+			for _, key in ipairs(D.BLESSING_KEYS) do
+				if not m.hasAddon or m.caps[key] or m.caps["g" .. key] then choices[#choices + 1] = key end
+			end
+			choices[#choices + 1] = "NONE"
+			local current, index = ns.Paladins.Get(selectedPaladin, class), 1
+			for j, key in ipairs(choices) do if key == current then index = j; break end end
+			local delta = mouseButton == "RightButton" and -1 or 1
+			ns.Paladins.Set(selectedPaladin, class, choices[((index - 1 + delta) % #choices) + 1])
+		end)
+		paladinRows[class] = button
+	end
+	local priority = paladinPanel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	priority:SetPoint("TOPLEFT", 16, -418); priority:SetWidth(300); priority:SetJustifyH("LEFT")
+	priority:SetText("Shared with the group's Buffeteria users. Personal overrides take priority; everyone else follows this plan. Your own row is saved between sessions.")
+	paladinSummary = paladinPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	paladinSummary:SetPoint("TOPLEFT", 16, -470); paladinSummary:SetPoint("BOTTOMRIGHT", -16, 44)
+	paladinSummary:SetJustifyH("LEFT"); paladinSummary:SetJustifyV("TOP")
+	local paladinAnnounce = CreateFrame("Button", nil, paladinPanel, "UIPanelButtonTemplate")
+	paladinAnnounce:SetSize(140, 22); paladinAnnounce:SetPoint("BOTTOM", 0, 14); paladinAnnounce:SetText("Announce to group")
+	paladinAnnounce:SetScript("OnClick", ns.Announce)
+	paladinPanel:Hide(); personalTab:Disable()
 
 	win:SetScript("OnShow", function()
 		content:SetParent(win); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -26); content:Show()
@@ -222,7 +346,7 @@ local function build()
 	local prev = ns.OnSolved
 	ns.OnSolved = function()
 		if prev then prev() end
-		if content:IsVisible() then refreshAssignments() end
+		if content:IsVisible() then P.Refresh() end
 	end
 end
 

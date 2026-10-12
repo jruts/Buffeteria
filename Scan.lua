@@ -92,7 +92,7 @@ function Scan.Update()
 			end
 			-- Blessings the member does not want at all (e.g. Salvation on a tank).
 			for key in pairs(m.excluded or {}) do
-				if cache[full] and cache[full][key] then
+				if not exp[key] and cache[full] and cache[full][key] then
 					table.insert(summary.problems, { who = full, key = key, status = "unwanted" })
 					if RANK.warn > RANK[summary.overall] then summary.overall = "warn" end
 				end
@@ -197,6 +197,13 @@ function Scan.NextAction(now, warnSec)
 				table.sort(needy)
 				local gName, gIcon = spellFor(b.groupIds)
 				local useGreater = gName and ns.ItemCount(D.BLESSING_REAGENT) > 0
+				-- Greater Blessings also hit players with a different personal
+				-- assignment. Use singles so a class refresh cannot overwrite it.
+				for full, member in pairs(roster.members) do
+					if member.class == class and not member.dead and (res.overrides[full] or {})[me] ~= nil then
+						useGreater = false; break
+					end
+				end
 				local sName, sIcon = spellFor(b.ids)
 				local spell, icon = (useGreater and gName or sName), (useGreater and gIcon or sIcon)
 				if spell then
@@ -241,6 +248,6 @@ function Scan.UnwantedOnMe()
 	local auras = cache[me]
 	if not m or not auras then return nil end
 	for key in pairs(m.excluded or {}) do
-		if auras[key] then return auras[key].name, key end
+		if not (ns.result.expected[me] or {})[key] and auras[key] then return auras[key].name, key end
 	end
 end

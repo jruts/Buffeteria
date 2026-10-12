@@ -80,6 +80,11 @@ local function initDB()
 	local db = BuffeteriaCharDB
 	local _, class = UnitClass("player")
 	db.order = D.NormalizeOrder(db.order or D.DEFAULT_ORDER[class], class)
+	-- Preserve deliberate rankings from before the explicit override toggle existed.
+	if db.blessingsOverride == nil then
+		db.blessingsOverride = table.concat(db.order, ",") ~= table.concat(D.DEFAULT_ORDER[class] or D.DEFAULT_ORDER.WARRIOR, ",")
+	end
+	db.paladinBlessings = db.paladinBlessings or {}
 	if not db.wants then db.wants = D.DefaultWants(class) end
 	db.warnMinutes = db.warnMinutes or 5
 	if db.showTracker == nil then db.showTracker = true end
@@ -92,7 +97,7 @@ end
 -- My own preferences in the shape the solver wants.
 function ns.MyPrefs()
 	local ranking, excluded = D.SplitOrder(ns.db.order)
-	return { wants = ns.db.wants, ranking = ranking, excluded = excluded }
+	return { wants = ns.db.wants, ranking = ranking, excluded = excluded, blessingsOverride = ns.db.blessingsOverride }
 end
 
 -- What I can cast: plain key = single version, "g"..key = group/Greater version.
@@ -150,13 +155,21 @@ function ns.BuildRoster()
 		end
 		if peer and peer.ranking then
 			m.wants, m.ranking, m.excluded = peer.wants, peer.ranking, peer.excluded
+			m.blessingsOverride = peer.blessingsOverride and true or false
 		else
 			local r, e = D.SplitOrder(D.DEFAULT_ORDER[class] or D.DEFAULT_ORDER.WARRIOR)
 			m.wants, m.ranking, m.excluded = D.DefaultWants(class), r, e
 		end
+		if not m.blessingsOverride then
+			m.ranking, m.excluded = D.SplitOrder(D.DEFAULT_ORDER[class] or D.DEFAULT_ORDER.WARRIOR)
+		end
 		roster.members[full] = m
 		roster.units[full] = unit
 	end)
+	if ns.Paladins then
+		ns.Paladins.Prune(roster)
+		roster.paladinAssignments = ns.Paladins.Assignments(roster)
+	end
 	return roster
 end
 
@@ -250,6 +263,7 @@ Core:SetScript("OnEvent", function(self, event, arg1)
 	if event == "ADDON_LOADED" and arg1 == ADDON then
 		initDB()
 	elseif event == "PLAYER_LOGIN" then
+		if ns.Paladins then ns.Paladins.Init() end
 		if ns.Comm then ns.Comm.Init() end
 		if ns.Tracker then ns.Tracker.Init() end
 		if ns.Minimap then ns.Minimap.Init() end
@@ -260,6 +274,7 @@ Core:SetScript("OnEvent", function(self, event, arg1)
 		if ns.Comm then ns.Comm.Announce() end
 		ns.Resolve()
 	elseif event == "SPELLS_CHANGED" then
+		if ns.Comm then ns.Comm.Announce() end
 		ns.Resolve()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if ns.Comm then ns.Comm.Flush() end
@@ -287,6 +302,7 @@ SlashCmdList.BUFFETERIA = function(msg)
 		local _, class = UnitClass("player")
 		ns.db.order = D.NormalizeOrder(D.DEFAULT_ORDER[class], class)
 		ns.db.wants = D.DefaultWants(class)
+		ns.db.blessingsOverride = false
 		ns.PrefsChanged(); if ns.Prefs then ns.Prefs.Refresh() end
 		ns.Print("preferences reset to class defaults")
 	elseif msg == "config" or msg == "settings" then
