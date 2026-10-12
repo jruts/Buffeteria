@@ -1,6 +1,6 @@
 # Buffeteria
 
-## Unreleased
+## v0.6.5
 
 - Fix missing navigation tabs caused by painting the Settings sample before it
   has dimensions. Lay out controls first and defer unsized previews safely.
