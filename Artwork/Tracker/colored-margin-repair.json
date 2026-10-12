@@ -1,0 +1,6 @@
+{
+  "tool": "built-in image_gen",
+  "source": "TrollColored.png",
+  "prompt": "Use case: precise-object-edit. Input is the exact production sprite sheet to repair. Preserve ALL artwork, colors, facial identity, expressions and detailed brushwork EXACTLY: left muted sage-green hair, middle copper-orange hair, right crimson-red hair; natural blue skin, ivory tusks, amber eyes, gold rings and purple eyebrows. ONLY correct SPRITE PACKING: make EACH complete Troll head about 15 percent smaller within its own cell and center it, leaving a truly transparent margin of at least 40 pixels on ALL FOUR SIDES including ABOVE the tallest mohawk tip. The top hair tip must be fully visible with transparent space above, never touching canvas boundary. Ensure both ear tips have margin, chin below has margin. Keep horizontal 3:1 image made of THREE identical SQUARE cells happy / annoyed / angry. Same scale all three, straight on floating heads, no neck or shoulders. No labels, text, checkerboard, solid background, frame, watermark, clipped features or overlaps. Genuine alpha transparency. This is a margin repair, do not repaint or alter any original face or hair color.",
+  "reference": "Initial TrollColored.png (replaced; margin repair)"
+}

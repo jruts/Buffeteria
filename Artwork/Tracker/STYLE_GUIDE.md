@@ -2,8 +2,13 @@
 
 The tracker uses expressive floating heads with Classic Warcraft race features
 and crisp, detailed painterly rendering. Happy, annoyed, and furious expressions
-carry the mood. Natural skin, fur, bone, hair, and eye colors stay stable across
-the three portraits, under the same neutral lighting.
+carry the mood. Natural skin, face fur, bone, and eye colors stay stable across
+the three portraits, under the same neutral lighting. The original sheets retain
+natural hair colors. The sibling `*Colored.png` sheets tint scalp hair muted green
+for happy, copper-orange for annoyed, and crimson-red for furious. They are the
+default in-game artwork; the **Colored hair** setting restores the originals.
+Keep facial hair and eyebrows natural. Tauren mane can carry the color while its
+face fur, muzzle, horns, and chin tuft stay natural. No emitted light or skin wash.
 
 ## Classic references
 
@@ -40,7 +45,7 @@ of a race.
 | Human | Strong jaw and brows, blue eyes, chestnut hair and beard, natural warm skin. | Glossy plastic skin, exaggerated round eyes, orange or red mood washes. |
 | Troll | Long lean face and hooked nose, blue skin, long lower-jaw tusks, swept pointed ears, purple mohawk. | An orc jaw painted blue, short button nose, later Zandalari motifs. |
 | Undead | Gaunt formerly human face, hollow cheeks, dry grey-green skin and exposed bone, damaged nose, sparse hair. | A healthy grey human, a bare clean skull, wet gore or glowing haze. |
-| Xaryu (Mage) | Josh "Xaryu" Lujan's lean face, brown eyes, dark expressive brows, exposed widow's-peak hairline with high temples, longer swept-back dark hair falling behind the ears to jaw level with feathered ends, moustache and small goatee; visible painted tonal planes and grouped brushstrokes. | A generic wizard face, photographic skin, heavy full beard, short cropped hair, headband, circlet, hat or any accessory obscuring his hairline. |
+| Xaru | Josh "Xaryu" Lujan's lean face, brown eyes, dark expressive brows, exposed widow's-peak hairline with high temples, longer swept-back dark hair falling behind the ears to jaw level with feathered ends, moustache and small goatee; visible painted tonal planes and grouped brushstrokes. | A generic wizard face, photographic skin, heavy full beard, short cropped hair, headband, circlet, hat or any accessory obscuring his hairline. |
 
 Xaryu is a streamer homage available to every class, with the same expressions
 and floating-head treatment as the race portraits. Likeness references are his
@@ -72,7 +77,9 @@ Leave true transparent margins around all hair, ears, horns, and tusks. A head
 must never touch or cross its cell boundary.
 
 `prompts.json` stores the exact built-in ImageGen prompts and references for
-the current sheets. `python tools/build_tracker_art.py` packs them into
+the original sheets. `colored-prompts.json` records the colored hair edits, and
+`colored-margin-repair.json` records the Troll margin correction.
+`python tools/build_tracker_art.py` packs both sets into
 uncompressed 256 x 256 RGBA TGAs and rebuilds each external silhouette halo.
 Packing preserves the generated artwork's alpha; it does not recolor faces.
 

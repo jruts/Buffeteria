@@ -137,14 +137,18 @@ the clickable head's size (32–128 pixels; changes apply after combat), a separ
 the expiring-buff threshold (1–15 minutes). Changing the small icon size updates
 the rows' spacing and alignment without resizing the face.
 
-Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, Undead, or Xaryu (Mage)** using the portrait menu in the
+Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, Undead, or Xaru** using the portrait menu in the
 **Tracker** card. Orc remains the default. Each head has happy, grumpy, and
 furious artwork, plus its own matching external cast halo. All portraits are
 floating heads without necks or shoulders. Their natural skin, fur, and bone
-colors and neutral lighting stay consistent across moods; facial expressions
-convey the mood without colored rims, skin washes, or bloom.
+colors and neutral lighting stay consistent across moods. **Colored hair** in the
+Tracker card is on by default: happy hair is subtly green, annoyed hair is orange,
+and angry hair is red. Untick it to restore the original hair colors. This choice
+is saved per character and changes immediately, including during combat. Skin,
+facial hair, and accessories retain their natural colors; there are no colored
+rims, skin washes, or bloom.
 The gnome has rounded ears and fair skin; the
-Undead is a gaunt, skeletal Forsaken. Xaryu is a hand-painted human mage homage
+Undead is a gaunt, skeletal Forsaken. Xaru is a hand-painted human mage homage
 to the streamer, with his exposed widow's-peak hairline, longer swept-back dark hair,
 moustache and goatee, and no headwear. Every class can select it.
 Your head choice
@@ -280,7 +284,8 @@ The mascot source sheets and their exact built-in ImageGen prompts are kept unde
 `Artwork/Tracker/`. [The tracker art guide](Artwork/Tracker/STYLE_GUIDE.md) defines
 Classic race features, lighting, expressions, and reference sources.
 Run `python tools/build_tracker_art.py` with Pillow to rebuild
-all eight heads' runtime portraits and silhouette glows in `Media/`.
+all eight heads' original and colored hair runtime portraits and silhouette glows
+in `Media/`. Use `--colored-only` to rebuild just the colored hair variants.
 These are uncompressed 256×256 RGBA TGA textures for the game; source artwork
 and build tools are not deployed.
 

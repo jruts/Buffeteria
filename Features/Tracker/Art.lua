@@ -11,7 +11,7 @@ Art.CHOICES = {
 	{ key = "HUMAN", label = "Human", prefix = "Human" },
 	{ key = "TROLL", label = "Troll", prefix = "Troll" },
 	{ key = "UNDEAD", label = "Undead", prefix = "Undead" },
-	{ key = "XARYU", label = "Xaryu (Mage)", prefix = "Xaryu" },
+	{ key = "XARYU", label = "Xaru", prefix = "Xaryu" },
 }
 local byKey = {}
 for _, choice in ipairs(Art.CHOICES) do byKey[choice.key] = choice end
@@ -22,7 +22,7 @@ local function choice(style)
 end
 
 local function prefix(style)
-	return ns.mediaPath .. choice(style).prefix
+	return ns.mediaPath .. choice(style).prefix .. (ns.db.coloredHair and "Colored" or "")
 end
 
 function Art.Label(style)

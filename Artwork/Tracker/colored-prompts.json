@@ -1,0 +1,62 @@
+{
+  "tool": "built-in image_gen",
+  "sheets": [
+    {
+      "source": "OrcColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha.",
+      "references": [
+        "Orc.png"
+      ]
+    },
+    {
+      "source": "GnomeColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha.",
+      "references": [
+        "Gnome.png"
+      ]
+    },
+    {
+      "source": "NightElfColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha.",
+      "references": [
+        "NightElf.png"
+      ]
+    },
+    {
+      "source": "TaurenColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha. For Tauren, recolor ONLY the upper dark crest and mane around it; preserve all brown face/muzzle fur, lower beard, ears and ivory horns.",
+      "references": [
+        "Tauren.png"
+      ]
+    },
+    {
+      "source": "HumanColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha.",
+      "references": [
+        "Human.png"
+      ]
+    },
+    {
+      "source": "TrollColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha.",
+      "references": [
+        "Troll.png"
+      ]
+    },
+    {
+      "source": "UndeadColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha. For Undead recolor just the existing sparse wispy scalp hair, preserve exposed scalp and every bone/skin patch.",
+      "references": [
+        "Undead.png"
+      ]
+    },
+    {
+      "source": "XaryuColored.png",
+      "prompt": "Use case: precise-object-edit. Production transparent Buffeteria three-expression floating-head sprite sheet. Input 1 is the EXACT edit target, original portraits. Change ONLY scalp hair color across the three heads: left happy muted subtle forest/sage green; middle annoyed warm burnt orange/copper; right furious deeper red/crimson. Keep dark roots, painted hair shadows, matte texture, strand highlights and shading; not neon, glowing, emissive or rim light. Keep EXACTLY the original face identity, facial anatomy, expression, size, hairstyle, skin/bone/face fur colors, eyes, eyebrow colors, moustache and beard colors, accessories, tusks and horns. Do not redesign, soften, beautify or render differently. Match the approved subtle tinted-hair idea, not a face-wide status wash. Preserve a 3:1 horizontal canvas of EXACTLY THREE equal SQUARE cells ordered Happy, Grumpy, Angry. Each full head centered inside its cell with generous true alpha-transparent margins on all sides. Complete hair, ears, horns, tusks cannot touch cell borders, cannot clip. Each head should occupy at most 80% cell width AND height. Front-view floating heads only, ending at chin/jaw/beard; no neck, shoulders, body, clothing, background, checkerboard, text, labels or watermark. Actual transparent alpha. Preserve his exact exposed widow's-peak hairline, high temple corners, longer swept-back dark hair shape, moustache and goatee and hand-painted likeness. No headwear.",
+      "references": [
+        "Xaryu.png"
+      ]
+    }
+  ],
+  "build": "python tools/build_tracker_art.py --colored-only"
+}

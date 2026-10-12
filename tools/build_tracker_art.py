@@ -6,6 +6,7 @@ only the runtime assets. This is format conversion and sprite packing; alpha
 from the generated artwork is preserved, including its antialiased edges.
 """
 from pathlib import Path
+import argparse
 
 from PIL import Image
 
@@ -14,6 +15,7 @@ from make_orc_glow import glow, write_tga
 ROOT = Path(__file__).resolve().parents[1]
 SIZE = 256
 MOODS = ("Happy", "Grumpy", "Angry")
+HEADS = ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu")
 
 
 def build(prefix):
@@ -45,5 +47,10 @@ def build(prefix):
 
 
 if __name__ == "__main__":
-    for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu"):
-        build(prefix)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--colored-only", action="store_true", help="Build only the colored hair variants")
+    args = parser.parse_args()
+    for prefix in HEADS:
+        if not args.colored_only:
+            build(prefix)
+        build(prefix + "Colored")

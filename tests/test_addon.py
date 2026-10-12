@@ -494,7 +494,7 @@ class AddonTests(unittest.TestCase):
             ns.Tracker.Refresh()
             local action = ns.Tracker.Summary().next
             assert(action and head.halo:IsShown() and not head.glow)
-            assert(head.halo.texture:find('OrcGlow$') and head.icon:GetAlpha() == 1)
+            assert(head.halo.texture:find('OrcColoredGlow$') and head.icon:GetAlpha() == 1)
             assert(frame.gief:IsShown())
             assert(frame.gief:GetText() == 'GIEF ' .. ns.Buffs.byKey[action.key].label .. '!')
             assert(frame.tag.point[2] == frame.gief) -- DEV sits above the demand
@@ -599,7 +599,8 @@ class AddonTests(unittest.TestCase):
         """)
 
     def test_mascot_textures_have_matching_dimensions_and_real_transparency(self):
-        for name in (prefix + mood for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu")
+        for name in (prefix + variant + mood for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu")
+                     for variant in ("", "Colored")
                      for mood in ("Happy", "Grumpy", "Angry", "Glow")):
             with self.subTest(name=name):
                 data = (ROOT / "Media" / f"{name}.tga").read_bytes()
@@ -615,6 +616,75 @@ class AddonTests(unittest.TestCase):
                 for corner in (0, width - 1, (height - 1) * width, height * width - 1):
                     self.assertEqual(alpha[corner], 0)
 
+    def test_colored_hair_defaults_and_saved_opt_out_survive_login(self):
+        for addon_name in ("Buffeteria", DEV_NAME):
+            for saved in (None, True, False):
+                with self.subTest(addon_name=addon_name, saved=saved):
+                    lua = full_addon(login=False, addon_name=addon_name)
+                    lua.globals().SAVED_HAIR = saved
+                    lua.execute("""
+                        _G[ns.savedVariable].coloredHair = SAVED_HAIR
+                        ns.Database.Init()
+                        assert(ns.db.coloredHair == (SAVED_HAIR ~= false))
+                        ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+                        ns.Database.Init()
+                        assert(ns.db.coloredHair == (SAVED_HAIR ~= false))
+                        local variant = ns.db.coloredHair and 'Colored' or ''
+                        assert(ns.Tracker.Art.Texture('happy') == ns.mediaPath .. 'Orc' .. variant .. 'Happy')
+                    """)
+
+    def test_colored_hair_toggle_updates_all_portraits_and_preserves_cast_in_combat(self):
+        for addon_name in ("Buffeteria", DEV_NAME):
+            with self.subTest(addon_name=addon_name):
+                lua = full_addon(addon_name=addon_name)
+                lua.execute("""
+                    ns.Options.Toggle()
+                    findWidget('Settings').parent:GetScript('OnClick')(findWidget('Settings').parent)
+                    local toggle = findWidget('Colored hair').parent
+                    local picker = _G[ns.globalPrefix .. '_HeadPicker']
+                    local head = _G[ns.globalPrefix .. '_CastButton']
+                    local frame = _G[ns.globalPrefix .. '_Tracker']
+                    assert(toggle:IsVisible() and toggle:GetChecked())
+                    local compute = ns.Tracker.Compute
+                    local s = ns.Tracker.Summary()
+                    assert(s.next and head:GetAttribute('spell'))
+                    local spell, unit, point = head:GetAttribute('spell'), head:GetAttribute('*unit1'), frame.point
+                    COMBAT = true
+                    for _, enabled in ipairs({false, true, false}) do
+                        toggle:SetChecked(enabled)
+                        toggle:GetScript('OnClick')(toggle)
+                        assert(ns.db.coloredHair == enabled)
+                        local variant = enabled and 'Colored' or ''
+                        for _, choice in ipairs(ns.Tracker.Art.CHOICES) do
+                            ns.Database.Set('headStyle', choice.key)
+                            assert(picker.portrait.texture == ns.mediaPath .. choice.prefix .. variant .. 'Happy')
+                            for _, w in ipairs(widgets) do
+                                if w.style == choice.key then
+                                    assert(w.portrait.texture == picker.portrait.texture)
+                                end
+                            end
+                            assert(head.halo.texture == ns.mediaPath .. choice.prefix .. variant .. 'Glow')
+                            assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
+                            assert(frame.point == point)
+                            for _, entry in ipairs({{'ok', 'Happy'}, {'warn', 'Grumpy'}, {'bad', 'Angry'}}) do
+                                ns.Tracker.Compute = function()
+                                    return {any=true, overall=entry[1], perKey={FORT={total=1,
+                                        bad=entry[1] == 'bad' and 1 or 0, warn=entry[1] == 'warn' and 1 or 0}}, next=s.next}
+                                end
+                                ns.Tracker.Refresh()
+                                assert(head.icon.texture == ns.mediaPath .. choice.prefix .. variant .. entry[2])
+                                assert(head.shade.texture == head.icon.texture)
+                            end
+                            ns.Tracker.Compute = compute
+                        end
+                    end
+                    COMBAT = false
+                    ns.Database.Init()
+                    settingsPage:GetScript('OnShow')(settingsPage)
+                    assert(not ns.db.coloredHair and not toggle:GetChecked())
+                    assert(picker.caption:GetText() == 'Xaru' and ns.db.headStyle == 'XARYU')
+                """)
+
     def test_saved_head_choice_defaults_validates_and_survives_login(self):
         for style in (None, "ORC", "GNOME", "NIGHTELF", "TAUREN", "HUMAN", "TROLL", "UNDEAD", "XARYU", "invalid", False):
             with self.subTest(style=style):
@@ -628,7 +698,7 @@ class AddonTests(unittest.TestCase):
                     ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
                     assert(Buffeteria_CastButton.icon.texture:find(expected .. '%a+$'))
                     ns.Database.Init()
-                    assert(ns.Tracker.Art.Glow() == ns.mediaPath .. expected .. 'Glow')
+                    assert(ns.Tracker.Art.Glow() == ns.mediaPath .. expected .. 'ColoredGlow')
                     ns.Database.Set('headStyle', 'removed')
                     assert(ns.db.headStyle == 'ORC')
                 """)
@@ -654,22 +724,22 @@ class AddonTests(unittest.TestCase):
                         picker:GetScript('OnClick')(picker)
                         assert(picker.menu:IsShown())
                         local chip = choiceButton(choice.key)
-                        assert(chip:IsVisible() and chip.portrait.texture == ns.mediaPath .. choice.prefix .. 'Happy')
+                        assert(chip:IsVisible() and chip.portrait.texture == ns.mediaPath .. choice.prefix .. 'ColoredHappy')
                         chip:GetScript('OnClick')(chip)
                         assert(not picker.menu:IsShown() and picker.caption:GetText() == choice.label)
-                        assert(picker.portrait.texture == ns.mediaPath .. choice.prefix .. 'Happy')
+                        assert(picker.portrait.texture == ns.mediaPath .. choice.prefix .. 'ColoredHappy')
                         assert(ns.db.headStyle == choice.key and chip:GetChecked())
                         for _, other in ipairs(ns.Tracker.Art.CHOICES) do
                             assert(choiceButton(other.key):GetChecked() == (other.key == choice.key))
                         end
                         assert(head.icon.texture == ns.Tracker.Art.Texture(ns.Tracker.Status.Mood(ns.Tracker.Summary())))
-                        assert(not head.glow and head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
+                        assert(not head.glow and head.halo.texture == ns.mediaPath .. choice.prefix .. 'ColoredGlow')
                         assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
                         assert(frame.point == point and head:GetWidth() == 64)
                     end
                     COMBAT = false
                     settingsPage:GetScript('OnShow')(settingsPage)
-                    assert(choiceButton('XARYU'):GetChecked() and picker.caption:GetText() == 'Xaryu (Mage)')
+                    assert(choiceButton('XARYU'):GetChecked() and picker.caption:GetText() == 'Xaru')
                     picker:GetScript('OnClick')(picker)
                     choiceButton('GNOME'):GetScript('OnClick')(choiceButton('GNOME'))
                     assert(ns.db.headStyle == 'GNOME')
@@ -685,9 +755,9 @@ class AddonTests(unittest.TestCase):
                         for phase, suffix in ipairs({'Angry', 'Grumpy', 'Grumpy', 'Happy'}) do
                             WOW_TIME = 100 + (phase - 1) * 5
                             ns.Tracker.Refresh()
-                            assert(head.icon.texture == ns.mediaPath .. choice.prefix .. suffix)
+                            assert(head.icon.texture == ns.mediaPath .. choice.prefix .. 'Colored' .. suffix)
                             assert(not head.glow)
-                            assert(head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
+                            assert(head.halo.texture == ns.mediaPath .. choice.prefix .. 'ColoredGlow')
                             assert(not head.icon.desaturated and not head:GetAttribute('spell') and not head:GetAttribute('*unit1'))
                         end
                     end
@@ -696,7 +766,7 @@ class AddonTests(unittest.TestCase):
                     local compute = ns.Tracker.Compute
                     ns.Tracker.Compute = function() return {any=false, overall='idle', perKey={}} end
                     ns.Tracker.Refresh()
-                    assert(head.icon.texture:find('XaryuGrumpy$') and head.icon.desaturated)
+                    assert(head.icon.texture:find('XaryuColoredGrumpy$') and head.icon.desaturated)
                     assert(not head.halo:IsShown() and not head.glow)
                     ns.Tracker.Compute = compute
                 """)
@@ -784,7 +854,7 @@ class AddonTests(unittest.TestCase):
                 WOW_TIME = 100 + (phase - 1) * 5
                 ns.Tracker.Refresh()
                 assert(Buffeteria_CastButton.icon.texture ==
-                    'Interface\\\\AddOns\\\\Buffeteria\\\\Media\\\\Orc' .. suffix)
+                    'Interface\\\\AddOns\\\\Buffeteria\\\\Media\\\\OrcColored' .. suffix)
                 assert(not Buffeteria_CastButton.icon.desaturated)
                 assert(not Buffeteria_CastButton:GetAttribute('spell'))
                 assert(not Buffeteria_CastButton:GetAttribute('*unit1'))
@@ -792,7 +862,7 @@ class AddonTests(unittest.TestCase):
             COMBAT = true
             WOW_TIME = 120
             ns.Tracker.Refresh()
-            assert(Buffeteria_CastButton.icon.texture:find('OrcAngry$'))
+            assert(Buffeteria_CastButton.icon.texture:find('OrcColoredAngry$'))
             assert(not Buffeteria_CastButton:GetAttribute('spell'))
             COMBAT = false
             ns.Tracker.Preview.Set(false)
@@ -836,7 +906,7 @@ class AddonTests(unittest.TestCase):
             assert(#s.unreadable == 1 and s.unreadable[1] == far)
             for _, p in ipairs(s.problems) do assert(p.who ~= far) end -- no stale read
             assert(ns.Tracker.Status.Mood(s) == 'happy')
-            assert(Buffeteria_CastButton.icon.texture:find('OrcHappy$'))
+            assert(Buffeteria_CastButton.icon.texture:find('OrcColoredHappy$'))
             local lines = {}
             local add = GameTooltip.AddDoubleLine
             GameTooltip.AddDoubleLine = function(_, l, r) lines[#lines + 1] = r end

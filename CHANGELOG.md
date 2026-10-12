@@ -1,5 +1,17 @@
 # Buffeteria
 
+## v0.6.4
+
+Update Buffeteria together with your group: group buff assignments now account for each caster's available group spells.
+
+- Choose from eight tracker heads: Orc, Gnome, Night Elf, Tauren, Human, Troll, Undead, and Xaru.
+- Colored hair is on by default: muted green when happy, orange when annoyed, and red when angry. Turn off **Colored hair** in Settings to restore the original artwork; the choice is saved per character.
+- Refined the Classic portraits and kept cast lighting behind the face. The cast halo is soft orange when annoyed and stronger red when angry.
+- Buffing advances after a successful cast, accounts for everyone covered by group and Greater spells, and updates promptly when another caster applies a buff.
+- Group buff assignments balance the number of casts and favor a caster's own group on a tie. **Cover for others**, enabled by default, lets helpers serve overdue group buffs and Thorns.
+- Repeated presses during the global cooldown no longer skip targets or flood spell-not-ready errors. A shadow on the head shows the cooldown; the cast cursor and press dimming appear when the button can cast.
+- Tinted preference tree artwork with each class's color for readability.
+
 ## v0.6.3
 
 - Added optional **Inner Fire** tracking for priests, enabled by default in the Buffs tree once learned. The tracker warns when it is missing or has less than 60 seconds left, and offers the cast once you have enough mana. Battle Shout likewise appears in the Buffs tree only after it is learned.

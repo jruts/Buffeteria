@@ -23,7 +23,10 @@ function View.Refresh()
 	if not panel then return end
 	refreshing = true
 	for _, cb in ipairs(toggles) do cb:SetChecked(cb.get() and true or false) end
-	for _, chip in ipairs(headButtons) do chip:SetChecked(ns.db.headStyle == chip.style) end
+	for _, chip in ipairs(headButtons) do
+		chip:SetChecked(ns.db.headStyle == chip.style)
+		chip.portrait:SetTexture(ns.Tracker.Art.Texture("happy", chip.style))
+	end
 	headPicker.caption:SetText(ns.Tracker.Art.Label())
 	headPicker.portrait:SetTexture(ns.Tracker.Art.Texture("happy"))
 	for _, chip in ipairs(displayButtons) do chip:SetChecked(ns.db.buffDisplay == chip.mode) end
@@ -95,6 +98,7 @@ local function trackerCard()
 	toggle("Minimap button", function() return not ns.db.minimap.hide end, function(v) ns.Minimap.SetShown(v) end, 150, -36)
 	toggle("Preview (fake raid)", function() return ns.Tracker.Preview.active end, function(v) ns.Tracker.Preview.Set(v) end, 150, -62)
 	toggle("Cover for others", function() return ns.db.helpOthers end, function(v) set("helpOthers", v) end, 10, -88)
+	toggle("Colored hair", function() return ns.db.coloredHair end, function(v) set("coloredHair", v) end, 150, -88)
 	ns.UI.Text(card, "GameFontHighlight", 14, -130, nil, "Head")
 	local menu
 	headPicker = ns.UI.Chip(card, "", 218, function() menu:SetShown(not menu:IsShown()) end, "GameFontNormal")
