@@ -10,8 +10,6 @@ local layoutStatusIcons
 local editing = false
 local MAIN = 64                                  -- current clickable head size
 local GAP = 2
-local COLS = 2                                   -- small icons per row under the big one
-local ICON_SIZE = 21
 local BORDER = 2
 local LABEL_HEIGHT = 12
 local SCREEN_MARGIN = 4
@@ -76,10 +74,9 @@ end
 
 local function startMoving()
 	frame:StartMoving()
-	-- Follow the screen edges during either kind of drag, without rescanning
-	-- the raid or changing the head's anchor.
+	-- Reposition Auto during dragging without rescanning or changing the head.
 	frame:SetScript("OnUpdate", function()
-		if lastSummary then layoutStatusIcons(lastSummary) end
+		if ns.db.iconPosition == "AUTO" and lastSummary then layoutStatusIcons(lastSummary) end
 	end)
 end
 
@@ -185,37 +182,47 @@ local function build()
 end
 
 local PRIORITY = ns.Status.PRIORITY
-local function iconPlacement(count)
-	local columns, left, upward = COLS, -(COLS * ICON_SIZE + (COLS - 1) * GAP) / 2, false
-	local belowGap = BORDER + LABEL_HEIGHT + GAP
-	-- Leave the preview tag and Edit Mode label clear when growing upward.
-	local aboveGap = (ns.Preview.active or editing) and 24 or GAP
-	local headLeft, headBottom, headTop = castBtn:GetLeft(), castBtn:GetBottom(), castBtn:GetTop()
-	if count == 0 or not headLeft or not headBottom or not headTop then
-		return columns, left, upward, belowGap
+local function iconPlacement(count, iconSize)
+	local columns = ns.db.iconsPerRow
+	local height = math.ceil(count / columns) * (iconSize + GAP) - GAP
+	local side = ns.db.iconPosition
+	if side == "AUTO" then
+		local belowGap = BORDER + LABEL_HEIGHT + GAP
+		local aboveGap = (ns.Preview.active or editing) and 24 or GAP
+		local headLeft, headBottom, headTop = castBtn:GetLeft(), castBtn:GetBottom(), castBtn:GetTop()
+		if count == 0 or not headLeft or not headBottom or not headTop then
+			return columns, "BOTTOM", 0, -belowGap
+		end
+		-- Convert screen bounds to the head's coordinate scale.
+		local scale = UIParent:GetEffectiveScale() / castBtn:GetEffectiveScale()
+		local screenLeft = (UIParent:GetLeft() or 0) * scale + SCREEN_MARGIN
+		local screenBottom = (UIParent:GetBottom() or 0) * scale + SCREEN_MARGIN
+		local screenRight = screenLeft + UIParent:GetWidth() * scale - SCREEN_MARGIN * 2
+		local screenTop = screenBottom + UIParent:GetHeight() * scale - SCREEN_MARGIN * 2
+		local below = math.max(0, headBottom - belowGap - screenBottom)
+		local above = math.max(0, screenTop - headTop - aboveGap)
+		local upward = height > below and above > below
+		local available = upward and above or below
+		-- Start with the chosen row width, widening only when height is tight.
+		local maxRows = math.max(1, math.floor((available + GAP) / (iconSize + GAP)))
+		local maxColumns = math.max(1, math.floor((screenRight - screenLeft + GAP) / (iconSize + GAP)))
+		columns = math.min(maxColumns, math.max(columns, math.ceil(count / maxRows)))
+		height = math.ceil(count / columns) * (iconSize + GAP) - GAP
+		local center = headLeft + castBtn:GetWidth() / 2
+		return columns, upward and "TOP" or "BOTTOM", 0, upward and (aboveGap + height) or -belowGap,
+			screenLeft - center, screenRight - center
 	end
-	-- Frame coordinates are in their own effective scale. Convert the screen
-	-- bounds to the head's units so UI scale changes don't break edge detection.
-	local scale = UIParent:GetEffectiveScale() / castBtn:GetEffectiveScale()
-	local screenLeft = (UIParent:GetLeft() or 0) * scale + SCREEN_MARGIN
-	local screenBottom = (UIParent:GetBottom() or 0) * scale + SCREEN_MARGIN
-	local screenRight = screenLeft + UIParent:GetWidth() * scale - SCREEN_MARGIN * 2
-	local screenTop = screenBottom + UIParent:GetHeight() * scale - SCREEN_MARGIN * 2
-	local below = math.max(0, headBottom - belowGap - screenBottom)
-	local above = math.max(0, screenTop - headTop - aboveGap)
-	local height = math.ceil(count / columns) * (ICON_SIZE + GAP) - GAP
-	upward = height > below and above > below
-	local available = upward and above or below
-	-- When neither side fits two columns, widen the grid enough to fit the
-	-- available height. Keep all columns inside the left and right edges.
-	local maxRows = math.max(1, math.floor((available + GAP) / (ICON_SIZE + GAP)))
-	local maxColumns = math.max(1, math.floor((screenRight - screenLeft + GAP) / (ICON_SIZE + GAP)))
-	columns = math.min(maxColumns, math.max(columns, math.ceil(count / maxRows)))
-	local width = columns * (ICON_SIZE + GAP) - GAP
-	local x = headLeft + castBtn:GetWidth() / 2 - width / 2
-	x = math.max(screenLeft, math.min(x, screenRight - width))
-	left = x - (headLeft + castBtn:GetWidth() / 2)
-	return columns, left, upward, upward and aboveGap or belowGap
+	-- Fixed choices retain their selected side and row width at screen edges.
+	if side == "LEFT" then
+		return columns, side, -BORDER - GAP - iconSize, height / 2
+	elseif side == "RIGHT" then
+		return columns, side, BORDER + GAP, height / 2
+	elseif side == "TOP" then
+		-- Keep the preview tag and Edit Mode label clear above the face.
+		local gap = (ns.Preview.active or editing) and 24 or GAP
+		return columns, side, 0, gap + height
+	end
+	return columns, "BOTTOM", 0, -BORDER - LABEL_HEIGHT - GAP
 end
 
 layoutStatusIcons = function(s)
@@ -234,22 +241,20 @@ layoutStatusIcons = function(s)
 		if mode == "ALL" or (mode == "MISSING" and pk.bad > 0)
 			or (mode == "EXPIRING" and pk.warn > 0) or (mode == "PROBLEMS" and st ~= "ok") then
 			keys[#keys + 1] = key
-			state[key] = mode == "EXPIRING" and "warn" or st
+			state[key] = st
 		end
 	end
-	-- Worst first, then blessings before the other buffs.
+	-- Worst first, with the same ordering for every kind of icon.
 	table.sort(keys, function(a, b)
 		if state[a] ~= state[b] then return PRIORITY[state[a]] < PRIORITY[state[b]] end
-		local ka, kb = Buffs.byKey[a].kind, Buffs.byKey[b].kind
-		if ka ~= kb then return ka == "blessing" end
 		return a < b
 	end)
-	local columns, left, upward, offset = iconPlacement(#keys)
+	local iconSize = ns.db.statusIconSize
+	local columns, side, left, top, minX, maxX = iconPlacement(#keys, iconSize)
 	for i, key in ipairs(keys) do
 		local ic = statusIcons[i]
 		if not ic then
 			ic = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-			ic:SetSize(ICON_SIZE, ICON_SIZE)
 			ic:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
 			ic.tex = ic:CreateTexture(nil, "ARTWORK")
 			ic.tex:SetPoint("TOPLEFT", 1, -1); ic.tex:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -272,15 +277,29 @@ layoutStatusIcons = function(s)
 			statusIcons[i] = ic
 		end
 		ic.key = key
+		ic:SetSize(iconSize, iconSize)
 		ic:ClearAllPoints()
 		local col, row = (i - 1) % columns, math.floor((i - 1) / columns)
-		local y = offset + row * (ICON_SIZE + GAP)
-		ic:SetPoint(upward and "BOTTOMLEFT" or "TOPLEFT", castBtn, upward and "TOP" or "BOTTOM",
-			left + col * (ICON_SIZE + GAP), upward and y or -y)
+		local x
+		if side == "LEFT" then
+			-- Fill outward from the face, including partially filled rows.
+			x = left - col * (iconSize + GAP)
+		elseif side == "RIGHT" then
+			x = left + col * (iconSize + GAP)
+		else
+			-- Center each row independently as icons appear or disappear.
+			local rowCount = math.min(columns, #keys - row * columns)
+			local rowWidth = rowCount * (iconSize + GAP) - GAP
+			local rowLeft = -rowWidth / 2
+			if minX then rowLeft = math.max(minX, math.min(rowLeft, maxX - rowWidth)) end
+			x = rowLeft + col * (iconSize + GAP)
+		end
+		ic:SetPoint("TOPLEFT", castBtn, side,
+			x, top - row * (iconSize + GAP))
 		local st = state[key]
 		local pk = s.perKey[key]
 		ic.tex:SetTexture(keyIcon(key))
-		ic.tex:SetDesaturated(st == "ok")
+		ic.tex:SetDesaturated(false)
 		ic:SetBackdropBorderColor(unpack(colorOf(st)))
 		local n = (ns.db.buffDisplay == "MISSING" and pk.bad)
 			or (ns.db.buffDisplay == "EXPIRING" and pk.warn) or (pk.bad + pk.warn)

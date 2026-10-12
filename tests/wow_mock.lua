@@ -40,6 +40,7 @@ function W:SetPushedTexture(texture) self.pushedTexture = texture end
 function W:SetTexture(texture) self.texture = texture end
 function W:SetDesaturated(value) self.desaturated = value end
 function W:SetVertexColor(...) self.vertexColor = {...} end
+function W:SetBackdropBorderColor(...) self.borderColor = {...} end
 function W:SetScript(event, callback) self.scripts[event] = callback end
 function W:GetScript(event) return self.scripts[event] end
 function W:StartMoving()

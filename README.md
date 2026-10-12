@@ -88,19 +88,33 @@ format changed for this feature.
 
 Every class has a **Settings** tab in `/buff` and the game's Buffeteria AddOns page.
 It holds **Show tracker**, **Lock tracker**, **Minimap button**, and **Preview**, plus
-the clickable head's size (32–128 pixels; changes apply after combat) and the
-expiring-buff threshold (1–15 minutes).
+the clickable head's size (32–128 pixels; changes apply after combat), a separate
+**Small icon size** slider (16–64 pixels, default: 21; applies immediately), and
+the expiring-buff threshold (1–15 minutes). Changing the small icon size updates
+the rows' spacing and alignment without resizing the face.
 
 Choose which small buff icons appear: **Always show all**, **Missing only**,
 **Missing or expiring** (the default), or **Expiring only**. A buff counts as
 expiring when at least one recipient has less than the configured time left.
 The counts follow the selected filter. These filters affect the small icons;
 the head's expression and next cast still consider all tracked buffs.
-The head stays fixed as icons appear or disappear. Rows normally grow underneath
-it, but automatically grow upward near the bottom of the screen. The grid shifts
-inward at the left and right edges and uses more columns if vertical space is
-tight. Placement follows the head while dragging, including in Edit Mode, and
-adapts to resolution and UI scale changes.
+Blessings, buffs, and auras all use the same full-color icons, with red borders
+when missing, orange when expiring, and green when buffed. Missing takes priority
+if some recipients are missing a buff while others have it running low.
+In **Settings > Icons**, choose **2**, **3**, or **4** icons per row (default: 2).
+Choose **Icon position: Left, Top, Right, Bottom, or Auto** (default: Bottom).
+The four fixed positions keep the chosen side and icons per row, including near
+screen edges. Move the tracker inward if icons extend off-screen.
+**Auto** normally places rows below the face, moves them above near the bottom
+of the screen, shifts rows inward at the left and right edges, and adds columns
+when vertical space is tight. It uses your chosen icon size and row width as its
+starting point, and updates while dragging or changing UI scale and resolution.
+Top and Bottom center each row on the face, including a partially filled last
+row. Left fills each row from right to left, starting beside the face; Right
+fills from left to right. Rows update as icons appear or disappear.
+The head stays fixed as icons appear or disappear; the grid follows it while
+dragging, including in Edit Mode. Bottom leaves room for the next recipient's
+name; Top leaves room for the preview tag and Edit Mode label.
 Existing tracker visibility and display choices are preserved.
 
 - **Orc head:** release a click to cast your next buff on the right target. The

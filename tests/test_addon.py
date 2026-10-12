@@ -36,80 +36,190 @@ def full_addon(player_class="PALADIN", login=True):
 
 
 class AddonTests(unittest.TestCase):
-    def test_smart_buff_grid_fits_edges_scale_and_drag_without_moving_head(self):
+    def test_icon_grid_uses_chosen_side_and_row_width_without_moving_head(self):
         lua = full_addon()
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
             local s = ns.Preview.Summary()
             ns.Scan.Update = function() return s end
             ns.db.buffDisplay = 'ALL'
-            local headScale = 1
-            head.GetEffectiveScale = function() return headScale end
-            local function check(left, bottom, expectedDirection, minColumns)
-                head.left, head.bottom, head.top = left, bottom, bottom + head:GetHeight()
+            local function check(side, columns, expectedCount)
+                ns.db.iconPosition, ns.db.iconsPerRow = side, columns
                 local oldPoint, oldHeight, oldWidth = frame.point, frame:GetHeight(), frame:GetWidth()
                 ns.Tracker.Refresh()
-                local count, xs = 0, {}
-                local screenW, screenH = UIParent:GetWidth() / headScale, UIParent:GetHeight() / headScale
+                local count, rows = 0, {}
+                local left, right, bottom, top
                 for _, w in ipairs(widgets) do
                     if w.parent == frame and w.key and w.tex and w:IsShown() then
                         count = count + 1
-                        assert(w.point[3] == expectedDirection)
-                        local x = head.left + head:GetWidth() / 2 + w.point[4]
-                        local y = (w.point[3] == 'TOP' and head.top or head.bottom) + w.point[5]
-                        local low = w.point[1] == 'BOTTOMLEFT' and y or y - w:GetHeight()
+                        assert(w:GetWidth() == ns.db.statusIconSize and w:GetHeight() == ns.db.statusIconSize)
+                        assert(w.point[1] == 'TOPLEFT' and w.point[2] == head and w.point[3] == side)
+                        local x, y = w.point[4], w.point[5]
+                        local r = rows[y] or {count=0, left=x, right=x + w:GetWidth()}
+                        rows[y] = r
+                        r.count = r.count + 1
+                        r.left = math.min(r.left, x)
+                        r.right = math.max(r.right, x + w:GetWidth())
+                        local step = ns.db.statusIconSize + 2
+                        if r.previousX then assert(x - r.previousX == (side == 'LEFT' and -step or step)) end
+                        r.previousX = x
+                        if side == 'LEFT' then x = x - head:GetWidth() / 2 end
+                        if side == 'RIGHT' then x = x + head:GetWidth() / 2 end
+                        if side == 'TOP' then y = y + head:GetHeight() / 2 end
+                        if side == 'BOTTOM' then y = y - head:GetHeight() / 2 end
+                        left = math.min(left or x, x)
+                        right = math.max(right or (x + w:GetWidth()), x + w:GetWidth())
+                        bottom = math.min(bottom or (y - w:GetHeight()), y - w:GetHeight())
+                        top = math.max(top or y, y)
+                    end
+                end
+                assert(count == expectedCount)
+                local actualColumns, actualRows = 0, 0
+                for _, r in pairs(rows) do
+                    actualColumns = math.max(actualColumns, r.count)
+                    actualRows = actualRows + 1
+                    if side == 'TOP' or side == 'BOTTOM' then assert(r.left == -r.right) end
+                    if side == 'LEFT' then assert(r.right == -4) end
+                    if side == 'RIGHT' then assert(r.left == 4) end
+                end
+                assert(actualColumns == math.min(columns, expectedCount))
+                assert(actualRows == math.ceil(expectedCount / columns))
+                if count > 0 then
+                    if side == 'LEFT' then assert(right < -head:GetWidth() / 2 and bottom == -top) end
+                    if side == 'RIGHT' then assert(left > head:GetWidth() / 2 and bottom == -top) end
+                    if side == 'TOP' then assert(bottom >= head:GetHeight() / 2 + 2 and left == -right) end
+                    if side == 'BOTTOM' then assert(top == -head:GetHeight() / 2 - 16 and left == -right) end
+                end
+                assert(frame.point == oldPoint and frame:GetHeight() == oldHeight and frame:GetWidth() == oldWidth)
+            end
+            for _, side in ipairs({'LEFT', 'TOP', 'RIGHT', 'BOTTOM'}) do
+                for columns = 2, 4 do
+                    check(side, columns, 10)
+                    -- Screen edges, a small screen, and UI scale never override the setting.
+                    for _, position in ipairs({{2, 12}, {1886, 12}, {2, 1000}, {1886, 1000}}) do
+                        head.left, head.bottom, head.top = position[1], position[2], position[2] + head:GetHeight()
+                        check(side, columns, 10)
+                    end
+                    UIParent:SetSize(320, 200)
+                    head.GetEffectiveScale = function() return 0.5 end
+                    check(side, columns, 10)
+                    UIParent:SetSize(1920, 1080)
+                    head.GetEffectiveScale = function() return 1 end
+                end
+            end
+            for _, size in ipairs({32, 128}) do
+                ns.db.iconSize = size; ns.Tracker.Refresh()
+                for _, side in ipairs({'LEFT', 'TOP', 'RIGHT', 'BOTTOM'}) do check(side, 3, 10) end
+            end
+            local spell, unit = head:GetAttribute('spell'), head:GetAttribute('unit')
+            COMBAT = true
+            check('RIGHT', 4, 10)
+            assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+            COMBAT = false
+            head:GetScript('OnDragStart')(head)
+            assert(frame.moving)
+            check('LEFT', 3, 10)
+            head:GetScript('OnDragStop')(head); runTimers()
+            assert(not frame.moving)
+            EventRegistry:TriggerEvent('EditMode.Enter')
+            frame.editOverlay:GetScript('OnDragStart')(frame.editOverlay)
+            check('TOP', 2, 10)
+            frame.editOverlay:GetScript('OnDragStop')(frame.editOverlay)
+            EventRegistry:TriggerEvent('EditMode.Exit')
+            -- Exercise every partial row, including transitions through empty.
+            local allKeys = {}; for key in pairs(s.perKey) do allKeys[#allKeys + 1] = key end
+            for _, iconSize in ipairs({16, 21, 32, 64}) do
+                ns.db.statusIconSize = iconSize
+                for count = #allKeys, 0, -1 do
+                    s.perKey = {}
+                    for i = 1, count do s.perKey[allKeys[i]] = {bad=1, warn=0, total=1} end
+                    for _, side in ipairs({'LEFT', 'TOP', 'RIGHT', 'BOTTOM'}) do
+                        for columns = 2, 4 do check(side, columns, count) end
+                    end
+                end
+            end
+        """)
+
+    def test_auto_icons_fit_screen_edges_sizes_scale_and_drag(self):
+        lua = full_addon()
+        lua.execute("""
+            local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+            ns.Scan.Update = ns.Preview.Summary
+            ns.db.iconPosition, ns.db.buffDisplay = 'AUTO', 'ALL'
+            local headScale = 1
+            head.GetEffectiveScale = function() return headScale end
+            local function check(left, bottom, side, minimumColumns, dragging)
+                head.left, head.bottom, head.top = left, bottom, bottom + head:GetHeight()
+                local point, width, height = frame.point, frame:GetWidth(), frame:GetHeight()
+                if dragging then frame:GetScript('OnUpdate')(frame) else ns.Tracker.Refresh() end
+                local screenW, screenH = UIParent:GetWidth() / headScale, UIParent:GetHeight() / headScale
+                local count, xs, rects = 0, {}, {}
+                for _, w in ipairs(widgets) do
+                    if w.parent == frame and w.key and w.tex and w:IsShown() then
+                        count = count + 1
+                        assert(w.point[2] == head and w.point[3] == side)
+                        assert(w:GetWidth() == ns.db.statusIconSize and w:GetHeight() == ns.db.statusIconSize)
+                        local x = left + head:GetWidth() / 2 + w.point[4]
+                        local y = (side == 'TOP' and head.top or head.bottom) + w.point[5]
                         assert(x >= 4 and x + w:GetWidth() <= screenW - 4)
-                        assert(low >= 4 and low + w:GetHeight() <= screenH - 4)
+                        assert(y <= screenH - 4 and y - w:GetHeight() >= 4)
                         xs[x] = true
+                        for _, r in ipairs(rects) do
+                            assert(x + w:GetWidth() <= r.x or x >= r.x + r.size
+                                   or y <= r.y - r.size or y - w:GetHeight() >= r.y)
+                        end
+                        rects[#rects + 1] = {x=x, y=y, size=w:GetWidth()}
                     end
                 end
                 local columns = 0; for _ in pairs(xs) do columns = columns + 1 end
-                assert(count == 10 and columns >= (minColumns or 2))
-                assert(frame.point == oldPoint and frame:GetHeight() == oldHeight and frame:GetWidth() == oldWidth)
+                assert(count == 10 and columns >= minimumColumns)
+                assert(frame.point == point and frame:GetWidth() == width and frame:GetHeight() == height)
             end
-            check(800, 500, 'BOTTOM') -- normal placement
-            check(800, 12, 'TOP') -- bottom edge, all rows above
-            check(800, 1000, 'BOTTOM') -- top edge, all rows below
-            ns.db.iconSize = 32; ns.Tracker.Refresh()
-            check(2, 12, 'TOP') -- narrower head at bottom-left
-            check(1886, 12, 'TOP') -- bottom-right
-            check(2, 900, 'BOTTOM') -- top-left
-            check(1886, 900, 'BOTTOM') -- top-right
-            ns.db.iconSize = 64; ns.Tracker.Refresh()
+            for _, size in ipairs({16, 21, 32, 64}) do
+                ns.db.statusIconSize = size
+                for columns = 2, 4 do
+                    ns.db.iconsPerRow = columns
+                    check(800, 500, 'BOTTOM', columns)
+                    check(2, 12, 'TOP', columns)
+                    check(1850, 12, 'TOP', columns)
+                    check(2, 1000, 'BOTTOM', columns)
+                    check(1850, 1000, 'BOTTOM', columns)
+                end
+            end
+            ns.db.iconsPerRow = 2
             UIParent:SetSize(320, 200)
-            check(120, 100, 'BOTTOM', 4) -- neither side fits two columns
+            for _, size in ipairs({16, 21}) do
+                ns.db.statusIconSize = size
+                check(120, 100, 'BOTTOM', 3) -- widen when neither side fits the chosen width
+            end
             UIParent:SetSize(1920, 1080)
             headScale = 0.5
-            check(3740, 12, 'TOP') -- coordinates after UI scaling
+            check(3740, 12, 'TOP', 2)
             headScale = 1
-            -- The grid can change during combat; secure casting stays untouched.
             local spell, unit = head:GetAttribute('spell'), head:GetAttribute('unit')
             COMBAT = true
-            check(800, 12, 'TOP')
+            ns.db.statusIconSize = 64
+            check(1850, 12, 'TOP', 2)
             assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
             COMBAT = false
-            -- Ordinary dragging and Edit Mode both update before release.
             head:GetScript('OnDragStart')(head)
-            head.left, head.bottom, head.top = 800, 500, 564
-            frame:GetScript('OnUpdate')(frame)
-            head.left, head.bottom, head.top = 800, 12, 76
-            frame:GetScript('OnUpdate')(frame)
-            for _, w in ipairs(widgets) do
-                if w.parent == frame and w.key and w.tex and w:IsShown() then assert(w.point[3] == 'TOP') end
-            end
+            check(800, 500, 'BOTTOM', 2, true)
+            check(2, 12, 'TOP', 2, true)
             head:GetScript('OnDragStop')(head); runTimers()
             assert(not frame:GetScript('OnUpdate'))
             EventRegistry:TriggerEvent('EditMode.Enter')
-            local overlay = frame.editOverlay
-            overlay:GetScript('OnDragStart')(overlay)
-            assert(frame:GetScript('OnUpdate'))
-            frame:GetScript('OnUpdate')(frame)
-            overlay:GetScript('OnDragStop')(overlay)
-            assert(not frame:GetScript('OnUpdate'))
+            frame.editOverlay:GetScript('OnDragStart')(frame.editOverlay)
+            check(1850, 12, 'TOP', 2, true)
+            frame.editOverlay:GetScript('OnDragStop')(frame.editOverlay)
             EventRegistry:TriggerEvent('EditMode.Exit')
-            -- Resolution/scale notifications also recalculate placement.
+            assert(not frame:GetScript('OnUpdate'))
             head.left, head.bottom, head.top = 800, 500, 564
             frame:GetScript('OnEvent')(frame, 'UI_SCALE_CHANGED')
+            check(800, 500, 'BOTTOM', 2)
+            -- Selecting a fixed position immediately bypasses automatic flipping.
+            ns.db.iconPosition = 'BOTTOM'
+            head.left, head.bottom, head.top = 2, 12, 76
+            ns.Tracker.Refresh()
             for _, w in ipairs(widgets) do
                 if w.parent == frame and w.key and w.tex and w:IsShown() then assert(w.point[3] == 'BOTTOM') end
             end
@@ -123,6 +233,9 @@ class AddonTests(unittest.TestCase):
                 ns.Database.Init()
                 assert(ns.db.buffDisplay == (old and 'PROBLEMS' or 'ALL'))
                 assert(ns.db.iconSize == 128)
+                assert(ns.db.iconsPerRow == 2)
+                assert(ns.db.iconPosition == 'BOTTOM')
+                assert(ns.db.statusIconSize == 21)
             end
             BuffeteriaCharDB = {onlyProblems=false, buffDisplay='MISSING', iconSize=16}
             ns.Database.Init()
@@ -130,6 +243,33 @@ class AddonTests(unittest.TestCase):
             BuffeteriaCharDB = {buffDisplay='invalid', iconSize='invalid'}
             ns.Database.Init()
             assert(ns.db.buffDisplay == 'PROBLEMS' and ns.db.iconSize == 64)
+            for _, columns in ipairs({2, 3, 4, '3'}) do
+                BuffeteriaCharDB = {iconsPerRow=columns}
+                ns.Database.Init()
+                assert(ns.db.iconsPerRow == tonumber(columns))
+            end
+            for _, columns in ipairs({0, 1, 5, 3.5, 'invalid', false}) do
+                BuffeteriaCharDB = {iconsPerRow=columns}
+                ns.Database.Init()
+                assert(ns.db.iconsPerRow == 2)
+            end
+            for _, side in ipairs({'LEFT', 'TOP', 'RIGHT', 'BOTTOM', 'AUTO'}) do
+                BuffeteriaCharDB = {iconPosition=side, iconsPerRow=3}
+                ns.Database.Init()
+                assert(ns.db.iconPosition == side and ns.db.iconsPerRow == 3)
+            end
+            for _, side in ipairs({'invalid', 'left', false, 5}) do
+                BuffeteriaCharDB = {iconPosition=side}
+                ns.Database.Init()
+                assert(ns.db.iconPosition == 'BOTTOM')
+            end
+            for _, sample in ipairs({{16,16}, {64,64}, {32,32}, {'24',24}, {24.6,25},
+                                      {0,16}, {100,64}, {'invalid',21}, {false,21}}) do
+                BuffeteriaCharDB = {statusIconSize=sample[1], iconSize=96, iconsPerRow=3, iconPosition='LEFT'}
+                ns.Database.Init()
+                assert(ns.db.statusIconSize == sample[2])
+                assert(ns.db.iconSize == 96 and ns.db.iconsPerRow == 3 and ns.db.iconPosition == 'LEFT')
+            end
         """)
 
     def test_settings_tab_for_every_class_and_shared_game_settings_controls(self):
@@ -153,8 +293,52 @@ class AddonTests(unittest.TestCase):
                     mode:GetScript('OnClick')(mode)
                     assert(ns.db.buffDisplay == 'MISSING' and mode:GetChecked())
                     assert(not findWidget('Missing or expiring').parent:GetChecked())
+                    assert(findWidget('Icons per row'):IsVisible())
+                    for columns = 2, 4 do
+                        local selected
+                        for _, w in ipairs(widgets) do
+                            if w.columns == columns and w:IsVisible() then selected = w end
+                        end
+                        assert(selected); selected:GetScript('OnClick')(selected)
+                        assert(ns.db.iconsPerRow == columns and selected:GetChecked())
+                        for _, w in ipairs(widgets) do
+                            if w.columns and w.columns ~= columns then assert(not w:GetChecked()) end
+                        end
+                    end
                     Buffeteria_IconSize:SetValue(96)
+                    assert(findWidget('Icon position'):IsVisible())
+                    for _, side in ipairs({'LEFT', 'TOP', 'RIGHT', 'BOTTOM', 'AUTO'}) do
+                        local selected
+                        for _, w in ipairs(widgets) do
+                            if w.side == side and w:IsVisible() then selected = w end
+                        end
+                        assert(selected); selected:GetScript('OnClick')(selected)
+                        assert(ns.db.iconPosition == side and selected:GetChecked())
+                        for _, w in ipairs(widgets) do
+                            if w.side and w.side ~= side then assert(not w:GetChecked()) end
+                        end
+                    end
                     assert(ns.db.iconSize == 96 and Buffeteria_CastButton:GetWidth() == 96)
+                    local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+                    local point, width, height = frame.point, frame:GetWidth(), frame:GetHeight()
+                    local spell, unit = head:GetAttribute('spell'), head:GetAttribute('unit')
+                    -- Both settings hosts use the same control, including immediate resizing in combat.
+                    COMBAT = true
+                    for _, size in ipairs({16, 32, 64, 21}) do
+                        Buffeteria_StatusIconSize:SetValue(size)
+                        assert(ns.db.statusIconSize == size)
+                        local visible = 0
+                        for _, w in ipairs(widgets) do
+                            if w.parent == frame and w.key and w.tex and w:IsShown() then
+                                visible = visible + 1
+                                assert(w:GetWidth() == size and w:GetHeight() == size)
+                            end
+                        end
+                        assert(visible > 0)
+                        assert(frame.point == point and frame:GetWidth() == width and frame:GetHeight() == height)
+                        assert(head:GetWidth() == 96 and head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+                    end
+                    COMBAT = false
                     settingsPage:GetScript('OnShow')(settingsPage)
                     assert(findWidget('Tracker settings'):IsVisible())
                     assert(tab.parent.parent == settingsPage)
@@ -211,6 +395,38 @@ class AddonTests(unittest.TestCase):
             COMBAT = false
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
             assert(head:GetWidth() == 100 and frame:GetWidth() == 104)
+        """)
+
+    def test_tracker_icons_keep_color_and_share_status_borders_for_buffs_and_auras(self):
+        lua = full_addon()
+        lua.execute("""
+            local frame = Buffeteria_Tracker
+            local s = {any=true, overall='bad', problems={}, perKey={}}
+            ns.Scan.Update = function() return s end
+            local keys = {'CONC', 'DEVO', 'FORT', 'INT', 'KINGS'}
+            -- Reuse every icon across healthy, expiring, and missing states.
+            for _, status in ipairs({'ok', 'warn', 'bad', 'ok'}) do
+                for _, key in ipairs(keys) do
+                    s.perKey[key] = {bad=status == 'bad' and 1 or 0,
+                                    warn=status ~= 'ok' and 1 or 0, total=2}
+                end
+                for _, mode in ipairs({'ALL', 'PROBLEMS', 'MISSING', 'EXPIRING'}) do
+                    ns.db.buffDisplay = mode; ns.Tracker.Refresh()
+                    local visible = 0
+                    for _, w in ipairs(widgets) do
+                        if w.parent == frame and w.key and w.tex and w:IsShown() then
+                            visible = visible + 1
+                            assert(w.key == keys[visible]) -- no type-specific grouping
+                            assert(w.tex.desaturated == false)
+                            local color = ns.Status.COLORS[status]
+                            for i = 1, 3 do assert(w.borderColor[i] == color[i]) end
+                        end
+                    end
+                    local shown = mode == 'ALL' or (status ~= 'ok' and mode ~= 'MISSING')
+                                  or (status == 'bad' and mode == 'MISSING')
+                    assert(visible == (shown and #keys or 0))
+                end
+            end
         """)
 
     def test_orc_textures_have_matching_dimensions_and_real_transparency(self):
