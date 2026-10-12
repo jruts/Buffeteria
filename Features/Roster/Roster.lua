@@ -8,7 +8,8 @@ function ns.Roster.Capabilities()
 	local caps = {}
 	local _, class = UnitClass("player")
 	for _, b in pairs(Buffs.byKey) do
-		if b.kind == "group" or class == "PALADIN" then
+		if ((b.kind == "group" or b.kind == "tank") and class == b.class)
+			or (class == "PALADIN" and (b.kind == "blessing" or b.kind == "aura")) then
 			if ns.WoW.KnowsAny(b.ids) then caps[b.key] = true end
 			if ns.WoW.KnowsAny(b.groupIds) then caps["g" .. b.key] = true end
 		end
@@ -58,6 +59,10 @@ function ns.Roster.Build()
 		else
 			local r, e = Buffs.SplitOrder(Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR)
 			m.wants, m.ranking, m.excluded = Buffs.DefaultWants(class), r, e
+			if ns.WoW.IsTank(unit) then
+				m.wants.THORNS = true
+				m.wants.RFURY = class == "PALADIN"
+			end
 		end
 		if not m.blessingsOverride then
 			m.ranking, m.excluded = Buffs.SplitOrder(Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR)

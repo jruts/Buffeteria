@@ -14,8 +14,8 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   (drag to reorder) and lights up the buffs they care about (Fortitude, Spirit, Shadow
   Protection, Mark of the Wild, Arcane Intellect). In `/buff`, these appear as
   talent-style trees: Blessings (each ranked blessing names the paladin serving it),
-  Buffs (each buff names its caster, plus tracker options), and Kitchen (the whole
-  group's plan: every paladin's blessings and every caster's raid groups).
+  Buffs (each buff names its caster, plus tracker options), and Tanks (buffs wanted
+  while tanking: Righteous Fury for paladins and Thorns from a druid).
 - **Smart assignments.** With one paladin you get your #1 blessing, with two your #1 and
   #2, and so on. Greater Blessings cover a whole class, so each class gets what most of
   its players ranked highest. Priests, druids and mages split the raid groups.
@@ -23,6 +23,20 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   different personal blessing from that paladin instead.
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
   same preferences. Players without the add-on get sensible class defaults.
+
+In **My preferences > Tanks**, **Role: Auto** follows your assigned Tank role or
+raid main-tank assignment. Click Role to cycle through **Tank**, **Not tank**, and
+**Auto** when you need an override, including solo play or groups without assigned
+roles. Righteous Fury (paladins only) and Thorns are enabled by default; click their
+icons to opt out individually. These choices are saved and only requested while
+tanking. The panel names the caster or shows when none is available.
+
+The tracker reminds paladin tanks to cast Righteous Fury on themselves and assigns
+Thorns to druids for tank recipients, including assigned tanks without Buffeteria.
+Multiple druids share Thorns targets. Missing and expiring tank buffs use the same
+tracker and cast button as other buffs. Updated casters need Buffeteria's tank-buff
+support to serve these requests; druids without the addon are named in the plan but
+must cast manually. `/buff who` and **Announce to group** still list the group's plan.
 
 ## Paladin assignments
 
@@ -72,12 +86,14 @@ format changed for this feature.
 
 ## The tracker
 
-- **Big button:** click it to cast your next buff on the right target. Its ring is
+- **Big button:** release a click to cast your next buff on the right target. Its ring is
   green when everyone is fed, orange when buffs are running low, red when something is
   missing.
 - **Small icons underneath:** which buffs need attention and how many players are
   affected. Hover for details.
-- Right-click the big button for options. Move it with Edit Mode.
+- Right-click the big button for options. Move it with Edit Mode, or unlock it in
+  options and drag. Dragging only moves it; releasing a drag never casts or opens options.
+- The minimap icon also acts on click release; dragging it only changes its position.
 - Bind a key: Key Bindings > AddOns > Buffeteria > "Cast next buff".
 
 ## Commands

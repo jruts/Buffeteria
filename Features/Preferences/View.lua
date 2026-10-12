@@ -3,9 +3,8 @@ local _, ns = ...
 local Buffs = ns.Buffs
 local View = {}
 ns.Preferences.View = View
-local personal, band, trees, rows, wants, toggles, warnText, overrideCheck, tip, list, menu
-local ROW_H, EDGE, GAP, BOARD_H, MENU_ROW = 22, 8, 2, 360, 20
-local MENU_TOP, MENU_ROWS = -80, 13
+local personal, band, trees, rows, wants, toggles, warnText, overrideCheck, tip, list, tankButtons, roleButton, roleText, tankTip
+local ROW_H, EDGE, GAP, BOARD_H = 22, 8, 2, 360
 local dragging
 
 local blessingIcon = ns.UI.BuffIcon
@@ -56,105 +55,27 @@ local function refreshRows()
 	return rank
 end
 
--- The third tree is a menu of pooled rows: section headings or icon entries.
-local function menuRow(i)
-	if menu[i] then return menu[i] end
-	local row = CreateFrame("Frame", nil, trees[3])
-	row:SetHeight(MENU_ROW)
-	row.head = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	row.head:SetPoint("LEFT", 0, -2)
-	row.rule = row:CreateTexture(nil, "ARTWORK")
-	row.rule:SetColorTexture(0.85, 0.66, 0.26, 0.6); row.rule:SetHeight(1)
-	row.rule:SetPoint("LEFT", row.head, "RIGHT", 6, 0); row.rule:SetPoint("RIGHT", 0, -2)
-	row.bg = row:CreateTexture(nil, "BACKGROUND")
-	row.bg:SetPoint("TOPLEFT", 0, -1); row.bg:SetPoint("BOTTOMRIGHT", 0, 1)
-	row.bg:SetColorTexture(0, 0, 0, 0.55)
-	row.icon = row:CreateTexture(nil, "ARTWORK")
-	row.icon:SetSize(16, 16); row.icon:SetPoint("LEFT", 2, 0)
-	row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	row.right:SetPoint("RIGHT", -4, 0); row.right:SetJustifyH("RIGHT"); row.right:SetWordWrap(false)
-	row.left = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	row.left:SetJustifyH("LEFT"); row.left:SetWordWrap(false)
-	menu[i] = row
-	return row
-end
-
-local function setMenuRow(i, entry)
-	local row = menuRow(i)
-	local heading, icon = entry.heading, entry.icon
-	row:ClearAllPoints()
-	row:SetPoint("TOPLEFT", trees[3], "TOPLEFT", 12, MENU_TOP - (i - 1) * MENU_ROW)
-	row:SetPoint("RIGHT", trees[3], "RIGHT", -12, 0)
-	row.head:SetText(heading or ""); row.head:SetShown(heading ~= nil); row.rule:SetShown(heading ~= nil)
-	row.bg:SetShown(heading == nil); row.icon:SetShown(heading == nil and icon ~= nil)
-	row.icon:SetTexture(icon)
-	row.left:ClearAllPoints()
-	row.left:SetPoint("LEFT", icon and 24 or 6, 0); row.left:SetPoint("RIGHT", row.right, "LEFT", -4, 0)
-	row.left:SetText(entry.left or ""); row.right:SetText(entry.right or "")
-	row.left:SetShown(heading == nil); row.right:SetShown(heading == nil)
-	row:Show()
-end
-
--- The whole group's plan: every paladin's aura and blessings, then every group-buff caster.
-local function menuEntries()
-	local out, result = {}, ns.result or {}
-	out[#out + 1] = { heading = "Paladins" }
-	local before = #out
-	-- Paladins: each blessing they cast, with how many classes get it.
-	local stations, paladins = {}, {}
-	for _, map in pairs(result.pally or {}) do
-		for paladin, key in pairs(map) do
-			if Buffs.byKey[key] then
-				if not stations[paladin] then stations[paladin] = {}; paladins[#paladins + 1] = paladin end
-				stations[paladin][key] = (stations[paladin][key] or 0) + 1
-			end
-		end
+-- Tank requests follow the role without changing the saved per-buff choices.
+local function refreshTanks()
+	local tank, mine = ns.Preferences.IsTank(), served()
+	local _, class = UnitClass("player")
+	roleButton:SetText("Role: " .. ({ AUTO = "Auto", TANK = "Tank", OFF = "Not tank" })[ns.db.tankRole])
+	roleText:SetText(tank and "|cff40ff40Tank buffs active|r" or GREY .. "Tank buffs inactive|r")
+	local wanted = 0
+	for _, buff in ipairs(Buffs.TANK_BUFFS) do
+		local button = tankButtons[buff.key]
+		local relevant = not buff.selfOnly or class == buff.class
+		button:SetShown(relevant)
+		local on = tank and ns.db.tankBuffs[buff.key]
+		if relevant and on then wanted = wanted + 1 end
+		button:SetState(on and "gold" or "grey", blessingIcon(buff.key))
+		if not tank then button.caster:SetText(GREY .. "Tank only|r")
+		elseif not on then button.caster:SetText(GREY .. "Skipped|r")
+		elseif mine[buff.key] then
+			button.caster:SetText(buff.selfOnly and "Self" or ns.UI.MemberName(mine[buff.key]))
+		else button.caster:SetText(RED .. (buff.selfOnly and "Not learned" or "No druid") .. "|r") end
 	end
-	for paladin in pairs(result.auras or {}) do
-		if not stations[paladin] then stations[paladin] = {}; paladins[#paladins + 1] = paladin end
-	end
-	table.sort(paladins)
-	for _, paladin in ipairs(paladins) do
-		local dishes = {}
-		for _, key in ipairs(Buffs.BLESSING_KEYS) do
-			local count = stations[paladin][key]
-			if count then dishes[#dishes + 1] = ns.UI.InlineIcon(blessingIcon(key), 13) .. count end
-		end
-		-- The row's icon is the aura that paladin runs.
-		local aura = (result.auras or {})[paladin]
-		out[#out + 1] = { icon = aura and blessingIcon(aura), left = ns.UI.MemberName(paladin), right = table.concat(dishes, " ") }
-	end
-	if #out == before then out[#out + 1] = { left = GREY .. "No paladins cooking.|r" } end
-	out[#out + 1] = { heading = "Group buffs" }
-	before = #out
-	-- Group buffs: each caster with the raid groups they cover.
-	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
-		local byCaster, casters = {}, {}
-		for group, caster in pairs((result.groups or {})[buff.key] or {}) do
-			if not byCaster[caster] then byCaster[caster] = {}; casters[#casters + 1] = caster end
-			table.insert(byCaster[caster], group)
-		end
-		table.sort(casters)
-		for _, caster in ipairs(casters) do
-			table.sort(byCaster[caster])
-			out[#out + 1] = { icon = blessingIcon(buff.key), left = ns.UI.MemberName(caster),
-				right = GREY .. "G" .. table.concat(byCaster[caster], ",") .. "|r" }
-		end
-	end
-	if #out == before then out[#out + 1] = { left = GREY .. "No priests, druids or mages.|r" } end
-	return out
-end
-
-local function refreshMenu()
-	local entries = menuEntries()
-	if #entries > MENU_ROWS then
-		local hidden = #entries - MENU_ROWS + 1
-		for i = #entries, MENU_ROWS + 1, -1 do entries[i] = nil end
-		entries[MENU_ROWS] = { left = GREY .. ("+%d more: Announce lists all|r"):format(hidden) }
-	end
-	for i, entry in ipairs(entries) do setMenuRow(i, entry) end
-	for i = #entries + 1, #menu do menu[i]:Hide() end
+	return wanted
 end
 
 local function refreshWants()
@@ -182,9 +103,8 @@ function View.Refresh()
 	for i, tree in ipairs(trees) do tree:SetArt(art[i]) end
 	trees[1]:SetHeader(blessingIcon("KINGS"), "Blessings", "Best first, drag to reorder", ranked)
 	trees[2]:SetHeader(blessingIcon("FORT"), "Buffs", "Click the buffs you want", wanted)
-	trees[3]:SetHeader(ns.UI.ICON, "Kitchen", "Who casts what for the group")
+	trees[3]:SetHeader(blessingIcon("THORNS"), "Tanks", "Buffs for your tank role", refreshTanks())
 	band:SetCount("Paladins", #ns.UI.PaladinNames())
-	refreshMenu()
 end
 
 function View.Layout(width)
@@ -198,6 +118,17 @@ function View.Layout(width)
 	for _, r in ipairs(rows) do r:SetWidth(column - 24) end
 	tip:SetWidth(column - 28)
 	overrideCheck.text:SetWidth(column - 44)
+	roleButton:SetWidth(column - 28)
+	roleText:SetWidth(column - 28)
+	tankTip:SetWidth(column - 28)
+	local _, class = UnitClass("player")
+	local row = 0
+	for _, buff in ipairs(Buffs.TANK_BUFFS) do
+		local button = tankButtons[buff.key]
+		button:ClearAllPoints(); button:SetPoint("TOPLEFT", trees[3], "TOPLEFT", 20, -150 - row * 66)
+		button.label:SetWidth(column - 80); button.caster:SetWidth(column - 80)
+		if not buff.selfOnly or class == buff.class then row = row + 1 end
+	end
 	local cell = column / 3
 	for i, buff in ipairs(Buffs.GROUP_BUFFS) do
 		-- Talent tiers: three on top, the rest centered below.
@@ -248,7 +179,7 @@ local function createRow(i)
 	r.icon = r:CreateTexture(nil, "ARTWORK")
 	r.icon:SetSize(ROW_H - 6, ROW_H - 6)
 	r.icon:SetPoint("LEFT", 22, 0)
-	r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	r.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
 	-- Action-button style slot ring around the icon.
 	r.border = r:CreateTexture(nil, "OVERLAY")
 	r.border:SetSize(ROW_H * 1.55, ROW_H * 1.55); r.border:SetPoint("CENTER", r.icon, "CENTER", 0, 0)
@@ -284,7 +215,7 @@ end
 function View.Create(parent)
 	personal = CreateFrame("Frame", nil, parent)
 	personal:SetPoint("TOPLEFT", 0, -34); personal:SetPoint("BOTTOMRIGHT")
-	band = ns.UI.Band(personal, "Your buffet", "Rank your blessings, pick your buffs, and see who serves what.")
+	band = ns.UI.Band(personal, "Your buffet", "Rank your blessings and pick your buffs, including tank buffs.")
 	trees = { ns.UI.Tree(personal), ns.UI.Tree(personal), ns.UI.Tree(personal) }
 
 	-- 1) Blessing ranking, with the paladin serving each ranked blessing
@@ -343,10 +274,43 @@ function View.Create(parent)
 	toggle("Preview (fake raid)", function() return ns.Preview.active end,
 		function(v) ns.Preview.Set(v) end)
 
-	-- 3) The whole group's plan (rows built on refresh)
-	menu = {}
+	-- 3) Tank buffs, with an automatic role and an override for unassigned groups.
+	local tanks = trees[3]
+	roleButton = CreateFrame("Button", nil, tanks, "UIPanelButtonTemplate")
+	roleButton:SetHeight(22); roleButton:SetPoint("TOPLEFT", 14, -84)
+	roleButton:SetScript("OnClick", function()
+		ns.db.tankRole = ({ AUTO = "TANK", TANK = "OFF", OFF = "AUTO" })[ns.db.tankRole]
+		ns.Preferences.Changed(); View.Refresh()
+	end)
+	roleText = ns.UI.Text(tanks, "GameFontHighlightSmall", 14, -114)
+	tankButtons = {}
+	for _, buff in ipairs(Buffs.TANK_BUFFS) do
+		local button = ns.UI.TalentButton(tanks)
+		button.key = buff.key
+		button.label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		button.label:SetPoint("TOPLEFT", button, "TOPRIGHT", 12, -3)
+		button.label:SetJustifyH("LEFT"); button.label:SetWordWrap(false); button.label:SetText(buff.label)
+		button.caster = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		button.caster:SetPoint("TOPLEFT", button, "TOPRIGHT", 12, -23)
+		button.caster:SetJustifyH("LEFT"); button.caster:SetWordWrap(false)
+		button:SetScript("OnClick", function(self)
+			ns.db.tankBuffs[self.key] = not ns.db.tankBuffs[self.key]
+			ns.Preferences.Changed(); View.Refresh()
+		end)
+		button:SetScript("OnEnter", function(self)
+			local b = Buffs.byKey[self.key]
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(b.label)
+			GameTooltip:AddLine(ns.db.tankBuffs[self.key] and "Wanted when tanking" or "Not wanted", 1, 0.82, 0)
+			GameTooltip:AddLine(b.selfOnly and "Self-cast by paladin tanks." or "Assigned to a druid for tank recipients.", 0.8, 0.8, 0.8, true)
+			GameTooltip:AddLine("Click to toggle.", 1, 1, 1); GameTooltip:Show()
+		end)
+		button:SetScript("OnLeave", GameTooltip_Hide)
+		tankButtons[buff.key] = button
+	end
+	tankTip = ns.UI.Text(tanks, "GameFontDisableSmall", 14, -286, nil,
+		"Auto follows your Tank role or raid main-tank assignment. Click Role to override it. Buff choices apply only while tanking.")
 
 	ns.UI.AnnounceButton(personal)
-	personal.wants, personal.menu = wants, menu
+	personal.wants, personal.tankButtons, personal.tankRole = wants, tankButtons, roleButton
 	return personal
 end

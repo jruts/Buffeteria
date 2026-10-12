@@ -125,6 +125,9 @@ class AddonTests(unittest.TestCase):
             assert(not Buffeteria_Tracker.moving)
             assert(ns.db.pos[3] == 37 and ns.db.pos[4] == -81)
             overlay:GetScript('OnClick')(overlay)
+            assert(not Buffeteria_Prefs or not Buffeteria_Prefs:IsShown())
+            overlay:GetScript('OnMouseDown')(overlay)
+            overlay:GetScript('OnClick')(overlay)
             assert(Buffeteria_Prefs:IsShown())
             Buffeteria_Prefs.CloseButton:GetScript('OnClick')()
             assert(not Buffeteria_Prefs:IsShown())
@@ -142,6 +145,93 @@ class AddonTests(unittest.TestCase):
             COMBAT = true
             EventRegistry:TriggerEvent('EditMode.Enter')
             assert(not overlay:IsShown() and not Buffeteria_Tracker:IsShown())
+        """)
+
+    def test_tracker_release_click_and_drag_suppression(self):
+        lua = full_addon()
+        lua.execute("""
+            local button = Buffeteria_CastButton
+            assert(table.concat(button.clicks, ',') == 'LeftButtonUp,RightButtonUp')
+            assert(button:GetAttribute('useOnKeyDown') == false)
+            assert(not button.pushedTexture)
+            local casts, toggles = 0, 0
+            ns.Actions.MarkCast = function() casts = casts + 1 end
+            ns.Options.Toggle = function() toggles = toggles + 1 end
+            button:GetScript('OnMouseDown')(button)
+            assert(button.icon.vertexColor[1] == 0.75)
+            button:GetScript('PostClick')(button, 'LeftButton', true)
+            assert(casts == 0)
+            button:GetScript('OnMouseUp')(button)
+            button:GetScript('PostClick')(button, 'LeftButton', false)
+            assert(casts == 1 and button.icon.vertexColor[1] == 1)
+            runTimers()
+            for _, stopFirst in ipairs({true, false}) do
+                button:GetScript('OnMouseDown')(button)
+                button:GetScript('OnDragStart')(button)
+                assert(Buffeteria_Tracker.moving and button:GetAttribute('*type1') == '')
+                assert(button.icon.vertexColor[1] == 1)
+                ns.Tracker.Refresh() -- periodic refresh must not re-enable a drag's cast
+                assert(button:GetAttribute('*type1') == '')
+                if stopFirst then button:GetScript('OnDragStop')(button) end
+                button:GetScript('PostClick')(button, 'LeftButton', false)
+                button:GetScript('PostClick')(button, 'RightButton', false)
+                assert(casts == 1 and toggles == 0)
+                if not stopFirst then button:GetScript('OnDragStop')(button) end
+                runTimers()
+                assert(not Buffeteria_Tracker.moving and not button:GetAttribute('*type1'))
+            end
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('OnDragStart')(button)
+            button:GetScript('OnDragStop')(button)
+            COMBAT = true
+            runTimers() -- no protected attribute write when combat interrupts a drag
+            assert(button:GetAttribute('*type1') == '')
+            COMBAT = false
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+            assert(not button:GetAttribute('*type1'))
+            ns.db.locked = true
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('OnDragStart')(button)
+            assert(not Buffeteria_Tracker.moving and not button:GetAttribute('*type1'))
+            button:GetScript('PostClick')(button, 'RightButton', false)
+            assert(toggles == 1)
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('PostClick')(button, 'LeftButton', false)
+            assert(casts == 2)
+            button:GetScript('OnLeave')(button)
+            assert(button.icon.vertexColor[1] == 1)
+        """)
+
+    def test_minimap_drag_does_not_click_or_announce(self):
+        lua = full_addon()
+        lua.execute("""
+            local button = Buffeteria_MinimapButton
+            local toggles, announcements = 0, 0
+            ns.Options.Toggle = function() toggles = toggles + 1 end
+            ns.Assignments.Announce = function() announcements = announcements + 1 end
+            local visible = ns.db.showTracker
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('OnDragStart')(button)
+            assert(button:GetScript('OnUpdate'))
+            button:GetScript('OnDragStop')(button)
+            assert(not button:GetScript('OnUpdate'))
+            button:GetScript('OnMouseUp')(button)
+            button:GetScript('OnClick')(button, 'LeftButton')
+            button:GetScript('OnClick')(button, 'RightButton')
+            IsShiftKeyDown = function() return true end
+            button:GetScript('OnClick')(button, 'LeftButton')
+            assert(toggles == 0 and announcements == 0 and ns.db.showTracker == visible)
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('OnClick')(button, 'LeftButton')
+            assert(announcements == 1)
+            IsShiftKeyDown = function() return false end
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('OnMouseUp')(button)
+            button:GetScript('OnClick')(button, 'LeftButton')
+            assert(toggles == 1 and button.icon.vertexColor[1] == 1)
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('OnClick')(button, 'RightButton')
+            assert(ns.db.showTracker ~= visible)
         """)
 
     def test_lua51_syntax(self):
@@ -241,14 +331,12 @@ class AddonTests(unittest.TestCase):
             fort:GetScript('OnClick')(fort)
             assert((ns.db.wants.FORT and true or false) == not wanted)
             assert(fort.state == (wanted and 'grey' or 'gold'))
-            -- The third tree is the whole group's plan: paladins, then group buffs.
-            local menu = findWidget('Your buffet').parent.menu
-            assert(menu[1].head:GetText() == 'Paladins')
-            local kitchen = false
-            for _, row in ipairs(menu) do
-                if row:IsShown() and row.head:GetText() == 'Group buffs' then kitchen = true end
-            end
-            assert(kitchen)
+            -- The third tree now hosts role-based tank requests.
+            assert(findWidget('Tanks'):IsVisible())
+            local panel = findWidget('Your buffet').parent
+            assert(panel.tankButtons.RFURY:IsShown() and panel.tankButtons.THORNS:IsShown())
+            panel.tankRole:GetScript('OnClick')(); runTimers()
+            assert(ns.db.tankRole == 'TANK' and ns.Preferences.Get().wants.RFURY)
         """)
 
     def test_paladin_columns_follow_roster_and_scroll_in_both_hosts(self):
@@ -656,6 +744,129 @@ class AddonTests(unittest.TestCase):
             assert(ns.Paladins.Get('B-Realm', 'WARRIOR') == 'AUTO')
             local announced = table.concat(ns.Assignments.Lines(false), ' ; ')
             assert(announced:find('Concentration Aura') and announced:find('Devotion Aura'))
+        """)
+
+    def test_tank_roles_requests_and_saved_opt_outs(self):
+        lua = full_addon()
+        lua.execute("""
+            local role = 'NONE'
+            function UnitGroupRolesAssigned() return role end
+            assert(not ns.Preferences.Get().wants.RFURY and not ns.Preferences.Get().wants.THORNS)
+            role = 'TANK'
+            ns.App:GetScript('OnEvent')(ns.App, 'ROLE_CHANGED_INFORM'); runTimers()
+            assert(ns.result.expected['A-Realm'].RFURY == 'A-Realm')
+            assert(ns.Preferences.Get().wants.THORNS)
+            local message = delivered[#delivered]
+            assert(message:match('^S|2|') and message:find('RFURY') and message:find('THORNS'))
+            for _, msg in ipairs(delivered) do assert(#msg <= 255) end
+            ns.Options.Toggle()
+            local panel = findWidget('Your buffet').parent
+            local thorns = panel.tankButtons.THORNS
+            thorns:GetScript('OnClick')(thorns); runTimers()
+            assert(not ns.Preferences.Get().wants.THORNS)
+            role = 'HEALER'
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_ROLES_ASSIGNED'); runTimers()
+            assert(not ns.result.expected['A-Realm'].RFURY)
+            assert(ns.db.tankBuffs.RFURY and not ns.db.tankBuffs.THORNS)
+            panel.tankRole:GetScript('OnClick')(); runTimers() -- Auto -> Tank
+            assert(ns.result.expected['A-Realm'].RFURY == 'A-Realm')
+            panel.tankRole:GetScript('OnClick')(); runTimers() -- Tank -> Not tank
+            assert(not ns.Preferences.Get().wants.RFURY)
+            ns.Database.Init() -- keep choices on reload
+            assert(ns.db.tankRole == 'OFF' and not ns.db.tankBuffs.THORNS)
+            ns.Preferences.Reset(); runTimers()
+            assert(ns.db.tankRole == 'AUTO' and ns.db.tankBuffs.THORNS)
+        """)
+
+    def test_classic_main_tank_detection_and_missing_role_apis(self):
+        lua = full_addon()
+        lua.execute("""
+            assert(not ns.WoW.IsTank('player')) -- role APIs absent
+            function GetPartyAssignment(assignment, unit) return assignment == 'MAINTANK' and unit == 'party1' end
+            assert(ns.WoW.IsTank('party1') and not ns.WoW.IsTank('player'))
+            GetPartyAssignment = nil
+            function UnitInRaid(unit) if unit == 'player' then return 1 end end
+            function GetRaidRosterInfo(index)
+                return 'A-Realm', 0, 1, 60, 'Paladin', 'PALADIN', '', true, false, 'maintank', false, 'NONE'
+            end
+            assert(ns.WoW.IsTank('player') and ns.WoW.IsTank('raid1'))
+            assert(ns.Preferences.Get().wants.RFURY)
+            GetRaidRosterInfo = function() return nil, 0, 1, 60, nil, nil, nil, true, false, nil, false, 'TANK' end
+            assert(ns.WoW.IsTank('raid1'))
+        """)
+
+    def test_tank_solver_self_buffs_and_multiple_druids(self):
+        self.solver("""
+            local a = member('PALADIN', {RFURY=true})
+            local b = member('PALADIN', {RFURY=true})
+            local c = member('WARRIOR')
+            local d = member('DRUID', {THORNS=true})
+            local e = member('DRUID', {THORNS=true})
+            a.wants = {RFURY=true, THORNS=true}; b.wants = {RFURY=true, THORNS=true}
+            c.wants = {RFURY=true, THORNS=true} -- self spell must reject wrong class
+            local roster = {members={A=a, B=b, C=c, D=d, E=e}}
+            local result = ns.Solver.Solve(roster)
+            assert(result.expected.A.RFURY == 'A' and result.expected.B.RFURY == 'B')
+            assert(not result.expected.C.RFURY)
+            assert(result.expected.A.THORNS == 'D' and result.expected.B.THORNS == 'E' and result.expected.C.THORNS == 'D')
+            assert(not result.expected.D.THORNS and not result.expected.E.THORNS)
+            a.caps.RFURY = nil; d.caps.THORNS = nil; e.caps.THORNS = nil
+            result = ns.Solver.Solve(roster)
+            assert(not result.expected.A.RFURY and not result.expected.A.THORNS)
+        """)
+
+    def test_tank_tracker_self_cast_expiry_and_combat(self):
+        lua = full_addon()
+        lua.execute("""
+            GROUP_SIZE = 0
+            ns.db.tankRole = 'TANK'; ns.db.wants = {}
+            ns.Paladins.Set('A-Realm', 'PALADIN', 'NONE')
+            ns.Paladins.Set('A-Realm', 'AURA', 'NONE'); runTimers()
+            ns.Tracker.Refresh()
+            local button = Buffeteria_CastButton
+            assert(button:GetAttribute('spell') == '25780' and button:GetAttribute('unit') == 'player')
+            assert(ns.Tracker.Summary().perKey.RFURY.bad == 1)
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'player' and i == 1 then return {name='25780', expirationTime=0, sourceUnit='player'} end
+            end
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.RFURY.bad == 0 and not button:GetAttribute('spell'))
+            C_UnitAuras.GetAuraDataByIndex = function() end
+            ns.Tracker.Refresh()
+            COMBAT = true
+            ns.db.tankRole = 'OFF'; ns.Preferences.Changed(); runTimers()
+            assert(button:GetAttribute('spell') == '25780') -- secure attributes held in combat
+            COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+            assert(not button:GetAttribute('spell'))
+        """)
+
+    def test_druid_serves_thorns_to_tanks_without_addon_and_peer_opt_out(self):
+        lua = full_addon('DRUID')
+        lua.execute("""
+            function UnitGroupRolesAssigned(unit) return unit == 'party1' and 'TANK' or 'HEALER' end
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_ROLES_ASSIGNED'); runTimers()
+            assert(ns.roster.members['B-Realm'].wants.THORNS)
+            assert(ns.result.expected['B-Realm'].THORNS == 'A-Realm')
+            assert(not ns.Preferences.Get().wants.RFURY)
+            assert(ns.Roster.Capabilities().THORNS and not ns.Roster.Capabilities().RFURY)
+            ns.Options.Toggle()
+            assert(not findWidget('Your buffet').parent.tankButtons.RFURY:IsShown())
+            ns.db.wants = {}
+            ns.Comm.OnMessage('BUFFETERIA', 'S|2|THORNS|KINGS||MIGHT|0', 'PARTY', 'B-Realm'); runTimers()
+            ns.result.pally = {}; ns.result.auras = {} -- isolate the tank cast
+            ns.Tracker.Refresh()
+            assert(Buffeteria_CastButton:GetAttribute('spell') == '9910')
+            assert(Buffeteria_CastButton:GetAttribute('unit') == 'party1')
+            assert(table.concat(ns.Assignments.Lines(false), ';'):find('Thorns: A -> B', 1, true))
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'party1' and i == 1 then return {name='9910', expirationTime=WOW_TIME+60} end
+            end
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.THORNS.warn == 1)
+            IsSpellInRange = function() return 0 end
+            assert(not ns.Actions.Next(WOW_TIME, 300))
+            ns.Comm.OnMessage('BUFFETERIA', 'S|2||KINGS||MIGHT|0', 'PARTY', 'B-Realm'); runTimers()
+            assert(not ns.result.expected['B-Realm'].THORNS) -- explicit peer opt-out beats role default
         """)
 
     def test_tracker_turns_on_my_missing_aura(self):

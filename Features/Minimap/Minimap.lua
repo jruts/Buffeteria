@@ -94,7 +94,13 @@ function MinimapButton.Init()
 	btn.ring:SetPoint("CENTER", dotBorder, "CENTER")
 	btn.ring:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 
-	btn:SetScript("OnClick", function(_, button)
+	btn:SetScript("OnMouseDown", function(self)
+		self.dragged = false
+		self.icon:SetVertexColor(0.75, 0.75, 0.75)
+	end)
+	btn:SetScript("OnMouseUp", function(self) self.icon:SetVertexColor(1, 1, 1) end)
+	btn:SetScript("OnClick", function(self, button)
+		if self.dragged then return end
 		if IsShiftKeyDown() then ns.Assignments.Announce()
 		elseif button == "RightButton" then
 			ns.db.showTracker = not ns.db.showTracker
@@ -103,10 +109,21 @@ function MinimapButton.Init()
 			ns.Options.Toggle()
 		end
 	end)
-	btn:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", onDragUpdate) end)
-	btn:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+	btn:SetScript("OnDragStart", function(self)
+		self.dragged = true
+		self.icon:SetVertexColor(1, 1, 1)
+		GameTooltip_Hide()
+		self:SetScript("OnUpdate", onDragUpdate)
+	end)
+	btn:SetScript("OnDragStop", function(self)
+		self:SetScript("OnUpdate", nil)
+		self.icon:SetVertexColor(1, 1, 1)
+	end)
 	btn:SetScript("OnEnter", showTooltip)
-	btn:SetScript("OnLeave", GameTooltip_Hide)
+	btn:SetScript("OnLeave", function(self)
+		self.icon:SetVertexColor(1, 1, 1)
+		GameTooltip_Hide()
+	end)
 
 	place()
 	MinimapButton.Refresh()

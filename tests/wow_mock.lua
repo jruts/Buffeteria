@@ -32,6 +32,9 @@ function W:SetAttribute(key, value)
 	self.attributes[key] = value
 end
 function W:GetAttribute(key) return self.attributes[key] end
+function W:RegisterForClicks(...) self.clicks = {...} end
+function W:SetPushedTexture(texture) self.pushedTexture = texture end
+function W:SetVertexColor(...) self.vertexColor = {...} end
 function W:SetScript(event, callback) self.scripts[event] = callback end
 function W:GetScript(event) return self.scripts[event] end
 function W:StartMoving()

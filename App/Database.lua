@@ -14,6 +14,11 @@ function ns.Database.Init()
 	end
 	db.paladinBlessings = db.paladinBlessings or {}
 	if not db.wants then db.wants = Buffs.DefaultWants(class) end
+	if db.tankRole ~= "TANK" and db.tankRole ~= "OFF" then db.tankRole = "AUTO" end
+	db.tankBuffs = db.tankBuffs or {}
+	for _, buff in ipairs(Buffs.TANK_BUFFS) do
+		if db.tankBuffs[buff.key] == nil then db.tankBuffs[buff.key] = true end
+	end
 	db.warnMinutes = db.warnMinutes or 5
 	if db.showTracker == nil then db.showTracker = true end
 	db.locked = db.locked or false

@@ -80,7 +80,8 @@ local function build()
 	castBtn:SetSize(MAIN, MAIN)
 	castBtn:SetPoint("TOPLEFT", BORDER, -BORDER)
 	castBtn:SetFrameLevel(ring:GetFrameLevel() + 2)
-	castBtn:RegisterForClicks("AnyUp", "AnyDown")
+	castBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	castBtn:SetAttribute("useOnKeyDown", false)
 	castBtn:SetAttribute("type", "spell")
 	-- Right-click must never cast: give it an empty macro, open options in PostClick.
 	castBtn:SetAttribute("type2", "macro")
@@ -89,10 +90,20 @@ local function build()
 	castBtn.icon:SetAllPoints()
 	castBtn.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
 	castBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-	castBtn:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
+	castBtn:SetScript("OnMouseDown", function(self)
+		self.dragged = false
+		if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
+		self.icon:SetVertexColor(0.75, 0.75, 0.75)
+	end)
+	castBtn:SetScript("OnMouseUp", function(self) self.icon:SetVertexColor(1, 1, 1) end)
 	castBtn:SetScript("OnEnter", showTooltip)
-	castBtn:SetScript("OnLeave", GameTooltip_Hide)
+	castBtn:SetScript("OnLeave", function(self)
+		self.icon:SetVertexColor(1, 1, 1)
+		GameTooltip_Hide()
+	end)
 	castBtn:SetScript("PostClick", function(self, button, down)
+		if down or self.dragged then return end
 		if button == "RightButton" then
 			if not down and not InCombatLockdown() then ns.Options.Toggle() end
 			return
@@ -101,10 +112,28 @@ local function build()
 		C_Timer.After(0.2, Tracker.Refresh)
 	end)
 	castBtn:RegisterForDrag("LeftButton")
-	castBtn:SetScript("OnDragStart", function()
-		if not ns.db.locked and not InCombatLockdown() then frame:StartMoving() end
+	castBtn:SetScript("OnDragStart", function(self)
+		if ns.db.locked or InCombatLockdown() then return end
+		self.dragged, self.dragging = true, true
+		-- Mask the secure action too: PostClick alone cannot prevent a cast.
+		self:SetAttribute("*type1", "")
+		self.icon:SetVertexColor(1, 1, 1)
+		GameTooltip_Hide()
+		frame:StartMoving()
 	end)
-	castBtn:SetScript("OnDragStop", savePos)
+	castBtn:SetScript("OnDragStop", function(self)
+		if not self.dragging then return end
+		self.dragging = false
+		savePos()
+		self.icon:SetVertexColor(1, 1, 1)
+		-- Keep the release suppressed through this input event. Restore on the
+		-- next frame even if the client doesn't send a click after the drag.
+		C_Timer.After(0, function()
+			if self.dragging then return end
+			self.dragged = false
+			if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
+		end)
+	end)
 
 	-- Who it's for, written over the bottom of the big icon (like a macro name).
 	castBtn.label = castBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
@@ -206,6 +235,7 @@ end
 -- Secure attributes can only change out of combat.
 local function applySecure(s)
 	if InCombatLockdown() then return end
+	castBtn:SetAttribute("*type1", castBtn.dragged and "" or nil)
 	local n = s.next
 	if n then
 		castBtn:SetAttribute("spell", n.spell)
@@ -296,14 +326,17 @@ local function buildEditOverlay()
 	o.label:SetPoint("BOTTOM", o, "TOP", 0, 10)
 	o.label:SetText("Buffeteria")
 	o:RegisterForDrag("LeftButton")
-	o:SetScript("OnDragStart", function()
+	o:RegisterForClicks("LeftButtonUp")
+	o:SetScript("OnMouseDown", function(self) self.dragged = false end)
+	o:SetScript("OnDragStart", function(self)
 		if InCombatLockdown() then return end
+		self.dragged = true
 		selectArtwork(true)
 		frame:StartMoving()
 	end)
 	o:SetScript("OnDragStop", savePos)
-	o:SetScript("OnClick", function()
-		if InCombatLockdown() then return end
+	o:SetScript("OnClick", function(self)
+		if self.dragged or InCombatLockdown() then return end
 		selectArtwork(true)
 		ns.Options.Toggle()
 	end)

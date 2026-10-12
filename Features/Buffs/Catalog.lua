@@ -14,6 +14,12 @@ Buffs.GROUP_BUFFS = {
 	{ key = "INT",    class = "MAGE",   label = "Arcane Intellect",  ids = {1459,1460,1461,10156,10157},      groupIds = {23028},       reagents = {17020} },
 }
 
+-- Tank requests are single-target buffs; Righteous Fury can only be self-cast.
+Buffs.TANK_BUFFS = {
+	{ key = "RFURY", class = "PALADIN", label = "Righteous Fury", ids = {25780}, groupIds = {}, selfOnly = true },
+	{ key = "THORNS", class = "DRUID", label = "Thorns", ids = {467,782,1075,8914,9756,9910}, groupIds = {} },
+}
+
 -- Paladin blessings. Greater versions hit every member of the target's class.
 Buffs.BLESSINGS = {
 	{ key = "KINGS",  label = "Kings",     ids = {20217},                                   groupIds = {25898} },
@@ -38,6 +44,7 @@ Buffs.AURAS = {
 
 Buffs.byKey = {}
 for _, b in ipairs(Buffs.GROUP_BUFFS) do b.kind = "group"; Buffs.byKey[b.key] = b end
+for _, b in ipairs(Buffs.TANK_BUFFS) do b.kind = "tank"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.BLESSINGS) do b.kind = "blessing"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey[b.key] = b end
 
@@ -73,7 +80,7 @@ Buffs.ASSUMED_CAPS = {
 	PALADIN = { MIGHT = true, WISDOM = true, SALV = true, LIGHT = true,
 		DEVO = true, RETRI = true, FIRERES = true, FROSTRES = true, SHADOWRES = true },
 	PRIEST  = { FORT = true, SHADOW = true },
-	DRUID   = { MOTW = true },
+	DRUID   = { MOTW = true, THORNS = true },
 	MAGE    = { INT = true },
 }
 

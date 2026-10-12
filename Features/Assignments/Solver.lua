@@ -299,6 +299,28 @@ local function solveGroupBuffs(roster, names, out)
 	end
 end
 
+local function solveTankBuffs(roster, names, out)
+	for _, buff in ipairs(Buffs.TANK_BUFFS) do
+		local casters, nextCaster = {}, 1
+		for _, n in ipairs(names) do
+			local m = roster.members[n]
+			if m.class == buff.class and (m.caps or {})[buff.key] then casters[#casters + 1] = n end
+		end
+		for _, n in ipairs(names) do
+			local m, caster = roster.members[n]
+			if (m.wants or {})[buff.key] then
+				if buff.selfOnly then
+					if m.class == buff.class and (m.caps or {})[buff.key] then caster = n end
+				elseif #casters > 0 then
+					caster = casters[nextCaster]
+					nextCaster = nextCaster % #casters + 1
+				end
+				if caster then out.expected[n][buff.key] = caster end
+			end
+		end
+	end
+end
+
 function Solver.Solve(roster)
 	local out = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, expected = {} }
 	local names = sortedKeys(roster.members)
@@ -306,5 +328,6 @@ function Solver.Solve(roster)
 	solvePaladins(roster, names, out)
 	solveAuras(roster, names, out)
 	solveGroupBuffs(roster, names, out)
+	solveTankBuffs(roster, names, out)
 	return out
 end

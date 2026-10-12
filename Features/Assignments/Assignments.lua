@@ -68,6 +68,15 @@ function ns.Assignments.Lines(withColor)
 			lines[#lines + 1] = buff.label .. ": " .. table.concat(parts, ", ")
 		end
 	end
+	for _, buff in ipairs(Buffs.TANK_BUFFS) do
+		local parts = {}
+		for member, expected in pairs(r.expected or {}) do
+			local caster = expected[buff.key]
+			if caster then parts[#parts + 1] = nm(caster) .. " -> " .. nm(member) end
+		end
+		table.sort(parts)
+		for _, part in ipairs(parts) do lines[#lines + 1] = buff.label .. ": " .. part end
+	end
 	if #lines == 0 then lines[1] = "Nothing to assign. Find a buffer!" end
 	return lines
 end

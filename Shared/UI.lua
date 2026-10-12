@@ -102,8 +102,8 @@ function UI.TalentButton(parent)
 	button.slot:SetTexture("Interface\\Buttons\\UI-EmptySlot-White")
 	button.icon = button:CreateTexture(nil, "BORDER")
 	button.icon:SetAllPoints()
-	-- Trim the icon's own baked-in border so only the slot frames it.
-	button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	-- Zoom past the icon's baked-in bevel so only the slot frames it.
+	button.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
 	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	button:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
 	button.rankBorder, button.rank = badge(button)
@@ -168,6 +168,8 @@ function UI.Tree(parent)
 	tree.header = header
 	tree.icon = header:CreateTexture(nil, "ARTWORK")
 	tree.icon:SetSize(34, 34); tree.icon:SetPoint("TOPLEFT", 16, -12)
+	-- Fill the round portrait with artwork, hiding the square icon bevel.
+	tree.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
 	local mask = header:CreateMaskTexture()
 	mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
 	mask:SetAllPoints(tree.icon)

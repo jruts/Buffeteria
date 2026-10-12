@@ -53,6 +53,19 @@ end
 
 function ns.WoW.Short(full) return (full and full:match("^[^-]+")) or full or "?" end
 
+-- Assigned combat roles, with the Classic raid main-tank assignment as fallback.
+function ns.WoW.IsTank(unit)
+	if UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) == "TANK" then return true end
+	if GetPartyAssignment and GetPartyAssignment("MAINTANK", unit) then return true end
+	local index = unit:match("^raid(%d+)$")
+	if not index and UnitInRaid then index = UnitInRaid(unit) end
+	if index and GetRaidRosterInfo then
+		local _, _, _, _, _, _, _, _, _, role, _, combatRole = GetRaidRosterInfo(tonumber(index))
+		return role == "MAINTANK" or role == "maintank" or combatRole == "TANK"
+	end
+	return false
+end
+
 function ns.WoW.ClassName(class)
 	return (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class]) or class
 end

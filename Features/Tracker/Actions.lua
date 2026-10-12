@@ -75,6 +75,23 @@ function Actions.Next(now, warnSec)
 		end
 	end
 
+	-- Tank buffs always use singles; Righteous Fury belongs to the caster alone.
+	for _, buff in ipairs(Buffs.TANK_BUFFS) do
+		local spell, icon = spellFor(buff.ids)
+		if spell then
+			for full, m in pairs(roster.members) do
+				if not m.dead and (res.expected[full] or {})[buff.key] == me and (not buff.selfOnly or full == me) then
+					local st = needs(full, buff.key)
+					local unit = buff.selfOnly and "player" or roster.units[full]
+					if st and unit and (buff.selfOnly or inRange(spell, unit)) then
+						add({ spell = spell, icon = icon, unit = unit, who = full, key = buff.key, status = st,
+							big = false, label = ns.WoW.Short(full) })
+					end
+				end
+			end
+		end
+	end
+
 	-- Blessings: Greater per class, then personal overrides.
 	local bless = Buffs.byKey
 	for class, map in pairs(res.pally or {}) do
