@@ -71,6 +71,7 @@ function ns.Roster.Build()
 		roster.units[full] = unit
 	end)
 	ns.Paladins.Prune(roster)
+	ns.Paladins.Replay(roster)
 	roster.paladinAssignments, roster.paladinAuras = ns.Paladins.Assignments(roster)
 	return roster
 end

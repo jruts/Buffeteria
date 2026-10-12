@@ -78,7 +78,10 @@ shares it, so the plan stays put when people join or leave. Your manual choices,
 including None, stay as they are. **Clear** sets every slot back to Auto.
 
 Edits are shared with the group's Buffeteria users. A paladin's own assignments are
-saved between sessions; assignments for other paladins stay with the current group.
+saved between sessions; assignments for other paladins stay with the current group,
+including while a paladin is briefly offline or on a loading screen, and are cleared
+when you leave the group. Edits and preferences that arrive before the sender appears
+in your roster are applied once they do.
 Use **Announce to group** to communicate the plan to players without the addon.
 Buffeteria cannot provide a cast button on a client that doesn't have it installed.
 

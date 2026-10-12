@@ -43,12 +43,29 @@ function ns.WoW.ItemCount(id)
 	return GetItemCount and GetItemCount(id) or 0
 end
 
-function ns.WoW.FullName(unit)
-	local name, realm = UnitFullName(unit)
-	if not name then return nil end
-	if not realm or realm == "" then realm = GetNormalizedRealmName and GetNormalizedRealmName() or "" end
+local function homeRealm()
+	local realm = GetNormalizedRealmName and GetNormalizedRealmName()
+	if (not realm or realm == "") and GetRealmName then realm = GetRealmName() end
+	return realm or ""
+end
+
+-- "Name-Realm" with the realm in normalized form (no spaces or hyphens), so the
+-- roster, addon-message senders and saved plans always use the same key.
+function ns.WoW.NormalizeName(full)
+	if type(full) ~= "string" or full == "" then return nil end
+	local name, realm = full:match("^([^-]+)-(.*)$")
+	name = name or full
+	if not realm or realm == "" then realm = homeRealm() end
+	realm = realm:gsub("[%s%-]", "")
 	if realm == "" then return name end
 	return name .. "-" .. realm
+end
+
+function ns.WoW.FullName(unit)
+	local name, realm = UnitFullName(unit)
+	-- Units that haven't loaded yet report a placeholder name; skip them until they do.
+	if not name or name == "" or name == (UNKNOWNOBJECT or "Unknown") then return nil end
+	return ns.WoW.NormalizeName(realm and realm ~= "" and (name .. "-" .. realm) or name)
 end
 
 function ns.WoW.Short(full) return (full and full:match("^[^-]+")) or full or "?" end

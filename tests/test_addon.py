@@ -1117,11 +1117,14 @@ class AddonTests(unittest.TestCase):
     def plan_runtime(self):
         lua = runtime()
         load(lua, "Features/Buffs/Catalog.lua")
-        lua.execute("ns.WoW = {}; ns.Preferences = {}; ns.Roster = {}; ns.Assignments = {}")
+        load(lua, "Shared/WoW.lua")
+        lua.execute("ns.Preferences = {}; ns.Roster = {}; ns.Assignments = {}")
         load(lua, "Shared/Events.lua")
         load(lua, "Features/Sync/Protocol.lua")
         load(lua, "Features/Tracker/Status.lua")
         lua.execute("""
+            function GetNormalizedRealmName() return 'Realm' end
+            function GetTime() return 100 end
             function time() return 1000 end
             function UnitClass() return 'Paladin','PALADIN' end
             ns.WoW.FullName = function() return 'A-Realm' end
@@ -1245,6 +1248,206 @@ class AddonTests(unittest.TestCase):
             assert(ns.Roster.peers['B-Realm'].blessingsOverride and ns.Roster.peers['B-Realm'].caps.MIGHT)
             ns.Comm.OnMessage('BUFFETERIA','P|2|A-Realm|2|KINGS|3000|B-Realm','PARTY','B-Realm')
             assert(ns.Paladins.Get('A-Realm','ROGUE') == 'KINGS')
+        """)
+
+    def test_names_normalize_across_roster_messages_and_unloaded_units(self):
+        lua = runtime()
+        lua.execute("ns.title = 'Buffeteria'")
+        load(lua, "Shared/WoW.lua")
+        lua.execute("""
+            function GetNormalizedRealmName() return 'AzjolNerub' end
+            local N = ns.WoW.NormalizeName
+            assert(N('Bob') == 'Bob-AzjolNerub' and N('Bob-Azjol-Nerub') == 'Bob-AzjolNerub')
+            assert(N('Bob-Living Flame') == 'Bob-LivingFlame' and N('') == nil and N(nil) == nil)
+            function UnitFullName(u) if u == 'player' then return 'Me', nil end return 'Unknown', nil end
+            assert(ns.WoW.FullName('player') == 'Me-AzjolNerub' and ns.WoW.FullName('party1') == nil)
+            -- Realm API not ready yet: fall back to the display realm name.
+            GetNormalizedRealmName = function() return nil end
+            function GetRealmName() return 'Azjol-Nerub' end
+            assert(ns.WoW.FullName('player') == 'Me-AzjolNerub')
+        """)
+
+    def test_late_messages_apply_personal_preferences_and_paladin_plan(self):
+        lua = full_addon("WARRIOR")
+        lua.execute("""
+            NAMES = {player='A', party1='Pal', party2='Rogue'}
+            CLASSES = {player='WARRIOR', party1='PALADIN', party2='ROGUE'}
+            function UnitFullName(u) return NAMES[u], nil end
+            function UnitClass(u) return CLASSES[u], CLASSES[u] end
+            -- The group is forming: messages arrive before the roster lists the senders.
+            GROUP_SIZE = 0
+            function IsInGroup(category) return category == nil end
+            runTimers()
+            ns.Comm.OnMessage('BUFFETERIA', 'S|2||SALV,KINGS|MIGHT,WISDOM,LIGHT,SANCT||1', 'PARTY', 'Rogue')
+            ns.Comm.OnMessage('BUFFETERIA', 'S|2||WISDOM,KINGS,SALV,MIGHT,LIGHT,SANCT||KINGS,MIGHT,SALV,WISDOM,gMIGHT,gKINGS|0', 'PARTY', 'Pal-Realm')
+            ns.Comm.OnMessage('BUFFETERIA', 'P|2|Pal-Realm|2|MIGHT|5000|Pal-Realm', 'PARTY', 'Pal')
+            ns.Comm.OnMessage('BUFFETERIA', 'P|2|Pal-Realm|1|KINGS|5000|Pal-Realm', 'PARTY', 'Pal')
+            assert(ns.Paladins.Get('Pal-Realm', 'ROGUE') == 'AUTO')
+            GROUP_SIZE = 2
+            ns.Assignments.Resolve(); runTimers()
+            local r, pal = ns.result, 'Pal-Realm'
+            assert(ns.roster.members[pal].hasAddon)
+            assert(ns.Paladins.Get(pal, 'ROGUE') == 'MIGHT' and ns.Paladins.Get(pal, 'WARRIOR') == 'KINGS')
+            assert(r.pally.ROGUE[pal] == 'MIGHT' and r.pally.WARRIOR[pal] == 'KINGS')
+            -- The rogue's explicit ranking beats the preset; the warrior follows it.
+            assert(r.expected['Rogue-Realm'].SALV == pal and r.overrides['Rogue-Realm'][pal] == 'SALV')
+            assert(r.expected['A-Realm'].KINGS == pal and not r.overrides['A-Realm'])
+            -- A paladin briefly missing from the roster keeps their plan.
+            GROUP_SIZE = 1; NAMES.party1 = 'Rogue'; CLASSES.party1 = 'ROGUE'; ns.Roster.Build()
+            assert(ns.Paladins.Get(pal, 'ROGUE') == 'MIGHT')
+            GROUP_SIZE = 2; NAMES.party1 = 'Pal'; CLASSES.party1 = 'PALADIN'
+            ns.Assignments.Resolve(); runTimers()
+            assert(ns.result.pally.ROGUE[pal] == 'MIGHT')
+            -- Leaving the group clears other paladins' cells.
+            GROUP_SIZE = 0; IsInGroup = function() return false end; ns.Roster.Build()
+            assert(ns.Paladins.Get(pal, 'ROGUE') == 'AUTO')
+        """)
+
+    def test_pending_plan_edits_expire_and_never_bypass_validation(self):
+        lua = self.plan_runtime()
+        lua.execute("""
+            local a = ns.Paladins
+            a.Receive('D-Realm', 'D-Realm', '2', 'KINGS', '2000', 'D-Realm')
+            a.Receive('X-Realm', 'C-Realm', '2', 'KINGS', '2000', 'X-Realm')
+            a.Receive('E-Realm', 'E-Realm', '2', 'MIGHT', '2000', 'E-Realm')
+            assert(a.Get('D-Realm', 'ROGUE') == 'AUTO')
+            ns.roster.members['D-Realm'] = {class='PALADIN', caps={}}
+            ns.roster.members['X-Realm'] = {class='ROGUE', caps={}}
+            assert(a.Replay(ns.roster))
+            assert(a.Get('D-Realm', 'ROGUE') == 'KINGS')
+            assert(a.Get('C-Realm', 'ROGUE') == 'AUTO') -- non-paladin editors stay rejected
+            function GetTime() return 1000 end
+            a.Replay(ns.roster)
+            ns.roster.members['E-Realm'] = {class='PALADIN', caps={}}
+            a.Replay(ns.roster)
+            assert(a.Get('E-Realm', 'ROGUE') == 'AUTO') -- expired before E appeared
+        """)
+
+    def test_rejected_messages_do_not_block_the_queue(self):
+        lua = self.plan_runtime()
+        lua.execute("""
+            ns.WoW.Print = function() end
+            function IsInGroup(category) return category == nil end
+            function IsInRaid() return false end
+            function strsplit(sep, str)
+                local out = {}; for part in (str..sep):gmatch('(.-)'..sep) do out[#out+1]=part end
+                return unpack(out)
+            end
+            delivered = {}; throttled = true
+            C_ChatInfo = {SendAddonMessage=function(_, msg)
+                if #msg > 255 then error('message too long') end
+                if throttled then return false end
+                table.insert(delivered, msg); return 0
+            end}
+        """)
+        load(lua, "Features/Sync/Comm.lua")
+        lua.execute("""
+            ns.Comm.Send(string.rep('x', 300))
+            ns.Comm.Send('P|2|A-Realm|1|KINGS|1|A-Realm')
+            ns.Comm.Flush(); assert(#delivered == 0)
+            throttled = false; ns.Comm.Flush()
+            assert(#delivered == 1 and delivered[1] == 'P|2|A-Realm|1|KINGS|1|A-Realm')
+        """)
+
+    def test_randomized_plans_and_personal_rankings_stay_consistent(self):
+        self.solver("""
+            local B, KEYS = ns.Buffs, ns.Buffs.BLESSING_KEYS
+            local CLASSES = {'WARRIOR', 'ROGUE', 'MAGE', 'PRIEST', 'HUNTER', 'PALADIN'}
+            local function shuffled()
+                local t = {}
+                for i, k in ipairs(KEYS) do t[i] = k end
+                for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
+                table.insert(t, math.random(1, #t + 1), '|')
+                return t
+            end
+            -- Best achievable personal result by brute force, as a 0/1 string in ranking order.
+            local function best(m, pals, members, plan)
+                local top
+                local function rec(i, got, used)
+                    if i > #pals then
+                        local v = {}
+                        for _, b in ipairs(m.ranking) do if not m.excluded[b] then v[#v + 1] = got[b] and 1 or 0 end end
+                        local s = table.concat(v)
+                        if not top or s > top then top = s end
+                        return
+                    end
+                    local p, c = pals[i], members[pals[i]].caps
+                    rec(i + 1, got, used)
+                    for _, b in ipairs(m.ranking) do
+                        if not used[b] and not m.excluded[b] and (c[b] or (plan[p] == b and c['g' .. b])) then
+                            used[b] = true; got[b] = true; rec(i + 1, got, used); used[b] = nil; got[b] = nil
+                        end
+                    end
+                end
+                rec(1, {}, {})
+                return top
+            end
+            for seed = 1, 1500 do
+                math.randomseed(seed)
+                local members, pals, manual = {}, {}, {}
+                for i = 1, math.random(1, 4) do
+                    local caps = {}
+                    for _, k in ipairs(KEYS) do
+                        if math.random() < 0.75 then caps[k] = true; if math.random() < 0.7 then caps['g' .. k] = true end end
+                    end
+                    members['P' .. i] = {class='PALADIN', caps=caps}; pals[i] = 'P' .. i
+                end
+                for i = 1, math.random(0, 6) do members['M' .. i] = {class=CLASSES[math.random(#CLASSES)], caps={}} end
+                for _, m in pairs(members) do
+                    m.group, m.wants = 1, {}
+                    m.blessingsOverride = math.random() < 0.5
+                    m.ranking, m.excluded = B.SplitOrder(m.blessingsOverride and shuffled() or B.DEFAULT_ORDER[m.class])
+                end
+                for _, class in ipairs(B.CLASS_KEYS) do
+                    manual[class] = {}
+                    for _, p in ipairs(pals) do
+                        local roll = math.random()
+                        if roll < 0.15 then manual[class][p] = 'NONE'
+                        elseif roll < 0.4 then manual[class][p] = KEYS[math.random(#KEYS)] end
+                    end
+                end
+                local r = ns.Solver.Solve({members=members, paladinAssignments=manual})
+                local function knows(p, b) local c = members[p].caps; return c[b] or c['g' .. b] end
+                local where = 'seed ' .. seed .. ': '
+                for _, class in ipairs(B.CLASS_KEYS) do
+                    local plan, seen = r.pally[class] or {}, {}
+                    for p, b in pairs(plan) do
+                        assert(not seen[b] and knows(p, b) and manual[class][p] ~= 'NONE', where .. 'class plan ' .. class)
+                        seen[b] = true
+                    end
+                    for _, p in ipairs(pals) do
+                        local b, claimed = manual[class][p], false
+                        for _, q in ipairs(pals) do if q < p and manual[class][q] == b then claimed = true end end
+                        if b and b ~= 'NONE' and knows(p, b) and not claimed then
+                            assert(plan[p] == b, where .. 'preset ignored ' .. class .. ' ' .. p)
+                        end
+                    end
+                end
+                for name, m in pairs(members) do
+                    local expected, overrides, plan, got = r.expected[name], r.overrides[name] or {}, r.pally[m.class] or {}, {}
+                    for _, p in ipairs(pals) do
+                        -- What this paladin actually casts on the member.
+                        local b = plan[p]
+                        if overrides[p] ~= nil then
+                            b = overrides[p] or nil
+                            assert(not b or members[p].caps[b], where .. 'single not known')
+                        end
+                        if b then
+                            assert(not got[b] and expected[b] == p, where .. name .. ' tracker mismatch ' .. b)
+                            got[b] = p
+                        end
+                    end
+                    for _, b in ipairs(KEYS) do assert(not expected[b] or got[b], where .. name .. ' expects uncast ' .. b) end
+                    if m.blessingsOverride then
+                        local v = {}
+                        for _, b in ipairs(m.ranking) do
+                            if not m.excluded[b] then v[#v + 1] = got[b] and 1 or 0 end
+                        end
+                        for b in pairs(got) do assert(not m.excluded[b], where .. name .. ' excluded ' .. b) end
+                        assert(table.concat(v) == best(m, pals, members, plan), where .. name .. ' personal ranking not optimal')
+                    end
+                end
+            end
         """)
 
     def test_tracker_uses_singles_around_personal_overrides(self):

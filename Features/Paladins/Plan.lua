@@ -48,7 +48,15 @@ function Plan.Init()
 	end
 end
 
+-- Edits for paladins or from senders not in the roster yet (just joined, zoning,
+-- not loaded). They are applied as soon as the roster can validate them.
+local pending, pendingCount, MAX_PENDING, PENDING_SECONDS = {}, 0, 200, 60
+
+-- Assignments belong to the current group. A paladin missing from one roster read
+-- (offline, loading screen, data not loaded) keeps their cells; leaving the group
+-- clears everyone else's.
 function Plan.Prune(roster)
+	if IsInGroup and IsInGroup() then return end
 	for paladin in pairs(Plan.cells) do
 		if not roster.members[paladin] then
 			Plan.cells[paladin] = nil
@@ -167,20 +175,61 @@ function Plan.Clear()
 	return cleared
 end
 
-function Plan.Broadcast()
+function Plan.Broadcast(roster)
 	if not isPaladin() then return end
+	-- Kept cells of paladins who are away right now go out again when they return.
+	roster = roster or ns.roster
 	for paladin, row in pairs(Plan.cells) do
-		for slot, cell in pairs(row) do ns.Comm.Send(message(paladin, slot, cell)) end
+		if (roster.members[paladin] or {}).class == "PALADIN" then
+			for slot, cell in pairs(row) do ns.Comm.Send(message(paladin, slot, cell)) end
+		end
 	end
 end
 
+-- nil = the roster cannot validate it yet, false = rejected or older, true = applied.
+local function apply(roster, edit)
+	local from, target, editor = roster.members[edit.sender], roster.members[edit.paladin], roster.members[edit.author]
+	if not from or not target then return nil end
+	if from.class ~= "PALADIN" or target.class ~= "PALADIN" or (editor and editor.class ~= "PALADIN") then return false end
+	return remember(edit.paladin, edit.slot, edit.key, edit.revision, edit.author)
+end
+
+local function newer(a, b)
+	return a.revision > b.revision or (a.revision == b.revision and a.author > b.author)
+end
+
+-- Retry edits that arrived before their sender or paladin was in the roster.
+function Plan.Replay(roster)
+	local changed, now = false, GetTime()
+	for id, edit in pairs(pending) do
+		local result = apply(roster, edit)
+		if result == nil and now - edit.at > PENDING_SECONDS then result = false end
+		if result ~= nil then
+			pending[id] = nil; pendingCount = pendingCount - 1
+			if result then changed = true end
+		end
+	end
+	if changed then ns.Assignments.Resolve() end
+	return changed
+end
+
 function Plan.Receive(sender, paladin, slotIndex, key, revision, author)
-	local roster = ns.Roster.Build()
-	local from, target, editor = roster.members[sender], roster.members[paladin], roster.members[author]
+	sender, paladin, author = ns.WoW.NormalizeName(sender), ns.WoW.NormalizeName(paladin), ns.WoW.NormalizeName(author)
 	local slot = slotAt[tonumber(slotIndex) or 0]
 	revision = tonumber(revision)
-	if not from or from.class ~= "PALADIN" or not target or target.class ~= "PALADIN"
-		or type(author) ~= "string" or author == "" or (editor and editor.class ~= "PALADIN") or not slot or not validKey(slot, key)
+	if not sender or not paladin or not author or not slot or not validKey(slot, key)
 		or not revision or revision < 0 or revision > 9007199254740000 or revision ~= math.floor(revision) then return end
-	if remember(paladin, slot, key, revision, author) then ns.Assignments.Resolve() end
+	local edit = { sender = sender, paladin = paladin, slot = slot, key = key, revision = revision, author = author, at = GetTime() }
+	local result = apply(ns.Roster.Build(), edit)
+	if result then
+		ns.Assignments.Resolve()
+	elseif result == nil then
+		local id = paladin .. "|" .. slot
+		local old = pending[id]
+		if old then
+			if newer(edit, old) then pending[id] = edit end
+		elseif pendingCount < MAX_PENDING then
+			pending[id] = edit; pendingCount = pendingCount + 1
+		end
+	end
 end

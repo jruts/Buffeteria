@@ -44,8 +44,14 @@ local function send(msg)
 	local chan = channel()
 	if not chan then return true end
 	local ok, res = pcall(C_ChatInfo.SendAddonMessage, PREFIX, msg, chan)
+	-- A message the client rejects outright would never send; drop it so it
+	-- cannot hold back every later edit in the queue.
+	if not ok then
+		if not Comm.sendWarned then Comm.sendWarned = true; ns.WoW.Print("could not send an addon message: " .. tostring(res)) end
+		return true
+	end
 	-- Older clients return a bool, Mainline returns Enum.SendAddonMessageResult (0 = Success).
-	if ok and (res == nil or res == true or res == 0) then return true end
+	if res == nil or res == true or res == 0 then return true end
 	return false
 end
 
@@ -64,8 +70,7 @@ end
 
 local function broadcastState()
 	Comm.Send(stateMessage())
-	ns.Roster.Build()
-	ns.Paladins.Broadcast()
+	ns.Paladins.Broadcast(ns.Roster.Build())
 end
 
 -- Broadcast my state. force = skip the anti-spam window (e.g. after a prefs change).
@@ -92,12 +97,8 @@ end
 local replyPending = false
 local function onMessage(prefix, msg, _, sender)
 	if prefix ~= PREFIX or not msg then return end
-	local full = sender
-	if not full then return end
-	if not full:find("-") then
-		full = full .. "-" .. (GetNormalizedRealmName and GetNormalizedRealmName() or "")
-	end
-	if full == ns.WoW.FullName("player") then return end
+	local full = ns.WoW.NormalizeName(sender)
+	if not full or full == ns.WoW.FullName("player") then return end
 
 	local kind, ver, a, b, c, d, e = strsplit("|", msg)
 	if kind == "S" then
@@ -105,7 +106,8 @@ local function onMessage(prefix, msg, _, sender)
 			if not Comm.warned then Comm.warned = true; ns.WoW.Print(ns.WoW.Short(full) .. " runs a different Buffeteria version. Assignments may disagree.") end
 			return
 		end
-		if not ns.Roster.Build().members[full] then return end
+		-- Keep state even if the sender isn't in our roster yet (they just joined or
+		-- haven't loaded); Roster.Build only uses peers who are in the group.
 		ns.Roster.peers[full] = { wants = toSet(a), ranking = toList(b), excluded = toSet(c), caps = toSet(d), blessingsOverride = e == "1" }
 		ns.Assignments.Resolve()
 	elseif kind == "P" and ver == VERSION then
