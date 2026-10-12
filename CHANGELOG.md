@@ -1,5 +1,12 @@
 # Buffeteria
 
+## v0.6.3
+
+- Added optional **Inner Fire** tracking for priests, enabled by default in the Buffs tree once learned. The tracker warns when it is missing or has less than 60 seconds left, and offers the cast once you have enough mana. Battle Shout likewise appears in the Buffs tree only after it is learned.
+- **Battle Shout and Inner Fire stay tracked during combat.** The orc calls for your self buff when it runs low, and clicking recasts it. Because the client hides buff information during combat, timing follows the last reading before the pull and your own recasts; early removals, including Inner Fire charges running out, are detected after combat.
+- Simplified the tracker: removed the **Need** label beneath the head and kept the **GIEF** call-out for buffs you can cast yourself. The head stays fully visible when there is nothing for you to cast.
+- Refactored feature ownership, shared controls, and event handling for simpler maintenance while preserving saved settings and the existing group message format.
+
 ## v0.6.2
 
 - The tracker now makes it clear when you have a buff to cast: the orc glows gold and calls out **GIEF <buff>!** above his head. When there is nothing for you to cast, he dims and shows the buffs you still need; tooltips name the assigned casters.

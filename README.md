@@ -153,8 +153,8 @@ Top and Bottom center each row on the face, including a partially filled last
 row. Left fills each row from right to left, starting beside the face; Right
 fills from left to right. Rows update as icons appear or disappear.
 The head stays fixed as icons appear or disappear; the grid follows it while
-dragging, including in Edit Mode. Bottom leaves room for the **Need** label;
-Top leaves room for the GIEF call-out, the preview tag and Edit Mode label.
+dragging, including in Edit Mode. Top leaves room for the GIEF call-out, the
+preview tag and Edit Mode label.
 Existing tracker visibility and display choices are preserved.
 
 - **Orc head:** release a click to cast your next buff on the right target. The
