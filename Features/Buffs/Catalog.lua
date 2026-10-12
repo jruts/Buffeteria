@@ -20,6 +20,12 @@ Buffs.TANK_BUFFS = {
 	{ key = "THORNS", class = "DRUID", label = "Thorns", ids = {467,782,1075,8914,9756,9910}, groupIds = {} },
 }
 
+-- Personal self buffs, offered only to their class. Battle Shout lasts two
+-- minutes, so it warns shortly before expiring instead of at the global threshold.
+Buffs.SELF_BUFFS = {
+	{ key = "BSHOUT", class = "WARRIOR", label = "Battle Shout", ids = {6673,5242,6192,11549,11550,11551,25289}, groupIds = {}, selfOnly = true, warnSeconds = 30 },
+}
+
 -- Paladin blessings. Greater versions hit every member of the target's class.
 Buffs.BLESSINGS = {
 	{ key = "KINGS",  label = "Kings",     ids = {20217},                                   groupIds = {25898} },
@@ -45,6 +51,7 @@ Buffs.AURAS = {
 Buffs.byKey = {}
 for _, b in ipairs(Buffs.GROUP_BUFFS) do b.kind = "group"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.TANK_BUFFS) do b.kind = "tank"; Buffs.byKey[b.key] = b end
+for _, b in ipairs(Buffs.SELF_BUFFS) do b.kind = "self"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.BLESSINGS) do b.kind = "blessing"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey[b.key] = b end
 
@@ -75,7 +82,7 @@ Buffs.DEFAULT_ORDER = {
 
 function Buffs.DefaultWants(class)
 	local mana = Buffs.MANA_CLASSES[class] or false
-	return { FORT = true, SPIRIT = mana, SHADOW = false, MOTW = true, INT = mana }
+	return { FORT = true, SPIRIT = mana, SHADOW = false, MOTW = true, INT = mana, BSHOUT = class == "WARRIOR" }
 end
 
 -- What we assume a player WITHOUT the add-on can cast (talents unknown, so be conservative).

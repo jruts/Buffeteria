@@ -14,8 +14,8 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   (drag to reorder) and lights up the buffs they care about (Fortitude, Spirit, Shadow
   Protection, Mark of the Wild, Arcane Intellect). In `/buff`, these appear as
   talent-style trees: Blessings (each ranked blessing names the paladin serving it),
-  Buffs (each buff names its caster), and Tanks (buffs wanted
-  while tanking: Righteous Fury for paladins and Thorns from a druid).
+  Buffs (each buff names its caster; warriors also get Battle Shout), and Tanks
+  (buffs wanted while tanking: Righteous Fury for paladins and Thorns from a druid).
 - **Smart assignments.** With one paladin you get your #1 blessing, with two your #1 and
   #2, and so on. Greater Blessings cover a whole class, so each class gets what most of
   its players ranked highest. Priests, druids and mages split the raid groups.
@@ -35,6 +35,12 @@ don't want Wisdom. Players without the add-on are planned from the same defaults
 and so are classes Auto and **Auto-fill** cover on the Paladins tab. If your saved
 ranking still matches the old Kings-first default, it moves to the new one; a
 ranking you reordered is kept.
+
+Warriors see **Battle Shout** in the Buffs tree. It is on by default; click it to
+skip it. The tracker reminds you when your own shout is missing or has less than
+30 seconds left (it lasts only two minutes, so the expiring-buff setting would
+always flag it), and the big button casts it once you have enough rage. Other
+classes never see it, and warriors without Buffeteria aren't tracked for it.
 
 In **My preferences > Tanks**, **Role: Auto** follows your assigned Tank role or
 raid main-tank assignment. Click Role to cycle through **Tank**, **Not tank**, and

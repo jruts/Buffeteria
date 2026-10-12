@@ -11,6 +11,17 @@ local dragging, grabY, ghost, ghostY, dropping, moved
 local blessingIcon = ns.UI.BuffIcon
 local GREY, RED = "|cff808080", "|cffff5040"
 
+-- Buffs tree entries for my class: group buffs, then my class's self buffs.
+local function buffList()
+	local _, class = UnitClass("player")
+	local out = {}
+	for _, buff in ipairs(Buffs.GROUP_BUFFS) do out[#out + 1] = buff end
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do
+		if buff.class == class then out[#out + 1] = buff end
+	end
+	return out
+end
+
 -- What the solver expects you to receive: buff key -> caster.
 local function served()
 	local result = ns.result or {}
@@ -101,13 +112,16 @@ end
 
 local function refreshWants()
 	local wanted, mine = 0, served()
-	for key, button in pairs(wants) do
+	for _, button in pairs(wants) do button:Hide() end
+	for _, buff in ipairs(buffList()) do
+		local key, button = buff.key, wants[buff.key]
 		local on = ns.db.wants[key] and true or false
 		if on then wanted = wanted + 1 end
+		button:Show()
 		button:SetState(on and "gold" or "grey", blessingIcon(key))
 		if not on then button.caster:SetText(GREY .. "Skipped|r")
-		elseif mine[key] then button.caster:SetText(ns.UI.MemberName(mine[key]))
-		else button.caster:SetText(RED .. "No caster|r") end
+		elseif mine[key] then button.caster:SetText(buff.selfOnly and "Self" or ns.UI.MemberName(mine[key]))
+		else button.caster:SetText(RED .. (buff.selfOnly and "Not learned" or "No caster") .. "|r") end
 	end
 	return wanted
 end
@@ -150,10 +164,12 @@ function View.Layout(width)
 		if not buff.selfOnly or class == buff.class then row = row + 1 end
 	end
 	local cell = column / 3
-	for i, buff in ipairs(Buffs.GROUP_BUFFS) do
-		-- Talent tiers: three on top, the rest centered below.
+	local entries = buffList()
+	for i, buff in ipairs(entries) do
+		-- Talent tiers of three, a partial last tier centered.
 		local tier = math.floor((i - 1) / 3)
-		local x = tier == 0 and cell * ((i - 1) + 0.5) or cell * (i - 3)
+		local inTier = math.min(3, #entries - tier * 3)
+		local x = cell * ((i - 1) % 3 + 0.5 + (3 - inTier) / 2)
 		local button = wants[buff.key]
 		button:ClearAllPoints(); button:SetPoint("TOP", trees[2], "TOPLEFT", x, -84 - tier * 60)
 		button.caster:SetWidth(cell - 2)
@@ -322,7 +338,10 @@ local function wantTooltip(button)
 	GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
 	GameTooltip:SetText(buff.label)
 	GameTooltip:AddLine(ns.db.wants[button.key] and "Wanted" or "Not wanted", 1, 0.82, 0)
-	if ns.db.wants[button.key] then
+	if buff.selfOnly then
+		GameTooltip:AddLine("You cast it yourself; the tracker reminds you when it is missing or about to expire.",
+			0.8, 0.8, 0.8, true)
+	elseif ns.db.wants[button.key] then
 		GameTooltip:AddLine(caster and ("Cast by " .. ns.UI.MemberName(caster)) or "Nobody in the group casts it yet.",
 			0.8, 0.8, 0.8, true)
 	end
@@ -364,7 +383,10 @@ function View.Create(parent)
 	-- 2) Buffs I want as talent buttons naming their caster
 	local buffs = trees[2]
 	wants = {}
-	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
+	local wantable = {}
+	for _, buff in ipairs(Buffs.GROUP_BUFFS) do wantable[#wantable + 1] = buff end
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do wantable[#wantable + 1] = buff end
+	for _, buff in ipairs(wantable) do
 		local button = ns.UI.TalentButton(buffs)
 		button.key = buff.key
 		button.caster = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")

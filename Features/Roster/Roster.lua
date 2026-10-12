@@ -8,7 +8,7 @@ function ns.Roster.Capabilities()
 	local caps = {}
 	local _, class = UnitClass("player")
 	for _, b in pairs(Buffs.byKey) do
-		if ((b.kind == "group" or b.kind == "tank") and class == b.class)
+		if ((b.kind == "group" or b.kind == "tank" or b.kind == "self") and class == b.class)
 			or (class == "PALADIN" and (b.kind == "blessing" or b.kind == "aura")) then
 			if ns.WoW.KnowsAny(b.ids) then caps[b.key] = true end
 			if ns.WoW.KnowsAny(b.groupIds) then caps["g" .. b.key] = true end

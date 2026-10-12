@@ -49,6 +49,8 @@ end
 local function rate(full, key, now, warnSec)
 	local auras = cache[full]
 	if not auras then return "unknown" end
+	local short = Buffs.byKey[key] and Buffs.byKey[key].warnSeconds
+	if short then warnSec = math.min(warnSec, short) end
 	local a = auras[key]
 	if not a then return "bad" end
 	if a.exp == 0 then return "ok" end

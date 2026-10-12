@@ -1762,6 +1762,63 @@ class AddonTests(unittest.TestCase):
             assert(not button:GetAttribute('spell'))
         """)
 
+    def test_warrior_battle_shout_is_optional_self_buff_with_short_warning(self):
+        lua = full_addon('WARRIOR')
+        lua.execute("""
+            assert(ns.db.wants.BSHOUT and ns.Preferences.Get().wants.BSHOUT)
+            ns.db.wants.BSHOUT = nil; ns.Database.Init() -- older saved wants enable it
+            assert(ns.db.wants.BSHOUT == true)
+            ns.Preferences.Changed(); runTimers()
+            assert(ns.result.expected['A-Realm'].BSHOUT == 'A-Realm')
+            assert(ns.Roster.Capabilities().BSHOUT)
+            ns.result.pally = {}; ns.result.auras = {}
+            ns.Tracker.Refresh()
+            local button = Buffeteria_CastButton
+            assert(button:GetAttribute('spell') == '25289' and button:GetAttribute('unit') == 'player')
+            -- 60 seconds left is fine; 20 seconds left warns despite the 5-minute setting.
+            local left = 60
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if i == 1 then return {name='25289', expirationTime=WOW_TIME + left, sourceUnit='player'} end
+            end
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.BSHOUT.warn == 0 and not button:GetAttribute('spell'))
+            left = 20; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.BSHOUT.warn == 1)
+            -- Not enough rage: still tracked, but nothing to cast.
+            C_Spell.IsSpellUsable = function() return false, true end
+            ns.Tracker.Refresh()
+            assert(not button:GetAttribute('spell'))
+            C_Spell.IsSpellUsable = nil
+            ns.Options.Toggle()
+            local panel = findWidget('Your buffet').parent
+            local shout = panel.wants.BSHOUT
+            assert(shout:IsShown())
+            shout:GetScript('OnClick')(shout); runTimers()
+            assert(not ns.db.wants.BSHOUT and not ns.result.expected['A-Realm'].BSHOUT)
+            ns.Database.Init()
+            assert(ns.db.wants.BSHOUT == false) -- skip survives reload
+            ns.Preferences.Reset(); runTimers()
+            assert(ns.db.wants.BSHOUT)
+        """)
+
+    def test_battle_shout_is_warrior_only(self):
+        lua = full_addon('PRIEST')
+        lua.execute("""
+            assert(ns.db.wants.BSHOUT == false and not ns.Preferences.Get().wants.BSHOUT)
+            assert(not ns.Roster.Capabilities().BSHOUT)
+            ns.Options.Toggle()
+            assert(not findWidget('Your buffet').parent.wants.BSHOUT:IsShown())
+            ns.db.wants.BSHOUT = true
+            assert(not ns.Preferences.Get().wants.BSHOUT)
+        """)
+        self.solver("""
+            local w = member('WARRIOR'); w.wants = {BSHOUT=true}; w.caps = {BSHOUT=true}
+            local p = member('PALADIN'); p.wants = {BSHOUT=true}; p.caps.BSHOUT = true
+            local x = member('WARRIOR'); x.wants = {BSHOUT=true} -- not learned
+            local result = ns.Solver.Solve({members={W=w, P=p, X=x}})
+            assert(result.expected.W.BSHOUT == 'W' and not result.expected.P.BSHOUT and not result.expected.X.BSHOUT)
+        """)
+
     def test_druid_serves_thorns_to_tanks_without_addon_and_peer_opt_out(self):
         lua = full_addon('DRUID')
         lua.execute("""

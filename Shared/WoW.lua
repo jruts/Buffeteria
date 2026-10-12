@@ -38,6 +38,14 @@ function ns.WoW.KnowsAny(ids)
 	return false
 end
 
+-- False only when the client reports too little power (e.g. rage) for the spell.
+function ns.WoW.SpellUsable(spell)
+	local check = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell
+	if not check then return true end
+	local ok, usable, noPower = pcall(check, spell)
+	return not ok or usable or not noPower
+end
+
 function ns.WoW.ItemCount(id)
 	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) or 0 end
 	return GetItemCount and GetItemCount(id) or 0

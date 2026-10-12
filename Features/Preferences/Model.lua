@@ -18,6 +18,9 @@ function ns.Preferences.Get()
 	for _, buff in ipairs(Buffs.TANK_BUFFS) do
 		wants[buff.key] = tank and ns.db.tankBuffs[buff.key] and (not buff.selfOnly or class == buff.class) or false
 	end
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do
+		wants[buff.key] = wants[buff.key] and class == buff.class or false
+	end
 	return { wants = wants, ranking = ranking, excluded = excluded, blessingsOverride = ns.db.blessingsOverride }
 end
 

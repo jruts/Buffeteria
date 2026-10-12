@@ -92,6 +92,19 @@ function Actions.Next(now, warnSec)
 		end
 	end
 
+	-- Self buffs (Battle Shout): only once there is enough rage to cast.
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do
+		local spell, icon = spellFor(buff.ids)
+		local m = roster.members[me]
+		if spell and m and not m.dead and (res.expected[me] or {})[buff.key] == me and ns.WoW.SpellUsable(spell) then
+			local st = needs(me, buff.key)
+			if st then
+				add({ spell = spell, icon = icon, unit = "player", who = me, key = buff.key, status = st,
+					big = false, label = ns.WoW.Short(me) })
+			end
+		end
+	end
+
 	-- Blessings: Greater per class, then personal overrides.
 	local bless = Buffs.byKey
 	for class, map in pairs(res.pally or {}) do

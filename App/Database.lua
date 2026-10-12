@@ -35,6 +35,10 @@ function ns.Database.Init()
 	end
 	db.paladinBlessings = db.paladinBlessings or {}
 	if not db.wants then db.wants = Buffs.DefaultWants(class) end
+	-- Self buffs added after a character's wants were saved start enabled for their class.
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do
+		if db.wants[buff.key] == nil then db.wants[buff.key] = class == buff.class end
+	end
 	if db.tankRole ~= "TANK" and db.tankRole ~= "OFF" then db.tankRole = "AUTO" end
 	db.tankBuffs = db.tankBuffs or {}
 	for _, buff in ipairs(Buffs.TANK_BUFFS) do

@@ -321,6 +321,18 @@ local function solveTankBuffs(roster, names, out)
 	end
 end
 
+-- Self buffs are always cast by the member who wants them.
+local function solveSelfBuffs(roster, names, out)
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do
+		for _, n in ipairs(names) do
+			local m = roster.members[n]
+			if (m.wants or {})[buff.key] and m.class == buff.class and (m.caps or {})[buff.key] then
+				out.expected[n][buff.key] = n
+			end
+		end
+	end
+end
+
 function Solver.Solve(roster)
 	local out = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, expected = {} }
 	local names = sortedKeys(roster.members)
@@ -329,5 +341,6 @@ function Solver.Solve(roster)
 	solveAuras(roster, names, out)
 	solveGroupBuffs(roster, names, out)
 	solveTankBuffs(roster, names, out)
+	solveSelfBuffs(roster, names, out)
 	return out
 end
