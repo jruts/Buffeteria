@@ -11,12 +11,34 @@ local queued = {}           -- keep every class edit through lockdown/throttle
 local lastSent, lastReq = 0, 0
 local announcePending, replyPending = false, false
 local sendWarned, versionWarned = false, false
+local stats = { sent = 0, failed = 0, heard = {} }
+Comm.stats = stats
 
+-- Results worth retrying: throttles and instance lockdown. Older clients report
+-- a throttle as false. Any other result means the message can never go out.
+local RETRY = { [false] = true, [3] = true, [8] = true, [11] = true }
+
+-- The home party or raid first. Some clients lack the instance category, and
+-- IsInGroup(nil) asks about any group, which would pick a channel the client rejects.
 local function channel()
-	if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return "INSTANCE_CHAT" end
+	local home, instance = LE_PARTY_CATEGORY_HOME, LE_PARTY_CATEGORY_INSTANCE
+	if instance and IsInGroup(instance) and not (home and IsInGroup(home)) then return "INSTANCE_CHAT" end
 	if IsInRaid() then return "RAID" end
 	if IsInGroup() then return "PARTY" end
 	return nil
+end
+Comm.Channel = channel
+
+local function resultName(res)
+	for name, value in pairs(Enum and Enum.SendAddonMessageResult or {}) do
+		if value == res then return name end
+	end
+	return tostring(res)
+end
+
+local function warnSend(text)
+	stats.failed, stats.lastError = stats.failed + 1, text
+	if not sendWarned then sendWarned = true; ns.WoW.Print("could not send an addon message: " .. text) end
 end
 
 local function send(msg)
@@ -25,12 +47,12 @@ local function send(msg)
 	local ok, res = pcall(C_ChatInfo.SendAddonMessage, PREFIX, msg, chan)
 	-- A message the client rejects outright would never send; drop it so it
 	-- cannot hold back every later edit in the queue.
-	if not ok then
-		if not sendWarned then sendWarned = true; ns.WoW.Print("could not send an addon message: " .. tostring(res)) end
-		return true
-	end
+	if not ok then warnSend(tostring(res)); return true end
 	-- Older clients return a bool, Mainline returns Enum.SendAddonMessageResult (0 = Success).
-	return res == nil or res == true or res == 0
+	if res == nil or res == true or res == 0 then stats.sent = stats.sent + 1; return true end
+	if RETRY[res] then return false end
+	warnSend(resultName(res) .. " on " .. chan)
+	return true
 end
 
 function Comm.Send(msg)
@@ -94,7 +116,19 @@ function Comm.OnMessage(prefix, msg, _, sender)
 	if prefix ~= PREFIX or not msg then return end
 	local full = ns.WoW.NormalizeName(sender)
 	if not full or full == ns.WoW.Me() then return end
+	stats.heard[full] = (stats.heard[full] or 0) + 1
 	dispatch(full, Protocol.Decode(msg))
+end
+
+-- Sync health for /buff sync: where messages go and who the client hears.
+function Comm.Report()
+	local out = { ("channel %s, %d sent, %d failed, %d waiting"):format(channel() or "none", stats.sent, stats.failed, #queued) }
+	if stats.lastError then out[#out + 1] = "last send error: " .. stats.lastError end
+	local heard = {}
+	for name, n in pairs(stats.heard) do heard[#heard + 1] = ns.WoW.Short(name) .. " (" .. n .. ")" end
+	table.sort(heard)
+	out[#out + 1] = "heard from: " .. (#heard > 0 and table.concat(heard, ", ") or "nobody yet")
+	return out
 end
 
 function Comm.Init()

@@ -1987,6 +1987,8 @@ class AddonTests(unittest.TestCase):
             local N = ns.WoW.NormalizeName
             assert(N('Bob') == 'Bob-AzjolNerub' and N('Bob-Azjol-Nerub') == 'Bob-AzjolNerub')
             assert(N('Bob-Living Flame') == 'Bob-LivingFlame' and N('') == nil and N(nil) == nil)
+            -- Some clients report addon-message senders as "Name Realm".
+            assert(N('Bob AzjolNerub') == 'Bob-AzjolNerub' and N('Bob Living Flame') == 'Bob-LivingFlame')
             function UnitFullName(u) if u == 'player' then return 'Me', nil end return 'Unknown', nil end
             assert(ns.WoW.FullName('player') == 'Me-AzjolNerub' and ns.WoW.FullName('party1') == nil)
             -- Realm API not ready yet: fall back to the display realm name.
@@ -2075,6 +2077,42 @@ class AddonTests(unittest.TestCase):
             ns.Comm.Flush(); assert(#delivered == 0)
             throttled = false; ns.Comm.Flush()
             assert(#delivered == 1 and delivered[1] == 'P|2|A-Realm|1|KINGS|1|A-Realm')
+        """)
+
+    def test_party_channel_without_instance_category_and_rejections_do_not_stall(self):
+        lua = self.plan_runtime()
+        lua.execute("""
+            ns.WoW.Print = function(m) printed = m end
+            ns.WoW.Short = function(n) return (n:match('^[^-]+')) end
+            LE_PARTY_CATEGORY_INSTANCE = nil; LE_PARTY_CATEGORY_HOME = nil
+            function IsInGroup(category) return true end
+            function IsInRaid() return false end
+            function strsplit(sep, str)
+                local out = {}; for part in (str..sep):gmatch('(.-)'..sep) do out[#out+1]=part end
+                return unpack(out)
+            end
+            Enum = {SendAddonMessageResult={Success=0, AddonMessageThrottle=3, InvalidChatType=4}}
+            delivered = {}; result = 0
+            C_ChatInfo = {SendAddonMessage=function(_, msg, chan)
+                if result ~= 0 then return result end
+                table.insert(delivered, chan .. ':' .. msg); return 0
+            end}
+        """)
+        load(lua, "Features/Sync/Comm.lua")
+        lua.execute("""
+            assert(ns.Comm.Channel() == 'PARTY')
+            ns.Comm.Send('S|2|||||0'); assert(delivered[1] == 'PARTY:S|2|||||0')
+            result = 4; ns.Comm.Send('P|2|A-Realm|1|KINGS|1|A-Realm')
+            assert(printed:find('InvalidChatType on PARTY'))
+            result = 0; ns.Comm.Send('S|2|||||1'); assert(delivered[2] == 'PARTY:S|2|||||1', table.concat(delivered, ' '))
+            result = 3; ns.Comm.Send('P|2|A-Realm|2|MIGHT|2|A-Realm'); ns.Comm.Flush(); assert(#delivered == 2, table.concat(delivered, ' '))
+            result = 0; ns.Comm.Flush(); assert(delivered[3] == 'PARTY:P|2|A-Realm|2|MIGHT|2|A-Realm')
+            ns.Comm.OnMessage('BUFFETERIA', 'X|2', 'PARTY', 'B-Realm')
+            local report = table.concat(ns.Comm.Report(), '\\n')
+            assert(report:find('channel PARTY, 3 sent, 1 failed, 0 waiting') and report:find('B %(1%)'), report)
+            LE_PARTY_CATEGORY_HOME, LE_PARTY_CATEGORY_INSTANCE = 1, 2
+            function IsInGroup(category) return category == 2 end
+            assert(ns.Comm.Channel() == 'INSTANCE_CHAT')
         """)
 
     def test_randomized_plans_and_personal_rankings_stay_consistent(self):

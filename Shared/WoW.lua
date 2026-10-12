@@ -76,10 +76,12 @@ local function homeRealm()
 end
 
 -- "Name-Realm" with the realm in normalized form (no spaces or hyphens), so the
--- roster, addon-message senders and saved plans always use the same key.
+-- roster, addon-message senders and saved plans always use the same key. Some
+-- clients send addon-message senders as "Name Realm"; names never contain spaces.
 function ns.WoW.NormalizeName(full)
 	if type(full) ~= "string" or full == "" then return nil end
 	local name, realm = full:match("^([^-]+)-(.*)$")
+	if not name then name, realm = full:match("^(%S+)%s+(.+)$") end
 	name = name or full
 	if not realm or realm == "" then realm = homeRealm() end
 	realm = realm:gsub("[%s%-]", "")

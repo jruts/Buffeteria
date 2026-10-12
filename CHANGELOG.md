@@ -1,5 +1,16 @@
 # Buffeteria
 
+## Unreleased
+
+- Fixed paladins never recognizing each other: this client names addon-message
+  senders "Name Realm" instead of "Name-Realm", so no message matched a group
+  member. Every other paladin stayed Unverified, edits were discarded, and each
+  client planned Kings for its own paladin. Both forms now resolve to the same player.
+- Normal parties and raids now always use party or raid chat, and a message the
+  client rejects is reported once instead of holding back every later message.
+- Added `/buff sync` to show the sync channel, sent and failed messages, and who
+  your client has heard from.
+
 ## v0.6.8
 
 - Fixed the tracker repeatedly asking for your assigned aura when another paladin

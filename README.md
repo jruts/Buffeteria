@@ -108,6 +108,12 @@ know only the untalented auras. The tracker reminds you when your assigned aura
 isn't running, and the big button turns it on. Another paladin's copy of the same
 aura on you counts as covered, because the game shows only one copy.
 
+A paladin column marked **Unverified** means your client has not heard from that
+paladin's Buffeteria. Their spellbook is assumed untalented (no Kings, Concentration
+or Sanctity), so each client may give those to its own paladin and the plans
+disagree. `/buff sync` shows the channel in use, sent and failed messages, and
+which players your client has heard from.
+
 **Lock in Auto picks** turns every resolved Auto blessing and aura into
 Buffeteria's current pick and shares it, so the plan stays put when people join or
 leave. Your manual choices, including None, stay as they are.

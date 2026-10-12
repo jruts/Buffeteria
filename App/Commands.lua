@@ -12,6 +12,9 @@ local COMMANDS = {
 	who = function()
 		for _, l in ipairs(ns.Assignments.Lines(true)) do ns.WoW.Print(l) end
 	end,
+	sync = function()
+		for _, l in ipairs(ns.Comm.Report()) do ns.WoW.Print(l) end
+	end,
 	reset = function()
 		ns.Preferences.Reset()
 		ns.WoW.Print("preferences reset to class defaults")
@@ -26,8 +29,8 @@ local COMMANDS = {
 	minimap = function() ns.Minimap.Toggle() end,
 	help = function()
 		local c = ns.command
-		ns.WoW.Print(("%s (options), %s preferences, %s paladins, %s settings, %s who, %s announce, %s show|hide, %s lock, %s minimap, %s preview, %s reset")
-			:format(c, c, c, c, c, c, c, c, c, c, c))
+		ns.WoW.Print(("%s (options), %s preferences, %s paladins, %s settings, %s who, %s announce, %s sync, %s show|hide, %s lock, %s minimap, %s preview, %s reset")
+			:format(c, c, c, c, c, c, c, c, c, c, c, c))
 	end,
 }
 COMMANDS.config, COMMANDS.test = COMMANDS.settings, COMMANDS.preview
