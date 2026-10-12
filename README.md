@@ -120,6 +120,8 @@ saved between sessions; assignments for other paladins stay with the current gro
 including while a paladin is briefly offline or on a loading screen, and are cleared
 when you leave the group. Edits and preferences that arrive before the sender appears
 in your roster are applied once they do.
+Paladins sharing an older plan cell receive the group's newer version, and login
+synchronization requests saved edits from older clients so plans can reconcile.
 Use **Announce to group** to communicate the plan to players without the addon.
 Buffeteria cannot provide a cast button on a client that doesn't have it installed.
 

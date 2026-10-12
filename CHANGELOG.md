@@ -1,5 +1,12 @@
 # Buffeteria
 
+## v0.6.7
+
+- Fixed paladin plans staying different when a client missed a newer edit. A
+  paladin sharing an older plan cell now receives the group's newer version.
+- Improved synchronization with older clients that keep saved plan edits private
+  at login, so those edits reach the group and plans can reconcile.
+
 ## v0.6.6
 
 - Added a badge on the tracker head showing your own buffing share: a gold count
