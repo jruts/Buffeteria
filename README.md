@@ -24,6 +24,15 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
   same preferences. Players without the add-on get sensible class defaults.
 
+New installs start from a class default ranking: warriors and rogues want Might
+first; mages, warlocks, priests, druids, paladins, and shamans want Wisdom first;
+hunters want Kings first (Might doesn't raise ranged attack power). Kings and
+Salvation follow for everyone. Casters don't want Might, and warriors and rogues
+don't want Wisdom. Players without the add-on are planned from the same defaults,
+and so are classes Auto and **Auto-fill** cover on the Paladins tab. If your saved
+ranking still matches the old Kings-first default, it moves to the new one; a
+ranking you reordered is kept.
+
 In **My preferences > Tanks**, **Role: Auto** follows your assigned Tank role or
 raid main-tank assignment. Click Role to cycle through **Tank**, **Not tank**, and
 **Auto** when you need an override, including solo play or groups without assigned

@@ -793,12 +793,12 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.blessingsOverride)
             assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'SALV')
             ns.db.blessingsOverride = false
-            assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'KINGS')
+            assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'MIGHT')
             assert(ns.db.order[1] == 'SALV') -- preserve the order for re-enabling
             ns.Roster.peers['B-Realm'] = {caps={KINGS=true},ranking={'SALV'},excluded={},wants={},blessingsOverride=true}
             assert(ns.Roster.Build().members['B-Realm'].blessingsOverride)
             ns.Roster.peers['B-Realm'].blessingsOverride = false
-            assert(ns.Roster.Build().members['B-Realm'].ranking[1] == 'KINGS')
+            assert(ns.Roster.Build().members['B-Realm'].ranking[1] == 'WISDOM') -- paladin default
             BuffeteriaCharDB = {}
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
             assert(not ns.db.blessingsOverride)
@@ -961,8 +961,31 @@ class AddonTests(unittest.TestCase):
             local r = ns.Solver.Solve(roster)
             assert(r.pally.ROGUE.Pal == 'SALV')
             assert(r.expected.Offline.SALV == 'Pal' and r.expected.Default.SALV == 'Pal')
-            assert(r.expected.Custom.KINGS == 'Pal' and r.expected.Custom.SALV == nil)
-            assert(r.overrides.Custom.Pal == 'KINGS')
+            assert(r.expected.Custom.MIGHT == 'Pal' and r.expected.Custom.SALV == nil)
+            assert(r.overrides.Custom.Pal == 'MIGHT')
+        """)
+
+    def test_class_defaults_lead_with_role_blessing_and_migrate_untouched_orders(self):
+        self.solver("""
+            assert(ns.Buffs.DEFAULT_ORDER.WARLOCK[1] == 'WISDOM' and ns.Buffs.DEFAULT_ORDER.WARRIOR[1] == 'MIGHT')
+            assert(ns.Buffs.DEFAULT_ORDER.HUNTER[1] == 'KINGS')
+            -- One paladin and nobody with the add-on: Auto plans each class's top default.
+            local r = ns.Solver.Solve({members={Pal=member('PALADIN', all)}})
+            assert(r.pally.WARLOCK.Pal == 'WISDOM' and r.pally.ROGUE.Pal == 'MIGHT' and r.pally.HUNTER.Pal == 'KINGS')
+        """)
+        lua = self.core_runtime("WARLOCK")
+        lua.execute("""
+            local legacy = {'KINGS','SALV','WISDOM','LIGHT','SANCT','|','MIGHT'}
+            BuffeteriaCharDB = {order={unpack(legacy)}, blessingsOverride=false}
+            ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
+            assert(ns.db.order[1] == 'WISDOM' and not ns.db.blessingsOverride)
+            -- Once migrated, a ranking that matches the old default is a choice.
+            ns.db.order = {unpack(legacy)}
+            ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
+            assert(ns.db.order[1] == 'KINGS')
+            BuffeteriaCharDB = {order={unpack(legacy)}, blessingsOverride=true}
+            ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
+            assert(ns.db.order[1] == 'KINGS' and ns.db.blessingsOverride)
         """)
 
     def test_manual_plan_can_override_class_default_exclusion(self):

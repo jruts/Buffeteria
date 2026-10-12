@@ -3,11 +3,32 @@ local _, ns = ...
 local Buffs = ns.Buffs
 ns.Database = {}
 
+-- Version 1 defaults (Kings first for everyone), only used to migrate untouched rankings.
+local LEGACY_ORDER = {
+	WARRIOR = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
+	ROGUE   = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
+	HUNTER  = { "KINGS", "MIGHT", "SALV", "WISDOM", "LIGHT", "SANCT", "|" },
+	MAGE    = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "|", "MIGHT" },
+	WARLOCK = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "|", "MIGHT" },
+	PRIEST  = { "KINGS", "WISDOM", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
+	DRUID   = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	PALADIN = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	SHAMAN  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+}
+
 function ns.Database.Init()
 	BuffeteriaCharDB = BuffeteriaCharDB or {}
 	local db = BuffeteriaCharDB
 	local _, class = UnitClass("player")
 	db.order = Buffs.NormalizeOrder(db.order or Buffs.DEFAULT_ORDER[class], class)
+	-- Untouched rankings from before the class-specific defaults move to the new ones.
+	if (db.defaultOrderVersion or 1) < Buffs.DEFAULT_ORDER_VERSION then
+		local legacy = LEGACY_ORDER[class] or LEGACY_ORDER.WARRIOR
+		if not db.blessingsOverride and table.concat(db.order, ",") == table.concat(legacy, ",") then
+			db.order = Buffs.NormalizeOrder(Buffs.DEFAULT_ORDER[class], class)
+		end
+	end
+	db.defaultOrderVersion = Buffs.DEFAULT_ORDER_VERSION
 	-- Preserve deliberate rankings from before the explicit override toggle existed.
 	if db.blessingsOverride == nil then
 		db.blessingsOverride = table.concat(db.order, ",") ~= table.concat(Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR, ",")

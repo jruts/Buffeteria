@@ -58,16 +58,19 @@ Buffs.CLASS_KEYS = { "WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", 
 Buffs.MANA_CLASSES = { PALADIN = true, PRIEST = true, DRUID = true, MAGE = true, WARLOCK = true, SHAMAN = true, HUNTER = true }
 
 -- Default blessing order per class. Everything after "|" is "don't want".
+-- Melee lead with Might, mana users with Wisdom, hunters with Kings (agility;
+-- Might has no effect on ranged attack power). Kings and Salvation follow for everyone.
+Buffs.DEFAULT_ORDER_VERSION = 2
 Buffs.DEFAULT_ORDER = {
-	WARRIOR = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
-	ROGUE   = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
-	HUNTER  = { "KINGS", "MIGHT", "SALV", "WISDOM", "LIGHT", "SANCT", "|" },
-	MAGE    = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "|", "MIGHT" },
-	WARLOCK = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "|", "MIGHT" },
-	PRIEST  = { "KINGS", "WISDOM", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
-	DRUID   = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
-	PALADIN = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
-	SHAMAN  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	WARRIOR = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
+	ROGUE   = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
+	HUNTER  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	MAGE    = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
+	WARLOCK = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
+	PRIEST  = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
+	DRUID   = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	PALADIN = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	SHAMAN  = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
 }
 
 function Buffs.DefaultWants(class)
