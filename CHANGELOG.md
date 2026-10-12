@@ -1,5 +1,11 @@
 # Buffeteria
 
+## v0.6.8
+
+- Fixed the tracker repeatedly asking for your assigned aura when another paladin
+  already provides the same aura. Their copy now counts as covered, matching the
+  client's display of a single copy.
+
 ## v0.6.7
 
 - Fixed paladin plans staying different when a client missed a newer edit. A
