@@ -1,19 +1,24 @@
 -- Observe group auras and summarize assigned buffs for the tracker.
 local _, ns = ...
-local Buffs = ns.Buffs
+local Buffs, Status = ns.Buffs, ns.Tracker.Status
 
 local Scan = {}
-ns.Scan = Scan
+ns.Tracker.Scan = Scan
 
+local EMPTY = {}
 local isSecret = issecretvalue or function() return false end
 local nameToKey = {}
 local cache = {}          -- [fullName] = { [key] = { exp = number, name = string } }
 
-local function buildNameMap()
-	for _, b in pairs(Buffs.byKey) do
-		for _, id in ipairs(b.ids) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
-		for _, id in ipairs(b.groupIds) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
+-- Spell names are only known once the client has loaded them.
+local function keyOf(name)
+	if not next(nameToKey) then
+		for _, b in pairs(Buffs.byKey) do
+			for _, id in ipairs(b.ids) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
+			for _, id in ipairs(b.groupIds) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
+		end
 	end
+	return nameToKey[name]
 end
 
 local function auraAt(unit, i)
@@ -24,29 +29,37 @@ local function auraAt(unit, i)
 	if name then return { name = name, expirationTime = exp, sourceUnit = source } end
 end
 
+-- Calls visit(aura) for each helpful aura. False if the client hides them, or
+-- visit returns false (it found a hidden value).
+local function eachAura(unit, visit)
+	for i = 1, 40 do
+		local ok, a = pcall(auraAt, unit, i)
+		if not ok then return false end
+		if not a then return true end
+		if visit(a) == false then return false end
+	end
+	return true
+end
+
 -- Returns a key -> {exp,name} map, or nil if the client hides aura data right now.
 local function readAuras(unit)
 	if not UnitIsVisible(unit) then return nil end
 	local out = {}
-	for i = 1, 40 do
-		local ok, a = pcall(auraAt, unit, i)
-		if not ok then return nil end
-		if not a then break end
-		if isSecret(a.name) or isSecret(a.expirationTime) then return nil end
-		local key = nameToKey[a.name]
+	local readable = eachAura(unit, function(a)
+		if isSecret(a.name) or isSecret(a.expirationTime) then return false end
+		local key = keyOf(a.name)
 		if key then
-			local exp = a.expirationTime or 0
-			local prev = out[key]
+			local exp, prev = a.expirationTime or 0, out[key]
 			if not prev or (prev.exp ~= 0 and (exp == 0 or exp > prev.exp)) then
 				out[key] = { exp = exp, name = a.name }
 			end
 		end
-	end
-	return out
+	end)
+	return readable and out or nil
 end
 
 -- status: "ok" | "warn" | "bad" | "unknown"
-local function rate(full, key, now, warnSec)
+function Scan.Rate(full, key, now, warnSec)
 	local auras = cache[full]
 	if not auras then return "unknown" end
 	local short = Buffs.byKey[key] and Buffs.byKey[key].warnSeconds
@@ -59,112 +72,95 @@ local function rate(full, key, now, warnSec)
 	if rem <= warnSec then return "warn", rem end
 	return "ok", rem
 end
-Scan.Rate = rate
 
-local PRIORITY = ns.Status.PRIORITY
-
--- Scans the group and returns a summary used by the tracker.
-function Scan.Update()
-	if not next(nameToKey) then buildNameMap() end
-	local now, warnSec = GetTime(), (ns.db.warnMinutes or 5) * 60
-	local roster, res = ns.roster, ns.result
+local function readGroup(roster)
 	for full, m in pairs(roster.members) do
 		if not m.dead then
 			if not UnitIsVisible(m.unit) then
 				cache[full] = nil -- out of range: an old read would be stale
 			else
-				local auras = readAuras(m.unit)
-				if auras then cache[full] = auras end -- keep the last good read when hidden
+				cache[full] = readAuras(m.unit) or cache[full] -- keep the last good read when hidden
 			end
 		end
 	end
+end
 
-	local me = ns.WoW.FullName("player")
+-- Scans the group and returns a summary used by the tracker.
+function Scan.Update()
+	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
+	local roster, res, me = ns.roster, ns.result, ns.WoW.Me()
+	readGroup(roster)
 	-- yours: keys I have to cast; needs: what I'm missing and who should cast it.
-	local summary = { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false,
-		yours = {}, needs = {} }
-	for full, exp in pairs(res.expected or {}) do
+	local summary = { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false, yours = {}, needs = {} }
+	local function problem(full, key, status, rem, caster)
+		table.insert(summary.problems, { who = full, key = key, status = status, rem = rem, caster = caster })
+		summary.overall = Status.Worst(summary.overall, status == "unwanted" and "warn" or status)
+	end
+	for full, exp in pairs(res.expected) do
 		local m = roster.members[full]
 		if m and not m.dead then
-			for key in pairs(exp) do
+			for key, caster in pairs(exp) do
 				summary.any = true
-				local st, rem = rate(full, key, now, warnSec)
-				local pk = summary.perKey[key] or { bad = 0, warn = 0, total = 0 }
+				local st, rem = Scan.Rate(full, key, now, warnSec)
+				local pk = summary.perKey[key] or { bad = 0, warn = 0, total = 0, unknown = 0, casters = {} }
 				summary.perKey[key] = pk
 				pk.total = pk.total + 1
+				summary.overall = Status.Worst(summary.overall, st)
 				if st == "unknown" then
-					pk.unknown = (pk.unknown or 0) + 1
+					pk.unknown = pk.unknown + 1
 					if summary.unreadable[#summary.unreadable] ~= full then table.insert(summary.unreadable, full) end
-				end
-				if st == "bad" or st == "warn" then
+				elseif st == "bad" or st == "warn" then
 					pk[st] = pk[st] + 1
-					local caster = exp[key]
-					table.insert(summary.problems, { who = full, key = key, status = st, rem = rem, caster = caster })
-					pk.casters = pk.casters or {}
-					if caster then pk.casters[caster] = true end
+					pk.casters[caster] = true
+					problem(full, key, st, rem, caster)
 					if caster == me then summary.yours[key] = true end
-					if full == me then
-						table.insert(summary.needs, { key = key, status = st, caster = caster })
-					end
+					if full == me then table.insert(summary.needs, { key = key, status = st, caster = caster }) end
 				end
-				if PRIORITY[st] < PRIORITY[summary.overall] then summary.overall = st end
 			end
 			-- Blessings the member does not want at all (e.g. Salvation on a tank).
-			for key in pairs(m.excluded or {}) do
-				if not exp[key] and cache[full] and cache[full][key] then
-					table.insert(summary.problems, { who = full, key = key, status = "unwanted" })
-					if PRIORITY.warn < PRIORITY[summary.overall] then summary.overall = "warn" end
-				end
+			for key in pairs(m.excluded or EMPTY) do
+				if not exp[key] and cache[full] and cache[full][key] then problem(full, key, "unwanted") end
 			end
 		end
 	end
 	-- My own assigned aura.
-	local aura = (res.auras or {})[me]
+	local aura, missingAura = res.auras[me], Scan.MissingAura()
 	if aura and roster.members[me] and not roster.members[me].dead then
 		summary.any = true
-		local missing = Scan.MissingAura() and 1 or 0
-		summary.perKey[aura] = { bad = missing, warn = 0, total = 1, casters = { [me] = true } }
-		if missing > 0 then
+		summary.perKey[aura] = { bad = missingAura and 1 or 0, warn = 0, total = 1, casters = { [me] = true } }
+		if missingAura then
 			summary.yours[aura] = true
-			table.insert(summary.problems, { who = me, key = aura, status = "bad", caster = me })
-			summary.overall = "bad"
+			problem(me, aura, "bad", nil, me)
 		end
 	end
 	if not summary.any then summary.overall = "idle" end
-	table.sort(summary.problems, ns.Status.CompareProblems)
+	table.sort(summary.problems, Status.CompareProblems)
 	table.sort(summary.unreadable)
-	table.sort(summary.needs, function(a, b)
-		if a.status ~= b.status then return PRIORITY[a.status] < PRIORITY[b.status] end
-		return a.key < b.key
-	end)
-	summary.next = ns.Actions.Next(now, warnSec)
+	table.sort(summary.needs, Status.CompareProblems)
+	summary.next = ns.Tracker.Actions.Next(now, warnSec, missingAura)
 	summary.cancel = Scan.UnwantedOnMe()
 	return summary
 end
 
 -- My assigned aura when I am not running it, or nil (none assigned, or auras hidden).
 function Scan.MissingAura()
-	local me = ns.WoW.FullName("player")
-	local key = ((ns.result or {}).auras or {})[me]
+	local key = ns.result.auras[ns.WoW.Me()]
 	if not key then return nil end
-	if not next(nameToKey) then buildNameMap() end
-	for i = 1, 40 do
-		local ok, a = pcall(auraAt, "player", i)
-		if not ok or (a and (isSecret(a.name) or isSecret(a.sourceUnit))) then return nil end
-		if not a then break end
+	local running = false
+	local readable = eachAura("player", function(a)
+		if isSecret(a.name) or isSecret(a.sourceUnit) then return false end
 		-- Another paladin's copy of the same aura doesn't count as mine.
-		if nameToKey[a.name] == key and (a.sourceUnit == nil or a.sourceUnit == "player") then return nil end
-	end
-	return key
+		if keyOf(a.name) == key and (a.sourceUnit == nil or a.sourceUnit == "player") then running = true end
+	end)
+	if readable and not running then return key end
 end
 
 -- An excluded blessing sitting on me -> the aura name to cancel.
 function Scan.UnwantedOnMe()
-	local me = ns.WoW.FullName("player")
-	local m = ns.roster.members[me]
-	local auras = cache[me]
+	local me = ns.WoW.Me()
+	local m, auras = ns.roster.members[me], cache[me]
 	if not m or not auras then return nil end
-	for key in pairs(m.excluded or {}) do
-		if not (ns.result.expected[me] or {})[key] and auras[key] then return auras[key].name, key end
+	for key in pairs(m.excluded or EMPTY) do
+		if not (ns.result.expected[me] or EMPTY)[key] and auras[key] then return auras[key].name, key end
 	end
 end

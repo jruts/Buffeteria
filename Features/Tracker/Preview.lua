@@ -5,7 +5,7 @@ local _, ns = ...
 local Buffs = ns.Buffs
 
 local Preview = { active = false }
-ns.Preview = Preview
+ns.Tracker.Preview = Preview
 
 local PHASE_SECONDS = 5
 local FAKE = {
@@ -23,7 +23,6 @@ local KEYS = { "KINGS", "MIGHT", "WISDOM", "SALV", "LIGHT", "FORT", "SPIRIT", "S
 local PHASES = { "empty", "bad", "warn", "ok" }
 -- What the player's class would be asked to cast; other classes only receive.
 local CLASS_CAST = { PALADIN = "KINGS", PRIEST = "FORT", DRUID = "MOTW", MAGE = "INT" }
-
 
 -- Deterministic pseudo-random so each phase looks the same every cycle.
 local function roll(i, j, phase) return ((i * 7 + j * 13 + phase * 31) % 17) end
@@ -53,9 +52,8 @@ function Preview.Summary()
 		if phase == "bad" then
 			table.insert(s.problems, { who = "Shieldwalla", class = "WARRIOR", key = "SALV", status = "unwanted" })
 		end
-		table.sort(s.problems, ns.Status.CompareProblems)
-		local _, class = UnitClass("player")
-		local key = CLASS_CAST[class]
+		table.sort(s.problems, ns.Tracker.Status.CompareProblems)
+		local key = CLASS_CAST[ns.WoW.PlayerClass()]
 		if key then
 			local b = Buffs.byKey[key]
 			s.next = { spell = ns.WoW.SpellName(b.groupIds[1]) or b.label, icon = ns.WoW.SpellIcon(b.groupIds[1]),

@@ -1,30 +1,38 @@
 -- User entry points; feature logic lives in Features/.
 local _, ns = ...
 
+local COMMANDS = {
+	announce = function() ns.Assignments.Announce() end,
+	show = function() ns.Database.Set("showTracker", true) end,
+	hide = function() ns.Database.Set("showTracker", false) end,
+	lock = function()
+		ns.Database.Set("locked", not ns.db.locked)
+		ns.WoW.Print(ns.db.locked and "tracker locked" or "tracker unlocked")
+	end,
+	who = function()
+		for _, l in ipairs(ns.Assignments.Lines(true)) do ns.WoW.Print(l) end
+	end,
+	reset = function()
+		ns.Preferences.Reset(); ns.Options.Refresh()
+		ns.WoW.Print("preferences reset to class defaults")
+	end,
+	settings = function() ns.Options.OpenSettings() end,
+	preview = function() ns.Tracker.Preview.Toggle() end,
+	minimap = function() ns.Minimap.SetShown(ns.db.minimap.hide) end,
+	help = function()
+		local c = ns.command
+		ns.WoW.Print(("%s (options), %s settings, %s who, %s announce, %s show|hide, %s lock, %s minimap, %s preview, %s reset")
+			:format(c, c, c, c, c, c, c, c, c))
+	end,
+}
+COMMANDS.config, COMMANDS.test = COMMANDS.settings, COMMANDS.preview
+
 _G["SLASH_" .. ns.commandKey .. "1"] = ns.isDev and "/buffeteriadev" or "/buffeteria"
 _G["SLASH_" .. ns.commandKey .. "2"] = ns.command
 SlashCmdList[ns.commandKey] = function(msg)
 	msg = (msg or ""):lower():match("^%s*(.-)%s*$")
-	if msg == "announce" then ns.Assignments.Announce()
-	elseif msg == "show" then ns.db.showTracker = true; ns.Tracker.Refresh()
-	elseif msg == "hide" then ns.db.showTracker = false; ns.Tracker.Refresh()
-	elseif msg == "lock" then ns.db.locked = not ns.db.locked; ns.WoW.Print(ns.db.locked and "tracker locked" or "tracker unlocked")
-	elseif msg == "who" then
-		for _, l in ipairs(ns.Assignments.Lines(true)) do ns.WoW.Print(l) end
-	elseif msg == "reset" then
-		ns.Preferences.Reset(); ns.Options.Refresh()
-		ns.WoW.Print("preferences reset to class defaults")
-	elseif msg == "config" or msg == "settings" then
-		ns.Options.OpenSettings()
-	elseif msg == "preview" or msg == "test" then
-		ns.Preview.Toggle()
-	elseif msg == "minimap" then
-		ns.db.minimap.hide = not ns.db.minimap.hide; ns.Minimap.Refresh()
-	elseif msg == "help" then
-		ns.WoW.Print(ns.command .. " (options), " .. ns.command .. " settings, " .. ns.command .. " who, " .. ns.command .. " announce, " .. ns.command .. " show|hide, " .. ns.command .. " lock, " .. ns.command .. " minimap, " .. ns.command .. " preview, " .. ns.command .. " reset")
-	else
-		ns.Options.Toggle()
-	end
+	local command = COMMANDS[msg] or function() ns.Options.Toggle() end
+	command()
 end
 
 -- Key binding labels

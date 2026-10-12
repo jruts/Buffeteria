@@ -69,7 +69,7 @@ class AddonTests(unittest.TestCase):
                     SlashCmdList.BUFFETERIADEV('hide'); assert(not ns.db.showTracker)
                     ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria-Dev')
                     assert(not ns.db.showTracker and BuffeteriaCharDB == liveDB)
-                    SlashCmdList.BUFFETERIADEV('preview'); assert(ns.Preview.active)
+                    SlashCmdList.BUFFETERIADEV('preview'); assert(ns.Tracker.Preview.active)
                     assert(ns.Protocol.PREFIX == 'BUFFETERIA') -- works with release users in the group
                 """)
 
@@ -129,8 +129,8 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
-            local s = ns.Preview.Summary()
-            ns.Scan.Update = function() return s end
+            local s = ns.Tracker.Preview.Summary()
+            ns.Tracker.Scan.Update = function() return s end
             ns.db.buffDisplay = 'ALL'
             local function check(side, columns, expectedCount)
                 ns.db.iconPosition, ns.db.iconsPerRow = side, columns
@@ -233,7 +233,7 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
-            ns.Scan.Update = ns.Preview.Summary
+            ns.Tracker.Scan.Update = ns.Tracker.Preview.Summary
             ns.db.iconPosition, ns.db.buffDisplay = 'AUTO', 'ALL'
             local headScale = 1
             head.GetEffectiveScale = function() return headScale end
@@ -367,7 +367,7 @@ class AddonTests(unittest.TestCase):
                 lua = full_addon(player_class)
                 lua.execute("""
                     ns.Options.Toggle()
-                    local tab = findWidget('Settings')
+                    local tab = findWidget('Settings').parent
                     assert(tab:IsVisible() and not findWidget('Show tracker'):IsVisible())
                     tab:GetScript('OnClick')(tab)
                     assert(findWidget('Tracker settings'):IsVisible())
@@ -433,7 +433,7 @@ class AddonTests(unittest.TestCase):
                     assert(tab.parent.parent == settingsPage)
                     ns.Options.Toggle()
                     assert(tab.parent.parent == Buffeteria_Prefs)
-                    local personal = findWidget('My preferences')
+                    local personal = findWidget('My preferences').parent
                     personal:GetScript('OnClick')(personal)
                     assert(findWidget('Your buffet'):IsVisible())
                     assert(not findWidget('Show tracker'):IsVisible())
@@ -448,7 +448,7 @@ class AddonTests(unittest.TestCase):
                 FORT={bad=1, warn=2, total=4}, INT={bad=0, warn=1, total=4},
                 MOTW={bad=0, warn=0, total=4}, RFURY={bad=1, warn=0, total=1},
             }}
-            ns.Scan.Update = function() return s end
+            ns.Tracker.Scan.Update = function() return s end
             -- Cover center, bottom and top saved anchors: changing rows must
             -- never alter the frame's size or its anchor, keeping the face fixed.
             for _, anchor in ipairs({'CENTER', 'BOTTOM', 'TOPLEFT'}) do
@@ -515,7 +515,7 @@ class AddonTests(unittest.TestCase):
                 INT={bad=1, warn=0, total=2, casters={['B-Realm']=true}},
                 KINGS={bad=1, warn=0, total=2, casters={['A-Realm']=true}},
             }}
-            ns.Scan.Update = function() return s end
+            ns.Tracker.Scan.Update = function() return s end
             ns.db.buffDisplay = 'ALL'; ns.Tracker.Refresh()
             assert(not head.glow:IsShown() and not head.halo:IsShown())
             assert(not frame.gief:IsShown() and frame.tag.point[2] == frame)
@@ -546,12 +546,12 @@ class AddonTests(unittest.TestCase):
             with self.subTest(player_class=player_class):
                 lua = full_addon(player_class)
                 lua.execute("""
-                    ns.Preview.Set(true)
+                    ns.Tracker.Preview.Set(true)
                     WOW_TIME = 100; ns.Tracker.Refresh()
                     local s, frame = ns.Tracker.Summary(), Buffeteria_Tracker
                     assert(frame.gief:IsShown() == %s and Buffeteria_CastButton.halo:IsShown() == %s)
                     assert((s.next ~= nil) == %s and (#s.needs > 0) ~= %s)
-                    ns.Preview.Set(false)
+                    ns.Tracker.Preview.Set(false)
                 """ % ((("true" if gief else "false"),) * 4))
 
     def test_tracker_icons_keep_color_and_share_status_borders_for_buffs_and_auras(self):
@@ -559,7 +559,7 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             local frame = Buffeteria_Tracker
             local s = {any=true, overall='bad', problems={}, perKey={}}
-            ns.Scan.Update = function() return s end
+            ns.Tracker.Scan.Update = function() return s end
             local keys = {'CONC', 'DEVO', 'FORT', 'INT', 'KINGS'}
             -- Reuse every icon across healthy, expiring, and missing states.
             for _, status in ipairs({'ok', 'warn', 'bad', 'ok'}) do
@@ -575,7 +575,7 @@ class AddonTests(unittest.TestCase):
                             visible = visible + 1
                             assert(w.key == keys[visible]) -- no type-specific grouping
                             assert(w.tex.desaturated == false)
-                            local color = ns.Status.COLORS[status]
+                            local color = ns.Tracker.Status.COLORS[status]
                             for i = 1, 3 do assert(w.borderColor[i] == color[i]) end
                         end
                     end
@@ -617,7 +617,7 @@ class AddonTests(unittest.TestCase):
                     assert(ns.roster.members['A-Realm'].class == PLAYER_CLASS)
                     assert(ns.result.expected['A-Realm'])
                     assert(ns.Tracker.Summary().any)
-                    assert(#tickers == 3)
+                    assert(#tickers == 2) -- comm retry and tracker; the minimap listens for summaries
                     for _, message in ipairs(delivered) do assert(#message <= 255) end
                     SlashCmdList.BUFFETERIA('show'); assert(ns.db.showTracker)
                     SlashCmdList.BUFFETERIA('hide'); assert(not ns.db.showTracker)
@@ -627,7 +627,7 @@ class AddonTests(unittest.TestCase):
                     SlashCmdList.BUFFETERIA('reset'); runTimers()
                     assert(not ns.db.blessingsOverride)
                     SlashCmdList.BUFFETERIA(''); assert(Buffeteria_Prefs:IsShown())
-                    assert(findWidget('Paladins'):IsVisible() == (PLAYER_CLASS == 'PALADIN'))
+                    assert(findWidget('Paladins').parent:IsVisible() == (PLAYER_CLASS == 'PALADIN'))
                     Buffeteria_OnAddonCompartmentClick(nil, 'RightButton'); assert(openedCategory == 1)
                 """)
 
@@ -651,7 +651,7 @@ class AddonTests(unittest.TestCase):
         lua = runtime()
         load(lua, "Features/Tracker/Status.lua")
         lua.execute("""
-            local mood = ns.Status.Mood
+            local mood = ns.Tracker.Status.Mood
             assert(mood({any = false, overall = 'idle', perKey = {}}) == 'idle')
             local s = {any = true, overall = 'bad', perKey = {
                 FORT = {bad = 2, warn = 0, total = 2},
@@ -678,7 +678,7 @@ class AddonTests(unittest.TestCase):
     def test_preview_cycles_orc_artwork_without_casting_and_updates_in_combat(self):
         lua = full_addon()
         lua.execute("""
-            ns.Preview.Set(true)
+            ns.Tracker.Preview.Set(true)
             local expected = {'Angry', 'Grumpy', 'Grumpy', 'Happy'}
             for phase, suffix in ipairs(expected) do
                 WOW_TIME = 100 + (phase - 1) * 5
@@ -695,7 +695,7 @@ class AddonTests(unittest.TestCase):
             assert(Buffeteria_CastButton.icon.texture:find('OrcAngry$'))
             assert(not Buffeteria_CastButton:GetAttribute('spell'))
             COMBAT = false
-            ns.Preview.Set(false)
+            ns.Tracker.Preview.Set(false)
         """)
 
     def test_unreadable_observations_do_not_count_toward_mood(self):
@@ -705,12 +705,12 @@ class AddonTests(unittest.TestCase):
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
             local s = ns.Tracker.Summary()
             assert(s.any and s.perKey.KINGS.unknown == s.perKey.KINGS.total)
-            assert(ns.Status.Mood(s) == 'angry') -- only my own missing aura is readable
+            assert(ns.Tracker.Status.Mood(s) == 'angry') -- only my own missing aura is readable
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='player'} end
             end
             ns.Tracker.Refresh()
-            assert(ns.Status.Mood(ns.Tracker.Summary()) == 'happy') -- the rest is out of range
+            assert(ns.Tracker.Status.Mood(ns.Tracker.Summary()) == 'happy') -- the rest is out of range
             assert(#ns.Tracker.Summary().unreadable == 2)
         """)
 
@@ -729,13 +729,13 @@ class AddonTests(unittest.TestCase):
             end
             -- B was read in range once (missing everything), then walked away.
             ns.Tracker.Refresh()
-            assert(ns.Status.Mood(ns.Tracker.Summary()) ~= 'happy')
+            assert(ns.Tracker.Status.Mood(ns.Tracker.Summary()) ~= 'happy')
             UnitIsVisible = function(unit) return unit == 'player' end
             ns.Tracker.Refresh()
             local s = ns.Tracker.Summary()
             assert(#s.unreadable == 1 and s.unreadable[1] == far)
             for _, p in ipairs(s.problems) do assert(p.who ~= far) end -- no stale read
-            assert(ns.Status.Mood(s) == 'happy')
+            assert(ns.Tracker.Status.Mood(s) == 'happy')
             assert(Buffeteria_CastButton.icon.texture:find('OrcHappy$'))
             local lines = {}
             local add = GameTooltip.AddDoubleLine
@@ -747,7 +747,7 @@ class AddonTests(unittest.TestCase):
             UnitIsVisible = function() return true end
             ns.Tracker.Refresh()
             s = ns.Tracker.Summary()
-            assert(#s.unreadable == 0 and ns.Status.Mood(s) == 'grumpy')
+            assert(#s.unreadable == 0 and ns.Tracker.Status.Mood(s) == 'grumpy')
             local named = false
             for _, p in ipairs(s.problems) do if p.who == far and p.status == 'bad' then named = true end end
             assert(named)
@@ -759,12 +759,12 @@ class AddonTests(unittest.TestCase):
             assert(Buffeteria_CastButton:GetAttribute('spell'))
             assert(Buffeteria_CastButton:GetAttribute('type2') == 'macro')
             assert(Buffeteria_CastButton:GetAttribute('macrotext2') == '')
-            ns.Preview.Set(true)
+            ns.Tracker.Preview.Set(true)
             assert(not Buffeteria_CastButton:GetAttribute('spell'))
             assert(not Buffeteria_CastButton:GetAttribute('unit'))
             assert(not Buffeteria_CancelButton:GetAttribute('spell'))
             assert(not Buffeteria_CancelButton:IsShown())
-            ns.Preview.Set(false)
+            ns.Tracker.Preview.Set(false)
             local spell, unit = Buffeteria_CastButton:GetAttribute('spell'), Buffeteria_CastButton:GetAttribute('unit')
             COMBAT = true
             ns.Tracker.Refresh()
@@ -806,9 +806,9 @@ class AddonTests(unittest.TestCase):
             assert(not Buffeteria_Prefs:IsShown())
             settingsPage:Show() -- It starts shown in the mock; force its OnShow.
             settingsPage:GetScript('OnShow')(settingsPage)
-            assert(findWidget('My preferences').parent.parent == settingsPage)
+            assert(findWidget('My preferences').parent.parent.parent == settingsPage)
             ns.Options.Toggle()
-            assert(findWidget('My preferences').parent.parent == Buffeteria_Prefs)
+            assert(findWidget('My preferences').parent.parent.parent == Buffeteria_Prefs)
             COMBAT = true
             overlay:GetScript('OnDragStart')(overlay)
             assert(not Buffeteria_Tracker.moving)
@@ -828,7 +828,7 @@ class AddonTests(unittest.TestCase):
             assert(button:GetAttribute('useOnKeyDown') == false)
             assert(not button.pushedTexture)
             local casts, toggles = 0, 0
-            ns.Actions.MarkCast = function() casts = casts + 1 end
+            ns.Tracker.Actions.MarkCast = function() casts = casts + 1 end
             ns.Options.Toggle = function() toggles = toggles + 1 end
             button:GetScript('OnMouseDown')(button)
             assert(button.icon.vertexColor[1] == 0.75)
@@ -907,6 +907,37 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.showTracker ~= visible)
         """)
 
+    def test_announce_bursts_collapse_and_plan_messages_skip_roster_rebuilds(self):
+        lua = full_addon()
+        lua.execute("""
+            runTimers(); delivered = {}
+            WOW_TIME = WOW_TIME + 1 -- inside the anti-spam window of the login broadcast
+            for _ = 1, 10 do ns.Comm.Announce() end
+            assert(#timers == 1)
+            runTimers()
+            local states = 0
+            for _, message in ipairs(delivered) do if message:sub(1, 2) == 'S|' then states = states + 1 end end
+            assert(states == 1)
+            local builds, build = 0, ns.Roster.Build
+            ns.Roster.Build = function() builds = builds + 1; return build() end
+            ns.Comm.OnMessage('BUFFETERIA', 'P|2|B-Realm|1|KINGS|5000|B-Realm', 'PARTY', 'B-Realm')
+            assert(builds == 0 and ns.Paladins.Get('B-Realm', 'WARRIOR') == 'KINGS')
+        """)
+
+    def test_every_settings_entry_point_updates_open_controls(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.Options.Toggle()
+            local tab = findWidget('Settings').parent; tab:GetScript('OnClick')(tab)
+            local show, minimap = findWidget('Show tracker').parent, findWidget('Minimap button').parent
+            assert(show:GetChecked() and minimap:GetChecked())
+            Buffeteria_MinimapButton:GetScript('OnClick')(Buffeteria_MinimapButton, 'RightButton')
+            assert(not ns.db.showTracker and not show:GetChecked() and not Buffeteria_Tracker:IsShown())
+            SlashCmdList.BUFFETERIA('show'); assert(show:GetChecked() and Buffeteria_Tracker:IsShown())
+            SlashCmdList.BUFFETERIA('minimap')
+            assert(ns.db.minimap.hide and not minimap:GetChecked() and not Buffeteria_MinimapButton:IsShown())
+        """)
+
     def test_lua51_syntax(self):
         lua = runtime()
         compile_lua = lua.eval("function(s,n) local f,e=loadstring(s,n); assert(f,e) end")
@@ -966,13 +997,13 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
             ns.Paladins.Init(); ns.roster = ns.Roster.Build(); ns.result = ns.Solver.Solve(ns.roster)
-            ns.Preview = {active=false}; ns.Tracker = {Refresh=function() end}
+            ns.Tracker.Preview = {active=false}; ns.Tracker.Refresh = function() end
         """)
-        for name in ("Features/Tracker/View.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("""
             ns.Options.Toggle()
-            local tab = findWidget('Paladins')
+            local tab = findWidget('Paladins').parent
             assert(tab:IsVisible())
             tab:GetScript('OnClick')(tab)
             local heading = findWidget('Blessings and auras')
@@ -993,7 +1024,7 @@ class AddonTests(unittest.TestCase):
             assert(heading:IsVisible() and not Buffeteria_Prefs:IsShown())
             ns.Options.Toggle()
             assert(heading:IsVisible() and Buffeteria_Prefs:IsShown())
-            local mine = findWidget('My preferences'); mine:GetScript('OnClick')(mine)
+            local mine = findWidget('My preferences').parent; mine:GetScript('OnClick')(mine)
             assert(not heading:IsVisible())
             local override = findWidget('Override the Paladins class plan').parent
             override:SetChecked(true); override:GetScript('OnClick')(override)
@@ -1039,7 +1070,7 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             ns.Options.Toggle()
-            local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
+            local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
             local panel = findWidget('Blessings and auras').parent
             local function shownSeats()
                 local n = 0
@@ -1091,7 +1122,7 @@ class AddonTests(unittest.TestCase):
             end
             ns.Options.Toggle()
             assert(Buffeteria_Prefs:GetWidth() == 652 and panel:GetParent():GetWidth() == 652)
-            local mine = findWidget('My preferences'); mine:GetScript('OnClick')(mine)
+            local mine = findWidget('My preferences').parent; mine:GetScript('OnClick')(mine)
             assert(not panel:IsVisible())
         """)
 
@@ -1099,7 +1130,7 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             ns.Options.Toggle()
-            local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
+            local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
             local panel = findWidget('Blessings and auras').parent
             ns.roster.members['A-Realm'].caps = {WISDOM=true}
             ns.roster.members['B-Realm'].hasAddon = false
@@ -1127,11 +1158,11 @@ class AddonTests(unittest.TestCase):
         lua = self.core_runtime("ROGUE")
         lua.execute("""
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
-            ns.roster = ns.Roster.Build(); ns.Preview = {active=false}; ns.Tracker = {}
+            ns.roster = ns.Roster.Build(); ns.Tracker.Preview = {active=false}
         """)
-        for name in ("Features/Tracker/View.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
-        lua.execute("ns.Options.Toggle(); assert(not findWidget('Paladins'):IsVisible())")
+        lua.execute("ns.Options.Toggle(); assert(not findWidget('Paladins').parent:IsVisible())")
 
     def test_manual_plan_and_opt_in_priority(self):
         self.solver("""
@@ -1384,13 +1415,13 @@ class AddonTests(unittest.TestCase):
             assert(r.expected['Rogue-Realm'].SALV == pal and r.overrides['Rogue-Realm'][pal] == 'SALV')
             assert(r.expected['A-Realm'].KINGS == pal and not r.overrides['A-Realm'])
             -- A paladin briefly missing from the roster keeps their plan.
-            GROUP_SIZE = 1; NAMES.party1 = 'Rogue'; CLASSES.party1 = 'ROGUE'; ns.Roster.Build()
+            GROUP_SIZE = 1; NAMES.party1 = 'Rogue'; CLASSES.party1 = 'ROGUE'; ns.Assignments.Resolve(); runTimers()
             assert(ns.Paladins.Get(pal, 'ROGUE') == 'MIGHT')
             GROUP_SIZE = 2; NAMES.party1 = 'Pal'; CLASSES.party1 = 'PALADIN'
             ns.Assignments.Resolve(); runTimers()
             assert(ns.result.pally.ROGUE[pal] == 'MIGHT')
             -- Leaving the group clears other paladins' cells.
-            GROUP_SIZE = 0; IsInGroup = function() return false end; ns.Roster.Build()
+            GROUP_SIZE = 0; IsInGroup = function() return false end; ns.Assignments.Resolve(); runTimers()
             assert(ns.Paladins.Get(pal, 'ROGUE') == 'AUTO')
         """)
 
@@ -1553,6 +1584,7 @@ class AddonTests(unittest.TestCase):
             function UnitIsVisible() return true end
             C_UnitAuras = {GetAuraDataByIndex=function() return nil end}
             ns.WoW.FullName = function() return 'Pal' end; ns.WoW.Short = function(n) return n end
+            ns.WoW.Me = function() return ns.WoW.FullName('player') end
             ns.WoW.ClassName = function(c) return c end
             ns.WoW.SpellName = function(id) return tostring(id) end
             ns.WoW.SpellIcon = function(id) return id end
@@ -1561,31 +1593,31 @@ class AddonTests(unittest.TestCase):
             ns.db = {warnMinutes=5}
             ns.roster = {members={R={class='ROGUE',unit='party1'}, C={class='ROGUE',unit='party2'}},
                 units={R='party1', C='party2'}}
-            ns.result = {groups={}, pally={ROGUE={Pal='KINGS'}},
+            ns.result = {groups={}, auras={}, pally={ROGUE={Pal='KINGS'}},
                 expected={R={KINGS='Pal'}, C={MIGHT='Pal'}}, overrides={C={Pal='MIGHT'}}}
         """)
         load(lua, "Features/Tracker/Scan.lua")
         load(lua, "Features/Tracker/Actions.lua")
         lua.execute("""
-            local summary = ns.Scan.Update()
+            local summary = ns.Tracker.Scan.Update()
             assert(summary.next and not summary.next.big)
             assert(summary.next.spell == '20217')
             ns.result.overrides = {}; ns.result.expected.C = {KINGS='Pal'}
-            summary = ns.Scan.Update()
+            summary = ns.Tracker.Scan.Update()
             assert(summary.next.big and summary.next.spell == '25898')
             ns.result.overrides = {C={Pal=false}}; ns.result.expected.C = {}
-            assert(not ns.Scan.Update().next.big)
+            assert(not ns.Tracker.Scan.Update().next.big)
             ns.WoW.FullName = function() return 'R' end
             ns.roster.members.R.excluded = {WISDOM=true}
             ns.result.expected.R = {WISDOM='Pal'}
             C_UnitAuras.GetAuraDataByIndex = function(_, i)
                 if i == 1 then return {name='25290', expirationTime=0} end
             end
-            summary = ns.Scan.Update()
-            assert(not summary.cancel and not ns.Scan.UnwantedOnMe())
+            summary = ns.Tracker.Scan.Update()
+            assert(not summary.cancel and not ns.Tracker.Scan.UnwantedOnMe())
             for _, problem in ipairs(summary.problems) do assert(problem.status ~= 'unwanted') end
             ns.result.expected.R = {}
-            assert(ns.Scan.UnwantedOnMe() == '25290')
+            assert(ns.Tracker.Scan.UnwantedOnMe() == '25290')
         """)
 
 
@@ -1637,7 +1669,7 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             ns.Options.Toggle()
-            local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
+            local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
             local panel = findWidget('Blessings and auras').parent
             -- B has no add-on, so only baseline auras are assumed: it gets Devotion,
             -- and A takes Concentration, which only A knows.
@@ -1843,7 +1875,7 @@ class AddonTests(unittest.TestCase):
             ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.THORNS.warn == 1)
             IsSpellInRange = function() return 0 end
-            assert(not ns.Actions.Next(WOW_TIME, 300))
+            assert(not ns.Tracker.Actions.Next(WOW_TIME, 300))
             ns.Comm.OnMessage('BUFFETERIA', 'S|2||KINGS||MIGHT|0', 'PARTY', 'B-Realm'); runTimers()
             assert(not ns.result.expected['B-Realm'].THORNS) -- explicit peer opt-out beats role default
         """)
@@ -1862,11 +1894,11 @@ class AddonTests(unittest.TestCase):
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='party1'} end
             end
-            assert(ns.Scan.MissingAura() == 'CONC')
+            assert(ns.Tracker.Scan.MissingAura() == 'CONC')
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='player'} end
             end
-            assert(ns.Scan.MissingAura() == nil)
+            assert(ns.Tracker.Scan.MissingAura() == nil)
             ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.CONC.bad == 0)
             assert(button:GetAttribute('spell') ~= '19746')

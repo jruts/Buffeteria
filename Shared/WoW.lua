@@ -76,6 +76,13 @@ function ns.WoW.FullName(unit)
 	return ns.WoW.NormalizeName(realm and realm ~= "" and (name .. "-" .. realm) or name)
 end
 
+function ns.WoW.Me() return ns.WoW.FullName("player") end
+
+function ns.WoW.PlayerClass()
+	local _, class = UnitClass("player")
+	return class
+end
+
 function ns.WoW.Short(full) return (full and full:match("^[^-]+")) or full or "?" end
 
 -- Assigned combat roles, with the Classic raid main-tank assignment as fallback.

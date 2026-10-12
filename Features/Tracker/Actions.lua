@@ -2,21 +2,21 @@
 local _, ns = ...
 local Buffs = ns.Buffs
 local Actions = {}
-ns.Actions = Actions
+ns.Tracker.Actions = Actions
+local EMPTY = {}
 local pendingUntil = {} -- ["name:key"] = expiry; wait for a cast's aura to arrive
 
 local function inRange(spell, unit)
 	if C_Spell and C_Spell.IsSpellInRange then
 		local ok, r = pcall(C_Spell.IsSpellInRange, spell, unit)
-		if ok and r == false then return false end
-		return true
+		return not (ok and r == false)
 	end
 	if IsSpellInRange then return IsSpellInRange(spell, unit) ~= 0 end
 	return true
 end
 
 local function hasReagent(list)
-	for _, id in ipairs(list or {}) do if ns.WoW.ItemCount(id) > 0 then return true end end
+	for _, id in ipairs(list or EMPTY) do if ns.WoW.ItemCount(id) > 0 then return true end end
 	return false
 end
 
@@ -31,139 +31,114 @@ function Actions.MarkCast(full, key)
 	pendingUntil[full .. ":" .. key] = GetTime() + 3
 end
 
--- My next cast: { spell, unit, icon, label, who, key, status }
-function Actions.Next(now, warnSec)
-	local me, roster, res = ns.WoW.FullName("player"), ns.roster, ns.result
+-- My next cast: { spell, unit, icon, label, who, key, status, big }.
+-- missingAura is my assigned aura when it isn't running.
+function Actions.Next(now, warnSec, missingAura)
+	local me, roster, res = ns.WoW.Me(), ns.roster, ns.result
 	local cands = {}
+	local function casting(full, key) return (pendingUntil[full .. ":" .. key] or 0) > now end
 	local function needs(full, key)
-		if (pendingUntil[full .. ":" .. key] or 0) > now then return nil end
-		local st = ns.Scan.Rate(full, key, now, warnSec)
+		if casting(full, key) then return nil end
+		local st = ns.Tracker.Scan.Rate(full, key, now, warnSec)
 		if st == "bad" or st == "warn" then return st end
 	end
-	local function add(c) cands[#cands + 1] = c end
+	local function mine(full, key) return (res.expected[full] or EMPTY)[key] == me end
+	local function add(buff, spell, icon, unit, who, status, big, label)
+		cands[#cands + 1] = { spell = spell, icon = icon, unit = unit, who = who, key = buff.key, status = status,
+			big = big, label = label or ns.WoW.Short(who) }
+	end
 
-	-- Group buffs (Fort, Spirit, Shadow Prot, Mark, Intellect)
+	-- My living recipients of a buff that match, the needy ones sorted, and the worst status.
+	local function recipients(key, match)
+		local needy, worst, count = {}, "warn", 0
+		for full, m in pairs(roster.members) do
+			if not m.dead and match(m) and mine(full, key) then
+				count = count + 1
+				local st = needs(full, key)
+				if st then needy[#needy + 1] = full; if st == "bad" then worst = "bad" end end
+			end
+		end
+		table.sort(needy)
+		return needy, worst, count
+	end
+	-- One cast covering the needy: the group version (labelled `label`) when big,
+	-- else the single version, on the first needy player in range.
+	local function addCover(buff, needy, worst, big, label)
+		local spell, icon = spellFor(big and buff.groupIds or buff.ids)
+		if not spell then return end
+		for _, full in ipairs(needy) do
+			local unit = roster.units[full]
+			if unit and inRange(spell, unit) then return add(buff, spell, icon, unit, full, worst, big, big and label or nil) end
+		end
+	end
+	local function addSingle(buff, full, status, onSelf)
+		local spell, icon = spellFor(buff.ids)
+		local unit = onSelf and "player" or roster.units[full]
+		if spell and unit and (onSelf or inRange(spell, unit)) then add(buff, spell, icon, unit, full, status, false) end
+	end
+	local function groupVersion(buff) return ns.WoW.KnowsAny(buff.groupIds) and hasReagent(buff.reagents) end
+
+	-- Group buffs (Fort, Spirit, Shadow Prot, Mark, Intellect), per raid group.
 	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
-		for g, caster in pairs((res.groups or {})[buff.key] or {}) do
+		for g, caster in pairs(res.groups[buff.key] or EMPTY) do
 			if caster == me then
-				local needy, wanters, worst = {}, 0, "warn"
-				for full, m in pairs(roster.members) do
-					if m.group == g and not m.dead and (res.expected[full] or {})[buff.key] == me then
-						wanters = wanters + 1
-						local st = needs(full, buff.key)
-						if st then needy[#needy + 1] = full; if st == "bad" then worst = "bad" end end
-					end
-				end
+				local needy, worst, wanters = recipients(buff.key, function(m) return m.group == g end)
 				if #needy > 0 then
-					table.sort(needy)
-					local gName, gIcon = spellFor(buff.groupIds)
-					local sName, sIcon = spellFor(buff.ids)
-					local useGroup = gName and hasReagent(buff.reagents) and wanters >= 2 and #needy >= math.min(3, wanters)
-					local spell, icon = (useGroup and gName or sName), (useGroup and gIcon or sIcon)
-					if spell then
-						for _, full in ipairs(needy) do
-							local unit = roster.units[full]
-							if unit and inRange(spell, unit) then
-								add({ spell = spell, icon = icon, unit = unit, who = full, key = buff.key, status = worst,
-									big = useGroup, label = useGroup and ("Group " .. g) or ns.WoW.Short(full) })
-								break
-							end
-						end
-					end
+					local big = groupVersion(buff) and wanters >= 2 and #needy >= math.min(3, wanters)
+					addCover(buff, needy, worst, big, "Group " .. g)
 				end
 			end
+		end
+	end
+
+	-- Blessings: Greater per class, unless it would overwrite someone's personal
+	-- assignment from me; then singles.
+	for class, map in pairs(res.pally) do
+		local buff = map[me] and Buffs.byKey[map[me]]
+		if buff then
+			local needy, worst = recipients(buff.key, function(m) return m.class == class end)
+			if #needy > 0 then
+				local big = groupVersion(buff)
+				for full, m in pairs(roster.members) do
+					if big and m.class == class and not m.dead and (res.overrides[full] or EMPTY)[me] ~= nil then big = false end
+				end
+				addCover(buff, needy, worst, big, ns.WoW.ClassName(class))
+			end
+		end
+	end
+	for full, map in pairs(res.overrides) do
+		local m = roster.members[full]
+		if map[me] and m and not m.dead then
+			local st = needs(full, map[me])
+			if st then addSingle(Buffs.byKey[map[me]], full, st, false) end
 		end
 	end
 
 	-- Tank buffs always use singles; Righteous Fury belongs to the caster alone.
 	for _, buff in ipairs(Buffs.TANK_BUFFS) do
-		local spell, icon = spellFor(buff.ids)
-		if spell then
-			for full, m in pairs(roster.members) do
-				if not m.dead and (res.expected[full] or {})[buff.key] == me and (not buff.selfOnly or full == me) then
-					local st = needs(full, buff.key)
-					local unit = buff.selfOnly and "player" or roster.units[full]
-					if st and unit and (buff.selfOnly or inRange(spell, unit)) then
-						add({ spell = spell, icon = icon, unit = unit, who = full, key = buff.key, status = st,
-							big = false, label = ns.WoW.Short(full) })
-					end
-				end
+		for full, m in pairs(roster.members) do
+			if not m.dead and mine(full, buff.key) and (not buff.selfOnly or full == me) then
+				local st = needs(full, buff.key)
+				if st then addSingle(buff, full, st, buff.selfOnly) end
 			end
 		end
 	end
 
 	-- Self buffs (Battle Shout): only once there is enough rage to cast.
+	local player = roster.members[me]
 	for _, buff in ipairs(Buffs.SELF_BUFFS) do
-		local spell, icon = spellFor(buff.ids)
-		local m = roster.members[me]
-		if spell and m and not m.dead and (res.expected[me] or {})[buff.key] == me and ns.WoW.SpellUsable(spell) then
+		local spell = spellFor(buff.ids)
+		if player and not player.dead and mine(me, buff.key) and spell and ns.WoW.SpellUsable(spell) then
 			local st = needs(me, buff.key)
-			if st then
-				add({ spell = spell, icon = icon, unit = "player", who = me, key = buff.key, status = st,
-					big = false, label = ns.WoW.Short(me) })
-			end
-		end
-	end
-
-	-- Blessings: Greater per class, then personal overrides.
-	local bless = Buffs.byKey
-	for class, map in pairs(res.pally or {}) do
-		local key = map[me]
-		if key then
-			local b = bless[key]
-			local needy, worst = {}, "warn"
-			for full, m in pairs(roster.members) do
-				if m.class == class and not m.dead and (res.expected[full] or {})[key] == me then
-					local st = needs(full, key)
-					if st then needy[#needy + 1] = full; if st == "bad" then worst = "bad" end end
-				end
-			end
-			if #needy > 0 then
-				table.sort(needy)
-				local gName, gIcon = spellFor(b.groupIds)
-				local useGreater = gName and ns.WoW.ItemCount(Buffs.BLESSING_REAGENT) > 0
-				-- Greater Blessings also hit players with a different personal
-				-- assignment. Use singles so a class refresh cannot overwrite it.
-				for full, member in pairs(roster.members) do
-					if member.class == class and not member.dead and (res.overrides[full] or {})[me] ~= nil then
-						useGreater = false; break
-					end
-				end
-				local sName, sIcon = spellFor(b.ids)
-				local spell, icon = (useGreater and gName or sName), (useGreater and gIcon or sIcon)
-				if spell then
-					for _, full in ipairs(needy) do
-						local unit = roster.units[full]
-						if unit and inRange(spell, unit) then
-							add({ spell = spell, icon = icon, unit = unit, who = full, key = key, status = worst, big = useGreater,
-								label = useGreater and ns.WoW.ClassName(class) or ns.WoW.Short(full) })
-							break
-						end
-					end
-				end
-			end
-		end
-	end
-	for full, map in pairs(res.overrides or {}) do
-		local key = map[me]
-		local m = roster.members[full]
-		if key and m and not m.dead then
-			local st = needs(full, key)
-			local spell, icon = spellFor(bless[key].ids)
-			local unit = roster.units[full]
-			if st and spell and unit and inRange(spell, unit) then
-				add({ spell = spell, icon = icon, unit = unit, who = full, key = key, status = st, big = false, label = ns.WoW.Short(full) })
-			end
+			if st then addSingle(buff, me, st, true) end
 		end
 	end
 
 	-- My assigned aura: a self-cast toggle, so it never needs a target.
-	local aura = ns.Scan.MissingAura()
-	if aura and (pendingUntil[me .. ":" .. aura] or 0) <= now then
-		local spell, icon = spellFor(bless[aura].ids)
-		if spell then
-			add({ spell = spell, icon = icon, unit = "player", who = me, key = aura, status = "bad", big = true, label = "Aura" })
-		end
+	if missingAura and not casting(me, missingAura) then
+		local buff = Buffs.byKey[missingAura]
+		local spell, icon = spellFor(buff.ids)
+		if spell then add(buff, spell, icon, "player", me, "bad", true, "Aura") end
 	end
 
 	table.sort(cands, function(a, b)

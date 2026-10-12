@@ -14,7 +14,6 @@ Shared/WoW.lua
 Features/Buffs/Catalog.lua
 Shared/UI.lua
 Features/Sync/Protocol.lua
-Features/Tracker/Status.lua
 App/Database.lua
 Features/Preferences/Model.lua
 Features/Roster/Roster.lua
@@ -22,12 +21,16 @@ Features/Assignments/Solver.lua
 Features/Assignments/Assignments.lua
 Features/Paladins/Plan.lua
 Features/Sync/Comm.lua
+Features/Tracker/Status.lua
 Features/Tracker/Scan.lua
 Features/Tracker/Actions.lua
 Features/Tracker/Preview.lua
+Features/Tracker/Layout.lua
+Features/Tracker/Tooltip.lua
 Features/Tracker/Tracker.lua
 Features/Tracker/View.lua
 Features/Minimap/Minimap.lua
+Features/Preferences/RankList.lua
 Features/Preferences/View.lua
 Features/Paladins/View.lua
 Features/Options/Window.lua

@@ -35,7 +35,7 @@ Buffs.BLESSINGS = {
 	{ key = "LIGHT",  label = "Light",     ids = {19977,19978,19979},                       groupIds = {25890} },
 	{ key = "SANCT",  label = "Sanctuary", ids = {20911,20912,20913,20914},                 groupIds = {25899} },
 }
-Buffs.BLESSING_REAGENT = 21177 -- Symbol of Kings
+Buffs.BLESSING_REAGENT = 21177 -- Symbol of Kings, for every Greater Blessing
 
 -- Paladin auras, in auto-assignment priority. Each paladin runs one; no two share one.
 Buffs.AURAS = {
@@ -52,7 +52,7 @@ Buffs.byKey = {}
 for _, b in ipairs(Buffs.GROUP_BUFFS) do b.kind = "group"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.TANK_BUFFS) do b.kind = "tank"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.SELF_BUFFS) do b.kind = "self"; Buffs.byKey[b.key] = b end
-for _, b in ipairs(Buffs.BLESSINGS) do b.kind = "blessing"; Buffs.byKey[b.key] = b end
+for _, b in ipairs(Buffs.BLESSINGS) do b.kind = "blessing"; b.reagents = { Buffs.BLESSING_REAGENT }; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey[b.key] = b end
 
 Buffs.BLESSING_KEYS = {}
@@ -80,9 +80,26 @@ Buffs.DEFAULT_ORDER = {
 	SHAMAN  = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
 }
 
+function Buffs.DefaultOrder(class) return Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR end
+
+-- Whether a buff is offered to a class: self-only buffs belong to their own class.
+function Buffs.OfferedTo(buff, class) return not buff.selfOnly or buff.class == class end
+
+-- Buffs a class can ask for in the Buffs tree: group buffs, then its own self buffs.
+function Buffs.Wantable(class)
+	local out = {}
+	for _, buff in ipairs(Buffs.GROUP_BUFFS) do out[#out + 1] = buff end
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do
+		if Buffs.OfferedTo(buff, class) then out[#out + 1] = buff end
+	end
+	return out
+end
+
 function Buffs.DefaultWants(class)
 	local mana = Buffs.MANA_CLASSES[class] or false
-	return { FORT = true, SPIRIT = mana, SHADOW = false, MOTW = true, INT = mana, BSHOUT = class == "WARRIOR" }
+	local wants = { FORT = true, SPIRIT = mana, SHADOW = false, MOTW = true, INT = mana }
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do wants[buff.key] = buff.class == class end
+	return wants
 end
 
 -- What we assume a player WITHOUT the add-on can cast (talents unknown, so be conservative).
@@ -105,6 +122,8 @@ function Buffs.SplitOrder(order)
 	return ranking, excluded
 end
 
+function Buffs.DefaultRanking(class) return Buffs.SplitOrder(Buffs.DefaultOrder(class)) end
+
 -- Make sure an order list contains every blessing exactly once plus the divider.
 function Buffs.NormalizeOrder(order, class)
 	local seen, out, hasBar = {}, {}, false
@@ -113,7 +132,7 @@ function Buffs.NormalizeOrder(order, class)
 		elseif Buffs.byKey[k] and Buffs.byKey[k].kind == "blessing" and not seen[k] then seen[k] = true; out[#out + 1] = k end
 	end
 	if not hasBar then out[#out + 1] = "|" end
-	for _, k in ipairs((Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR)) do
+	for _, k in ipairs(Buffs.DefaultOrder(class)) do
 		if k ~= "|" and not seen[k] then seen[k] = true; table.insert(out, k) end
 	end
 	return out

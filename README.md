@@ -243,19 +243,29 @@ Each feature owns its logic and, when needed, its view:
 | Directory | Responsibility |
 | --- | --- |
 | `Features/Buffs` | Spell catalog and class defaults |
-| `Features/Preferences` | Personal buff choices, reset behavior, and preference controls |
-| `Features/Roster` | Group members, peer preferences, and spell capabilities |
+| `Features/Preferences` | Personal buff choices, reset behavior, the drag-and-drop ranking, and preference controls |
+| `Features/Roster` | Group members, peer preferences, spell capabilities, and member names |
 | `Features/Assignments` | Pure assignment solver, recomputation, summaries, and announcements |
 | `Features/Paladins` | Shared class plans and their editor |
-| `Features/Sync` | Message protocol, transport, and retry queue |
-| `Features/Tracker` | Aura observations, next-cast selection, status, secure buttons, and preview |
+| `Features/Sync` | Wire format (`Protocol`), transport, and retry queue |
+| `Features/Tracker` | Aura observations, next-cast selection, status, icon layout, tooltips, secure buttons, and preview |
 | `Features/Minimap` | Minimap button and positioning |
 | `Features/Options` | Window and Settings page hosting the feature views |
 
 `App` initializes the runtime snapshots and saved variables, routes WoW events,
-and exposes commands. `Shared` contains the WoW compatibility helpers, reused UI
-controls, and internal notifications. The existing saved-variable keys and
-version 2 message format are preserved.
+and exposes commands. `App/Database.lua` validates saved settings against one
+table of ranges and choices, which the settings controls also read. `Shared`
+contains the WoW compatibility helpers, reused UI controls, and internal
+notifications; it never depends on a feature. The existing saved-variable keys
+and version 2 message format are preserved.
+
+Each roster read flows one way: `Assignments.Resolve` builds the roster, lets
+`Paladins.Attach` add the shared class plan, runs the pure solver, and emits
+`AssignmentsChanged`. Views read the result through `ns.Assignments` accessors.
+Change a display setting with `ns.Database.Set`, which emits `SettingsChanged`
+so the tracker, minimap button, and open controls follow. The tracker emits
+`SummaryChanged` after each scan. Tracker modules live under `ns.Tracker`
+(`ns.Tracker.Scan`, `ns.Tracker.Actions`, and so on).
 
 Keep new behavior in its owning feature. Use its namespace (`ns.Preferences`,
 `ns.Paladins`, etc.) for public operations; keep implementation helpers local.

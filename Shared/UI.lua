@@ -1,6 +1,6 @@
 -- Controls and textures used by more than one feature.
 local _, ns = ...
-local UI = { ICON = ns.mediaPath .. "Icon" }
+local UI = { ICON = ns.mediaPath .. "Icon", WHITE = "Interface\\Buttons\\WHITE8X8", GOLD = { 1, 0.82, 0 } }
 ns.UI = UI
 local icons = {}
 
@@ -17,7 +17,7 @@ UI.TREE_ART = {
 	SHAMAN = { "ShamanElementalCombat", "ShamanEnhancement", "ShamanRestoration" },
 }
 -- Talent slot tints: learned, available, unavailable, and conflict.
-UI.SLOT_COLORS = { gold = { 1, 0.82, 0 }, green = { 0.1, 1, 0.1 }, grey = { 0.5, 0.5, 0.5 }, red = { 1, 0.25, 0.2 } }
+UI.SLOT_COLORS = { gold = UI.GOLD, green = { 0.1, 1, 0.1 }, grey = { 0.5, 0.5, 0.5 }, red = { 1, 0.25, 0.2 } }
 -- Visible area of the four-piece talent art (TopLeft 256x256, TopRight 64x256,
 -- BottomLeft 256x128, BottomRight 64x128), as the native talent frame shows it.
 local ART_W, ART_H = 296, 332
@@ -28,6 +28,15 @@ function UI.BuffIcon(key)
 		icons[key] = (buff.groupIds[1] and ns.WoW.SpellIcon(buff.groupIds[1])) or ns.WoW.SpellIcon(buff.ids[1]) or 134400
 	end
 	return icons[key]
+end
+
+-- A dark panel with the tooltip border; edge 12 suits cards, 10 or less small controls.
+function UI.Backdrop(frame, edgeSize, background, border)
+	local inset = edgeSize >= 12 and 3 or 2
+	frame:SetBackdrop({ bgFile = UI.WHITE, edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = edgeSize,
+		insets = { left = inset, right = inset, top = inset, bottom = inset } })
+	if background then frame:SetBackdropColor(unpack(background)) end
+	if border then frame:SetBackdropBorderColor(unpack(border)) end
 end
 
 function UI.Checkbox(parent, label, x, y, onClick)
@@ -42,12 +51,19 @@ function UI.Checkbox(parent, label, x, y, onClick)
 	return button
 end
 
-function UI.AnnounceButton(parent)
+-- A standard push button, with an optional tooltip.
+function UI.Button(parent, label, width, onClick, tip)
 	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-	button:SetSize(160, 22)
-	button:SetPoint("BOTTOM", 0, 10)
-	button:SetText("Announce to group")
-	button:SetScript("OnClick", ns.Assignments.Announce)
+	button:SetSize(width, 22)
+	button:SetText(label)
+	button:SetScript("OnClick", function() onClick() end)
+	if tip then
+		button:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:SetText(label)
+			GameTooltip:AddLine(tip, 1, 1, 1, true); GameTooltip:Show()
+		end)
+		button:SetScript("OnLeave", GameTooltip_Hide)
+	end
 	return button
 end
 
@@ -57,6 +73,16 @@ function UI.Text(parent, font, x, y, width, label)
 	if width then region:SetWidth(width) end
 	region:SetJustifyH("LEFT"); region:SetText(label or "")
 	return region
+end
+
+-- A small framed box showing one value, like the talent panel's point counter.
+function UI.ValueBox(parent, width, height, font)
+	local box = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+	box:SetSize(width, height)
+	UI.Backdrop(box, 10, { 0, 0, 0, 0.8 }, { 0.6, 0.6, 0.6, 1 })
+	box.value = box:CreateFontString(nil, "OVERLAY", font)
+	box.value:SetPoint("CENTER", 0, 0)
+	return box
 end
 
 -- The gold line under talent tree headers, with a dark shadow beneath it.
@@ -69,21 +95,10 @@ local function goldRule(parent)
 	return line
 end
 
--- A sub-heading inside a tree: small gold caption with a rule running to the right edge.
-function UI.Section(parent, label, x, y)
-	local text = UI.Text(parent, "GameFontNormalSmall", x, y, nil, label)
-	local line = goldRule(parent)
-	line:SetPoint("LEFT", text, "RIGHT", 6, 0); line:SetPoint("RIGHT", parent, "RIGHT", -10, 0)
-	return text
-end
-
 -- A framed settings group: dark panel, shaded header with an icon and gold title.
 function UI.Card(parent, title, icon)
 	local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-	card:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-	card:SetBackdropColor(0.04, 0.03, 0.02, 0.72); card:SetBackdropBorderColor(0.55, 0.45, 0.25, 1)
+	UI.Backdrop(card, 12, { 0.04, 0.03, 0.02, 0.72 }, { 0.55, 0.45, 0.25, 1 })
 	local shade = card:CreateTexture(nil, "BORDER")
 	shade:SetPoint("TOPLEFT", 3, -3); shade:SetPoint("TOPRIGHT", -3, -3); shade:SetHeight(25)
 	shade:SetColorTexture(0, 0, 0, 0.45)
@@ -96,22 +111,20 @@ function UI.Card(parent, title, icon)
 	return card
 end
 
--- A selectable pill button styled like the window's tabs. The label lives on its
--- own font string so lookups by label return the caption, whose parent is the chip.
-function UI.Chip(parent, label, width, onClick)
+-- A selectable pill button, also used for the window's tabs. The label lives on
+-- its own font string so lookups by label return the caption, whose parent is the chip.
+function UI.Chip(parent, label, width, onClick, font)
 	local chip = CreateFrame("Button", nil, parent, "BackdropTemplate")
 	chip:SetSize(width, 22)
-	chip:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
-		insets = { left = 2, right = 2, top = 2, bottom = 2 } })
-	chip.caption = chip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	UI.Backdrop(chip, 10)
+	chip.caption = chip:CreateFontString(nil, "OVERLAY", font or "GameFontHighlightSmall")
 	chip.caption:SetPoint("CENTER", 0, 0); chip.caption:SetText(label)
 	chip:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
 	function chip:SetChecked(value)
 		self.checked = value and true or false
 		if self.checked then
-			self:SetBackdropColor(0.32, 0.22, 0.04, 0.95); self:SetBackdropBorderColor(1, 0.82, 0, 1)
-			self.caption:SetTextColor(1, 0.82, 0)
+			self:SetBackdropColor(0.32, 0.22, 0.04, 0.95); self:SetBackdropBorderColor(UI.GOLD[1], UI.GOLD[2], UI.GOLD[3], 1)
+			self.caption:SetTextColor(unpack(UI.GOLD))
 		else
 			self:SetBackdropColor(0, 0, 0, 0.6); self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 			self.caption:SetTextColor(0.75, 0.75, 0.75)
@@ -121,12 +134,6 @@ function UI.Chip(parent, label, width, onClick)
 	chip:SetChecked(false)
 	chip:SetScript("OnClick", function(self) onClick(self) end)
 	return chip
-end
-
--- An icon embedded in a font string, trimmed like an action button.
-function UI.InlineIcon(texture, size)
-	size = size or 14
-	return ("|T%s:%d:%d:0:0:64:64:5:59:5:59|t"):format(tostring(texture), size, size)
 end
 
 -- Talent rank badge: the small numbered box at a talent button's corner.
@@ -152,21 +159,13 @@ function UI.TalentButton(parent)
 	button.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
 	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	button:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
-	button.rankBorder, button.rank = badge(button)
-	button.rankBorder:SetPoint("CENTER", button, "BOTTOMRIGHT", 0, 0)
 	function button:SetState(state, texture)
 		local color = UI.SLOT_COLORS[state] or UI.SLOT_COLORS.grey
 		self.state = state
 		self.icon:SetTexture(texture)
 		self.icon:SetDesaturated(state == "grey")
 		self.slot:SetVertexColor(color[1], color[2], color[3])
-		self.rank:SetTextColor(color[1], color[2], color[3])
 	end
-	function button:SetRank(text)
-		self.rank:SetText(text or "")
-		self.rankBorder:SetShown(text ~= nil); self.rank:SetShown(text ~= nil)
-	end
-	button:SetRank(nil)
 	return button
 end
 
@@ -274,34 +273,12 @@ function UI.Band(parent, title, help)
 	band.title = UI.Text(parent, "GameFontNormal", 16, -7, nil, title)
 	band.help = UI.Text(parent, "GameFontHighlightSmall", 16, -25, nil, help)
 	band.help:SetPoint("RIGHT", band, "RIGHT", -170, 0); band.help:SetWordWrap(false)
-	band.box = CreateFrame("Frame", nil, band, "BackdropTemplate")
-	band.box:SetSize(34, 24); band.box:SetPoint("RIGHT", -14, 0)
-	band.box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
-		insets = { left = 2, right = 2, top = 2, bottom = 2 } })
-	band.box:SetBackdropColor(0, 0, 0, 0.8); band.box:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-	band.count = band.box:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-	band.count:SetPoint("CENTER", 0, 0)
+	band.box = UI.ValueBox(band, 34, 24, "GameFontHighlightLarge")
+	band.box:SetPoint("RIGHT", -14, 0)
 	band.countLabel = band:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	band.countLabel:SetPoint("RIGHT", band.box, "LEFT", -8, 0)
 	function band:SetCount(label, value)
-		self.countLabel:SetText(label); self.count:SetText(tostring(value))
+		self.countLabel:SetText(label); self.box.value:SetText(tostring(value))
 	end
 	return band
-end
-
--- Sorted full names of the paladins in the current roster.
-function UI.PaladinNames()
-	local out = {}
-	for full, member in pairs(ns.roster and ns.roster.members or {}) do
-		if member.class == "PALADIN" then out[#out + 1] = full end
-	end
-	table.sort(out)
-	return out
-end
-
--- A roster member's short name in class color, or the plain short name.
-function UI.MemberName(full)
-	local member = ns.roster and ns.roster.members[full]
-	return member and ns.WoW.ClassColorName(full, member.class) or ns.WoW.Short(full)
 end

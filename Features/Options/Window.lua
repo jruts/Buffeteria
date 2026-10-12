@@ -2,67 +2,59 @@
 local _, ns = ...
 local Options = {}
 ns.Options = Options
-local win, content, panel, personal, paladinPanel, trackerPanel, personalTab, paladinTab, settingsTab
+local win, content, panel
 -- The /buff window matches the native talent panel: three trees side by side.
 local WIDTH, HEIGHT, CONTENT_H = 652, 528, 498
+-- Tabs in order; Paladins only exists for paladins.
+local TABS = {
+	{ key = "PERSONAL", label = "My preferences", view = function() return ns.Preferences.View end },
+	{ key = "PALADIN", label = "Paladins", view = function() return ns.Paladins.View end, paladinOnly = true },
+	{ key = "SETTINGS", label = "Settings", view = function() return ns.Tracker.View end },
+}
+
+local function visibleTabs()
+	local out, paladin = {}, ns.WoW.PlayerClass() == "PALADIN"
+	for _, tab in ipairs(TABS) do
+		if paladin or not tab.paladinOnly then out[#out + 1] = tab end
+	end
+	return out
+end
 
 local function layout()
 	local inWindow = content:GetParent() == win
 	local width = inWindow and WIDTH or math.max(WIDTH - 40, panel:GetWidth() - 32)
 	content:SetWidth(width)
 	-- Leave room for the window's portrait; Settings has none.
-	personalTab:ClearAllPoints(); personalTab:SetPoint("TOPLEFT", inWindow and 64 or 16, -4)
-	local _, class = UnitClass("player")
-	settingsTab:ClearAllPoints(); settingsTab:SetPoint("LEFT", class == "PALADIN" and paladinTab or personalTab, "RIGHT", 6, 0)
-	ns.Preferences.View.Layout(width)
-	ns.Paladins.View.Layout(width)
-	ns.Tracker.View.Layout(width)
-end
-
-local function styleTab(tab, selected)
-	tab:SetEnabled(not selected)
-	if selected then
-		tab:SetBackdropColor(0.32, 0.22, 0.04, 0.95); tab:SetBackdropBorderColor(1, 0.82, 0, 1)
-		tab.caption:SetTextColor(1, 0.82, 0)
-	else
-		tab:SetBackdropColor(0, 0, 0, 0.75); tab:SetBackdropBorderColor(0.45, 0.45, 0.45, 1)
-		tab.caption:SetTextColor(0.6, 0.6, 0.6)
+	local previous
+	for _, tab in ipairs(visibleTabs()) do
+		tab.button:ClearAllPoints()
+		if previous then tab.button:SetPoint("LEFT", previous, "RIGHT", 6, 0)
+		else tab.button:SetPoint("TOPLEFT", inWindow and 64 or 16, -4) end
+		previous = tab.button
 	end
+	for _, tab in ipairs(TABS) do tab.view().Layout(width) end
 end
 
--- Talent-panel style top tab ("Primary" / "Secondary").
-local function createTab(label)
-	local tab = CreateFrame("Button", nil, content, "BackdropTemplate")
-	tab:SetSize(150, 24)
-	tab:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-	tab.caption = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	tab.caption:SetPoint("CENTER", 0, 0)
-	tab:SetFontString(tab.caption)
-	tab:SetText(label)
-	tab:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-	return tab
-end
-
-local function selectTab(selected)
-	local _, class = UnitClass("player")
-	if selected == "PALADIN" and class ~= "PALADIN" then selected = "PERSONAL" end
-	personal:SetShown(selected == "PERSONAL")
-	paladinPanel:SetShown(selected == "PALADIN")
-	trackerPanel:SetShown(selected == "SETTINGS")
-	styleTab(personalTab, selected == "PERSONAL")
-	styleTab(paladinTab, selected == "PALADIN")
-	styleTab(settingsTab, selected == "SETTINGS")
-	Options.Refresh()
+local function showTab(selected)
+	if selected == "PALADIN" and ns.WoW.PlayerClass() ~= "PALADIN" then selected = "PERSONAL" end
+	for _, tab in ipairs(TABS) do
+		local on = tab.key == selected
+		tab.panel:SetShown(on)
+		tab.button:SetChecked(on)
+		tab.button:SetEnabled(not on)
+	end
 end
 
 function Options.Refresh()
 	if not content then return end
-	ns.Preferences.View.Refresh()
-	ns.Paladins.View.Refresh()
-	ns.Tracker.View.Refresh()
+	for _, tab in ipairs(TABS) do tab.view().Refresh() end
 	layout()
+end
+
+-- Show the shared controls in a host: this window or the Settings page.
+local function attach(host, top)
+	content:SetParent(host); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, top); content:Show()
+	Options.Refresh()
 end
 
 local function build()
@@ -87,36 +79,23 @@ local function build()
 	content = CreateFrame("Frame", nil, win)
 	content:SetSize(WIDTH, CONTENT_H)
 	content:SetPoint("TOPLEFT", 0, -26)
-	personalTab = createTab("My preferences")
-	paladinTab = createTab("Paladins")
-	settingsTab = createTab("Settings")
-	paladinTab:SetPoint("LEFT", personalTab, "RIGHT", 6, 0)
-	local _, playerClass = UnitClass("player")
-	paladinTab:SetShown(playerClass == "PALADIN")
-	personal = ns.Preferences.View.Create(content)
-	paladinPanel = ns.Paladins.View.Create(content)
-	trackerPanel = ns.Tracker.View.Create(content)
-	personalTab:SetScript("OnClick", function() selectTab("PERSONAL") end)
-	paladinTab:SetScript("OnClick", function() selectTab("PALADIN") end)
-	settingsTab:SetScript("OnClick", function() selectTab("SETTINGS") end)
-
-	paladinPanel:Hide()
-	trackerPanel:Hide()
-	styleTab(personalTab, true); styleTab(paladinTab, false)
-	styleTab(settingsTab, false)
-	win:SetScript("OnShow", function()
-		content:SetParent(win); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -26); content:Show()
-		Options.Refresh()
-	end)
+	local paladin = ns.WoW.PlayerClass() == "PALADIN"
+	for _, tab in ipairs(TABS) do
+		-- Talent-panel style top tab ("Primary" / "Secondary").
+		tab.button = ns.UI.Chip(content, tab.label, 150, function() showTab(tab.key); Options.Refresh() end, "GameFontNormal")
+		tab.button:SetShown(paladin or not tab.paladinOnly)
+	end
+	for _, tab in ipairs(TABS) do tab.panel = tab.view().Create(content) end
+	showTab("PERSONAL")
+	win:SetScript("OnShow", function() attach(win, -26) end)
 	win:Hide()
 
 	local function refreshVisible()
 		if content:IsVisible() then Options.Refresh() end
 	end
-	ns.Events.On("AssignmentsChanged", refreshVisible)
-	ns.Events.On("PaladinPlanChanged", refreshVisible)
-	ns.Events.On("PreviewChanged", refreshVisible)
-	ns.Events.On("TrackerSettingsChanged", refreshVisible)
+	for _, event in ipairs({ "AssignmentsChanged", "PaladinPlanChanged", "PreviewChanged", "SettingsChanged" }) do
+		ns.Events.On(event, refreshVisible)
+	end
 	win:RegisterEvent("DISPLAY_SIZE_CHANGED")
 	win:RegisterEvent("UI_SCALE_CHANGED")
 	win:SetScript("OnEvent", refreshVisible)
@@ -142,8 +121,7 @@ function Options.RegisterSettings()
 	panel:SetScript("OnShow", function()
 		if not win then build() end
 		win:Hide()
-		content:SetParent(panel); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -56); content:Show()
-		Options.Refresh()
+		attach(panel, -56)
 	end)
 	panel:SetScript("OnSizeChanged", function()
 		if content and content:GetParent() == panel then layout() end

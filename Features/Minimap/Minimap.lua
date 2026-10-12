@@ -5,8 +5,8 @@ local MinimapButton = {}
 ns.Minimap = MinimapButton
 
 local btn
-local ICON = ns.UI.ICON
 local RADIUS_PAD = 10
+local MOOD_TEXT = { ok = "Everyone is fed.", warn = "Buffs running low.", bad = "Buffs missing!", idle = "Nothing to track." }
 
 local function place()
 	local angle = math.rad(ns.db.minimap.angle or 200)
@@ -31,17 +31,18 @@ local function onDragUpdate()
 	place()
 end
 
-local function statusColor()
+-- The tracker's overall status, its color, and the summary.
+local function status()
 	local s = ns.Tracker.Summary()
-	return ns.Status.Color(s and s.overall), s
+	local overall = s and s.overall or "idle"
+	return overall, ns.Tracker.Status.Color(overall), s
 end
 
 local function showTooltip(self)
 	GameTooltip:SetOwner(self, "ANCHOR_LEFT")
 	GameTooltip:AddLine(ns.title)
-	local c, s = statusColor()
-	local text = ({ ok = "Everyone is fed.", warn = "Buffs running low.", bad = "Buffs missing!", idle = "Nothing to track." })[(s and s.overall) or "idle"]
-	GameTooltip:AddLine(text, c[1], c[2], c[3])
+	local overall, c, s = status()
+	GameTooltip:AddLine(MOOD_TEXT[overall] or MOOD_TEXT.idle, c[1], c[2], c[3])
 	if s and s.next then GameTooltip:AddLine(("Next: %s on %s"):format(s.next.spell, s.next.label), 0.4, 0.8, 1) end
 	GameTooltip:AddLine(" ")
 	GameTooltip:AddLine("|cffffffffLeft-click|r: options", 0.7, 0.7, 0.7)
@@ -54,8 +55,13 @@ end
 function MinimapButton.Refresh()
 	if not btn then return end
 	btn:SetShown(not ns.db.minimap.hide)
-	local c = statusColor()
+	local _, c = status()
 	btn.ring:SetVertexColor(c[1], c[2], c[3])
+end
+
+function MinimapButton.SetShown(shown)
+	ns.db.minimap.hide = not shown
+	ns.Events.Emit("SettingsChanged")
 end
 
 function MinimapButton.Init()
@@ -74,7 +80,7 @@ function MinimapButton.Init()
 
 	btn.icon = btn:CreateTexture(nil, "ARTWORK")
 	btn.icon:SetSize(17, 17)
-	btn.icon:SetTexture(ICON)
+	btn.icon:SetTexture(ns.UI.ICON)
 	btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	btn.icon:SetPoint("TOPLEFT", 7, -6)
 
@@ -102,12 +108,8 @@ function MinimapButton.Init()
 	btn:SetScript("OnClick", function(self, button)
 		if self.dragged then return end
 		if IsShiftKeyDown() then ns.Assignments.Announce()
-		elseif button == "RightButton" then
-			ns.db.showTracker = not ns.db.showTracker
-			ns.Tracker.Refresh()
-		else
-			ns.Options.Toggle()
-		end
+		elseif button == "RightButton" then ns.Database.Set("showTracker", not ns.db.showTracker)
+		else ns.Options.Toggle() end
 	end)
 	btn:SetScript("OnDragStart", function(self)
 		self.dragged = true
@@ -127,6 +129,7 @@ function MinimapButton.Init()
 
 	place()
 	MinimapButton.Refresh()
-	ns.Events.On("PreviewChanged", MinimapButton.Refresh)
-	C_Timer.NewTicker(2, MinimapButton.Refresh)
+	-- The tracker announces each new summary; no polling needed.
+	ns.Events.On("SummaryChanged", MinimapButton.Refresh)
+	ns.Events.On("SettingsChanged", MinimapButton.Refresh)
 end

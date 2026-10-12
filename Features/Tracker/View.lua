@@ -2,8 +2,8 @@
 local _, ns = ...
 local View = {}
 ns.Tracker.View = View
-local panel, cards, toggles, displayButtons, rowButtons, positionButtons
-local sizeSlider, sizeValue, iconSizeSlider, iconSizeValue, shoutSlider, shoutValue, warnValue
+local set = ns.Database.Set
+local panel, cards, toggles, displayButtons, rowButtons, positionButtons, sliders, warnValue
 local refreshing = false
 local MODES = {
 	{ key = "ALL", label = "Always show all" },
@@ -19,11 +19,6 @@ local POSITIONS = {
 }
 local MARGIN, GAP, TOP_ROW, TOP_H, BOTTOM_ROW, BOTTOM_H = 12, 10, -54, 168, -232, 230
 
-local function changed()
-	ns.Events.Emit("TrackerSettingsChanged")
-	View.Refresh()
-end
-
 function View.Refresh()
 	if not panel then return end
 	refreshing = true
@@ -31,12 +26,10 @@ function View.Refresh()
 	for _, chip in ipairs(displayButtons) do chip:SetChecked(ns.db.buffDisplay == chip.mode) end
 	for _, chip in ipairs(rowButtons) do chip:SetChecked(ns.db.iconsPerRow == chip.columns) end
 	for _, chip in ipairs(positionButtons) do chip:SetChecked(ns.db.iconPosition == chip.side) end
-	sizeSlider:SetValue(ns.db.iconSize)
-	sizeValue:SetText(ns.db.iconSize .. " px")
-	iconSizeSlider:SetValue(ns.db.statusIconSize)
-	iconSizeValue:SetText(ns.db.statusIconSize .. " px")
-	shoutSlider:SetValue(ns.db.shoutSize)
-	shoutValue:SetText(ns.db.shoutSize .. " px")
+	for _, bar in ipairs(sliders) do
+		bar:SetValue(ns.db[bar.key])
+		bar.readout:SetText(ns.db[bar.key] .. " px")
+	end
 	warnValue:SetText(ns.db.warnMinutes .. " min")
 	refreshing = false
 end
@@ -54,50 +47,51 @@ function View.Layout(width)
 	end
 end
 
--- A labelled slider with its value on the right and the range at either end.
-local function slider(card, name, label, y, minimum, maximum, step, set)
+-- A labelled slider for a ranged setting, its value on the right and the range at either end.
+local function slider(card, key, name, label, y)
+	local minimum, maximum, step = unpack(ns.Database.RANGES[key])
 	ns.UI.Text(card, "GameFontHighlight", 14, y, nil, label)
-	local value = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	value:SetPoint("TOPRIGHT", -14, y); value:SetJustifyH("RIGHT")
-	local bar = CreateFrame("Slider", name, card, "BackdropTemplate")
+	local bar = CreateFrame("Slider", ns.globalPrefix .. "_" .. name, card, "BackdropTemplate")
+	bar.key = key
+	bar.readout = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	bar.readout:SetPoint("TOPRIGHT", -14, y); bar.readout:SetJustifyH("RIGHT")
 	bar:SetHeight(14)
 	bar:SetPoint("TOPLEFT", 40, y - 20); bar:SetPoint("TOPRIGHT", -40, y - 20)
 	bar:SetOrientation("HORIZONTAL")
-	bar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 8,
-		insets = { left = 2, right = 2, top = 2, bottom = 2 } })
-	bar:SetBackdropColor(0, 0, 0, 0.8); bar:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+	ns.UI.Backdrop(bar, 8, { 0, 0, 0, 0.8 }, { 0.5, 0.5, 0.5, 1 })
 	bar:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
 	bar:GetThumbTexture():SetSize(24, 24)
 	bar:SetMinMaxValues(minimum, maximum); bar:SetValueStep(step)
 	if bar.SetObeyStepOnDrag then bar:SetObeyStepOnDrag(true) end
 	bar:SetScript("OnValueChanged", function(_, raw)
 		if refreshing then return end
-		set(math.max(minimum, math.min(maximum, math.floor(raw / step + 0.5) * step)))
-		changed()
+		set(key, math.max(minimum, math.min(maximum, math.floor(raw / step + 0.5) * step)))
 	end)
 	local low = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	low:SetPoint("RIGHT", bar, "LEFT", -6, 0); low:SetText(minimum)
 	local high = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	high:SetPoint("LEFT", bar, "RIGHT", 6, 0); high:SetText(maximum)
-	return bar, value
+	sliders[#sliders + 1] = bar
+end
+
+-- Chips that pick one value of a setting; returns them for View.Refresh.
+local function choiceChip(card, label, width, key, value, field)
+	local chip = ns.UI.Chip(card, label, width, function() set(key, value) end)
+	chip[field] = value
+	return chip
 end
 
 local function trackerCard()
 	local card = ns.UI.Card(panel, "Tracker", ns.UI.ICON)
 	toggles = {}
-	local function toggle(label, get, set, x, y)
-		local cb = ns.UI.Checkbox(card, label, x, y, function(value) set(value); changed() end)
+	local function toggle(label, get, setter, x, y)
+		local cb = ns.UI.Checkbox(card, label, x, y, setter)
 		cb.get = get; toggles[#toggles + 1] = cb
 	end
-	toggle("Show tracker", function() return ns.db.showTracker end,
-		function(v) ns.db.showTracker = v end, 10, -36)
-	toggle("Lock tracker", function() return ns.db.locked end,
-		function(v) ns.db.locked = v end, 10, -62)
-	toggle("Minimap button", function() return not ns.db.minimap.hide end,
-		function(v) ns.db.minimap.hide = not v; ns.Minimap.Refresh() end, 150, -36)
-	toggle("Preview (fake raid)", function() return ns.Preview.active end,
-		function(v) ns.Preview.Set(v) end, 150, -62)
+	toggle("Show tracker", function() return ns.db.showTracker end, function(v) set("showTracker", v) end, 10, -36)
+	toggle("Lock tracker", function() return ns.db.locked end, function(v) set("locked", v) end, 10, -62)
+	toggle("Minimap button", function() return not ns.db.minimap.hide end, function(v) ns.Minimap.SetShown(v) end, 150, -36)
+	toggle("Preview (fake raid)", function() return ns.Tracker.Preview.active end, function(v) ns.Tracker.Preview.Set(v) end, 150, -62)
 	local hint = ns.UI.Text(card, "GameFontDisableSmall", 14, -96, nil,
 		"Unlock the tracker to drag it, or move it with Edit Mode.")
 	hint:SetPoint("RIGHT", card, "RIGHT", -14, 0)
@@ -106,12 +100,9 @@ end
 
 local function sizeCard()
 	local card = ns.UI.Card(panel, "Size", "Interface\\Icons\\INV_Misc_Spyglass_02")
-	sizeSlider, sizeValue = slider(card, ns.globalPrefix .. "_IconSize", "Clickable head", -38, 32, 128, 4,
-		function(value) ns.db.iconSize = value end)
-	iconSizeSlider, iconSizeValue = slider(card, ns.globalPrefix .. "_StatusIconSize", "Small icons", -78, 16, 64, 1,
-		function(value) ns.db.statusIconSize = value end)
-	shoutSlider, shoutValue = slider(card, ns.globalPrefix .. "_ShoutSize", "Shout-out text", -118, 10, 24, 1,
-		function(value) ns.db.shoutSize = value end)
+	slider(card, "iconSize", "IconSize", "Clickable head", -38)
+	slider(card, "statusIconSize", "StatusIconSize", "Small icons", -78)
+	slider(card, "shoutSize", "ShoutSize", "Shout-out text", -118)
 	ns.UI.Text(card, "GameFontDisableSmall", 14, -154, nil, "Head size applies after combat.")
 	return card
 end
@@ -120,16 +111,10 @@ local function showCard()
 	local card = ns.UI.Card(panel, "Show icons", "Interface\\Icons\\Spell_Holy_WordFortitude")
 	displayButtons = {}
 	for i, mode in ipairs(MODES) do
-		local key = mode.key
-		local chip = ns.UI.Chip(card, mode.label, 0, function()
-			ns.db.buffDisplay = key
-			-- Retain the legacy value for older copies of the add-on.
-			ns.db.onlyProblems = key ~= "ALL"
-			changed()
-		end)
+		local chip = choiceChip(card, mode.label, 0, "buffDisplay", mode.key, "mode")
 		local y = -38 - (i - 1) * 27
 		chip:SetPoint("TOPLEFT", 14, y); chip:SetPoint("TOPRIGHT", -14, y)
-		chip.mode = key; displayButtons[#displayButtons + 1] = chip
+		displayButtons[#displayButtons + 1] = chip
 	end
 	local rule = card:CreateTexture(nil, "ARTWORK")
 	rule:SetColorTexture(0.55, 0.45, 0.25, 0.5); rule:SetHeight(1)
@@ -137,21 +122,16 @@ local function showCard()
 	ns.UI.Text(card, "GameFontHighlight", 14, -166, nil, "Expiring below")
 	ns.UI.Text(card, "GameFontDisableSmall", 14, -190, 160,
 		"A buff is expiring when anyone has less time left than this.")
-	local plus = ns.UI.Chip(card, "+", 24, function()
-		ns.db.warnMinutes = math.min(15, ns.db.warnMinutes + 1); changed()
-	end)
+	local minimum, maximum = unpack(ns.Database.RANGES.warnMinutes)
+	local function step(delta)
+		set("warnMinutes", math.max(minimum, math.min(maximum, ns.db.warnMinutes + delta)))
+	end
+	local plus = ns.UI.Chip(card, "+", 24, function() step(1) end)
 	plus:SetPoint("TOPRIGHT", -14, -162)
-	local box = CreateFrame("Frame", nil, card, "BackdropTemplate")
-	box:SetSize(54, 22); box:SetPoint("RIGHT", plus, "LEFT", -4, 0)
-	box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
-		insets = { left = 2, right = 2, top = 2, bottom = 2 } })
-	box:SetBackdropColor(0, 0, 0, 0.85); box:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-	warnValue = box:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	warnValue:SetPoint("CENTER", 0, 0)
-	local minus = ns.UI.Chip(card, "-", 24, function()
-		ns.db.warnMinutes = math.max(1, ns.db.warnMinutes - 1); changed()
-	end)
+	local box = ns.UI.ValueBox(card, 54, 22, "GameFontHighlight")
+	box:SetPoint("RIGHT", plus, "LEFT", -4, 0)
+	warnValue = box.value
+	local minus = ns.UI.Chip(card, "-", 24, function() step(-1) end)
 	minus:SetPoint("RIGHT", box, "LEFT", -4, 0)
 	return card
 end
@@ -161,24 +141,16 @@ local function layoutCard()
 	ns.UI.Text(card, "GameFontHighlight", 14, -38, nil, "Icon position")
 	positionButtons = {}
 	for _, position in ipairs(POSITIONS) do
-		local side = position[1]
-		local chip = ns.UI.Chip(card, position[2], 64, function()
-			ns.db.iconPosition = side
-			changed()
-		end)
+		local chip = choiceChip(card, position[2], 64, "iconPosition", position[1], "side")
 		chip:SetPoint("TOP", position[3], -58 - position[4] * 26)
-		chip.side = side; positionButtons[#positionButtons + 1] = chip
+		positionButtons[#positionButtons + 1] = chip
 	end
 	ns.UI.Text(card, "GameFontHighlight", 14, -150, nil, "Icons per row")
 	rowButtons = {}
 	for columns = 2, 4 do
-		local count = columns
-		local chip = ns.UI.Chip(card, tostring(count), 44, function()
-			ns.db.iconsPerRow = count
-			changed()
-		end)
-		chip:SetPoint("TOP", (count - 3) * 52, -172)
-		chip.columns = count; rowButtons[#rowButtons + 1] = chip
+		local chip = choiceChip(card, tostring(columns), 44, "iconsPerRow", columns, "columns")
+		chip:SetPoint("TOP", (columns - 3) * 52, -172)
+		rowButtons[#rowButtons + 1] = chip
 	end
 	ns.UI.Text(card, "GameFontDisableSmall", 14, -206, nil, "Auto keeps icons on screen near edges.")
 	return card
@@ -193,7 +165,7 @@ local function legend()
 		edge:SetColorTexture(0, 0, 0, 1)
 		local swatch = panel:CreateTexture(nil, "OVERLAY")
 		swatch:SetSize(10, 10); swatch:SetPoint("CENTER", edge, "CENTER", 0, 0)
-		swatch:SetColorTexture(unpack(ns.Status.COLORS[entry[1]]))
+		swatch:SetColorTexture(unpack(ns.Tracker.Status.COLORS[entry[1]]))
 		anchor = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		anchor:SetPoint("LEFT", edge, "RIGHT", 4, 0); anchor:SetText(entry[2])
 	end
@@ -202,6 +174,7 @@ end
 function View.Create(parent)
 	panel = CreateFrame("Frame", nil, parent)
 	panel:SetPoint("TOPLEFT", 0, -34); panel:SetPoint("BOTTOMRIGHT")
+	sliders = {}
 	local band = ns.UI.Band(panel, "Tracker settings",
 		"Tune the clickable head and the buff icons around it. Changes apply instantly.")
 	band.box:Hide(); band.countLabel:Hide()
