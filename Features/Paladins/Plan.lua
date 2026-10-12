@@ -42,7 +42,11 @@ local function remember(paladin, slot, key, revision, author)
 	if old and not newer(cell, old) then return false end
 	Plan.cells[paladin] = row
 	row[slot] = cell
-	if paladin == ns.WoW.Me() then ns.db.paladinBlessings[slot] = key end
+	if paladin == ns.WoW.Me() then
+		ns.db.paladinBlessings[slot] = key
+		ns.db.paladinCells = ns.db.paladinCells or {}
+		ns.db.paladinCells[slot] = { key = key, revision = revision, author = author }
+	end
 	return true
 end
 
@@ -51,13 +55,22 @@ local function nextRevision()
 	return Plan.revision
 end
 
+-- My saved cells come back with the revision and author they were written with,
+-- so an edit another paladin made while I was away still wins over them. Keys
+-- saved without one (older versions) yield to anything the group knows.
 function Plan.Init()
 	ns.db.paladinBlessings = ns.db.paladinBlessings or {}
+	ns.db.paladinCells = ns.db.paladinCells or {}
 	Plan.revision = math.max(Plan.revision, tonumber(ns.db.paladinRevision) or 0, time())
 	if not ns.WoW.IsPaladin() then return end
 	local me = ns.WoW.Me()
 	for slot, key in pairs(ns.db.paladinBlessings) do
-		if slots[slot] and validKey(slot, key) then remember(me, slot, key, nextRevision(), me) end
+		if slots[slot] and validKey(slot, key) then
+			local saved = ns.db.paladinCells[slot]
+			local revision = type(saved) == "table" and saved.key == key and tonumber(saved.revision) or 0
+			local author = revision > 0 and ns.WoW.NormalizeName(saved.author) or me
+			remember(me, slot, key, revision, author)
+		end
 	end
 end
 
@@ -289,8 +302,10 @@ end
 function Plan.Broadcast()
 	if not ns.WoW.IsPaladin() then return end
 	-- Kept cells of paladins who are away right now go out again when they return.
+	-- Mine always go out: at login the roster is not built yet.
+	local me = ns.WoW.Me()
 	for paladin, row in pairs(Plan.cells) do
-		if paladinMember(ns.Assignments.roster, paladin) then
+		if paladin == me or paladinMember(ns.Assignments.roster, paladin) then
 			for slot in pairs(row) do send(paladin, slot) end
 		end
 	end

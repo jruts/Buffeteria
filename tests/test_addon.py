@@ -1820,11 +1820,63 @@ class AddonTests(unittest.TestCase):
         load(lua, "Features/Paladins/Plan.lua")
         lua.execute("""
             ns.Paladins.Init()
-            assert(ns.Paladins.revision > oldRevision)
+            assert(ns.Paladins.revision >= oldRevision)
+            -- The saved cell keeps its revision, so newer group edits still win.
             assert(ns.Paladins.cells['A-Realm'].ROGUE.key == 'AUTO')
+            assert(ns.Paladins.cells['A-Realm'].ROGUE.revision == oldRevision)
             ns.Paladins.Set('A-Realm', 'ROGUE', 'MIGHT')
             assert(ns.Paladins.cells['A-Realm'].ROGUE.revision > oldRevision)
         """)
+
+    def test_edits_made_while_a_paladin_was_away_survive_their_login(self):
+        def client(me, other, saved=None):
+            lua = full_addon(login=False)
+            lua.execute(f"function UnitFullName(u) return u == 'player' and '{me}' or '{other}', 'Realm' end")
+            lua.execute("CLOCK = 1000; function time() return CLOCK end")
+            if saved:
+                lua.globals().ns.db.paladinBlessings = lua.table_from(dict(saved.eval("ns.db.paladinBlessings")))
+                cells = lua.table_from({slot: lua.table_from(dict(cell))
+                                        for slot, cell in saved.eval("ns.db.paladinCells").items()})
+                lua.globals().ns.db.paladinCells = cells
+                lua.globals().ns.db.paladinRevision = saved.eval("ns.db.paladinRevision")
+                lua.globals().CLOCK = saved.globals().CLOCK + 100
+            lua.execute("ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()")
+            return lua
+
+        clients = {"A": client("A", "B"), "B": client("B", "A")}
+
+        def exchange(away=()):
+            for _ in range(4):
+                for sender, receiver in (("A", "B"), ("B", "A")):
+                    messages = list(clients[sender].globals().delivered.values())
+                    clients[sender].execute("delivered = {}")
+                    if receiver in away:
+                        continue
+                    for message in messages:
+                        clients[receiver].globals().ns.Comm.OnMessage("BUFFETERIA", message, "PARTY", sender + "-Realm")
+                for lua in clients.values():
+                    lua.execute("runTimers()")
+
+        def plan(lua):
+            return dict(lua.eval("ns.Assignments.result.pally.WARRIOR").items())
+
+        def edit(name, mine, other):
+            lua = clients[name]
+            lua.execute("CLOCK = CLOCK + 10")
+            lua.execute(f"ns.Paladins.Set(ns.WoW.Me(), 'WARRIOR', '{mine}')")
+            peer = "B-Realm" if name == "A" else "A-Realm"
+            lua.execute(f"ns.Paladins.Set('{peer}', 'WARRIOR', '{other}'); runTimers()")
+
+        edit("B", "KINGS", "WISDOM")
+        exchange()
+        edit("A", "KINGS", "WISDOM")
+        exchange(away=("B",))
+        clients["B"] = client("B", "A", clients["B"])
+        exchange()
+        expected = {"A-Realm": "KINGS", "B-Realm": "WISDOM"}
+        self.assertEqual(plan(clients["A"]), expected)
+        self.assertEqual(plan(clients["B"]), expected)
+        self.assertEqual(clients["B"].eval("ns.db.paladinBlessings.WARRIOR"), "WISDOM")
 
     def test_simultaneous_duplicate_slots_have_one_winner(self):
         lua = self.plan_runtime()
