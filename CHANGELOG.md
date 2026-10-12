@@ -1,5 +1,11 @@
 # Buffeteria
 
+## v0.6.2
+
+- The tracker now makes it clear when you have a buff to cast: the orc glows gold and calls out **GIEF <buff>!** above his head. When there is nothing for you to cast, he dims and shows the buffs you still need; tooltips name the assigned casters.
+- Small icons for buffs assigned to other players are dimmed, while your assignments and buffs you need stay bright. Added a **Shout-out text** size slider and class-aware preview states.
+- Added optional **Battle Shout** tracking for warriors, enabled by default in the Buffs tree. The tracker warns when your shout is missing or has less than 30 seconds left, and offers the cast once you have enough rage. Other classes and warriors without Buffeteria are not tracked for it.
+
 ## v0.6.1
 
 - Fixed personal preferences and Paladins-tab edits arriving before players appear in the roster. Assignments now survive a paladin briefly going offline or entering a loading screen, and clear when you leave the group.
