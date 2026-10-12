@@ -599,7 +599,7 @@ class AddonTests(unittest.TestCase):
         """)
 
     def test_mascot_textures_have_matching_dimensions_and_real_transparency(self):
-        for name in (prefix + mood for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead")
+        for name in (prefix + mood for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu")
                      for mood in ("Happy", "Grumpy", "Angry", "Glow")):
             with self.subTest(name=name):
                 data = (ROOT / "Media" / f"{name}.tga").read_bytes()
@@ -616,14 +616,14 @@ class AddonTests(unittest.TestCase):
                     self.assertEqual(alpha[corner], 0)
 
     def test_saved_head_choice_defaults_validates_and_survives_login(self):
-        for style in (None, "ORC", "GNOME", "NIGHTELF", "TAUREN", "HUMAN", "TROLL", "UNDEAD", "invalid", False):
+        for style in (None, "ORC", "GNOME", "NIGHTELF", "TAUREN", "HUMAN", "TROLL", "UNDEAD", "XARYU", "invalid", False):
             with self.subTest(style=style):
                 lua = full_addon(login=False)
                 lua.globals().SAVED_HEAD = style
                 lua.execute("""
                     BuffeteriaCharDB.headStyle = SAVED_HEAD
                     ns.Database.Init()
-                    local expected = ({ORC='Orc', GNOME='Gnome', NIGHTELF='NightElf', TAUREN='Tauren', HUMAN='Human', TROLL='Troll', UNDEAD='Undead'})[SAVED_HEAD] or 'Orc'
+                    local expected = ({ORC='Orc', GNOME='Gnome', NIGHTELF='NightElf', TAUREN='Tauren', HUMAN='Human', TROLL='Troll', UNDEAD='Undead', XARYU='Xaryu'})[SAVED_HEAD] or 'Orc'
                     assert(ns.db.headStyle == (expected == 'Orc' and 'ORC' or SAVED_HEAD))
                     ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
                     assert(Buffeteria_CastButton.icon.texture:find(expected .. '%a+$'))
@@ -646,7 +646,7 @@ class AddonTests(unittest.TestCase):
                         for _, w in ipairs(widgets) do if w.style == style then return w end end
                         error('missing head choice ' .. style)
                     end
-                    assert(#ns.Tracker.Art.CHOICES == 7 and picker:IsVisible() and not picker.menu:IsShown())
+                    assert(#ns.Tracker.Art.CHOICES == 8 and picker:IsVisible() and not picker.menu:IsShown())
                     assert(picker.caption:GetText() == 'Orc')
                     local spell, unit, point = head:GetAttribute('spell'), head:GetAttribute('unit'), frame.point
                     COMBAT = true
@@ -669,7 +669,7 @@ class AddonTests(unittest.TestCase):
                     end
                     COMBAT = false
                     settingsPage:GetScript('OnShow')(settingsPage)
-                    assert(choiceButton('UNDEAD'):GetChecked() and picker.caption:GetText() == 'Undead')
+                    assert(choiceButton('XARYU'):GetChecked() and picker.caption:GetText() == 'Xaryu (Mage)')
                     picker:GetScript('OnClick')(picker)
                     choiceButton('GNOME'):GetScript('OnClick')(choiceButton('GNOME'))
                     assert(ns.db.headStyle == 'GNOME')
@@ -696,7 +696,7 @@ class AddonTests(unittest.TestCase):
                     local compute = ns.Tracker.Compute
                     ns.Tracker.Compute = function() return {any=false, overall='idle', perKey={}} end
                     ns.Tracker.Refresh()
-                    assert(head.icon.texture:find('UndeadGrumpy$') and head.icon.desaturated)
+                    assert(head.icon.texture:find('XaryuGrumpy$') and head.icon.desaturated)
                     assert(not head.halo:IsShown() and not head.glow)
                     ns.Tracker.Compute = compute
                 """)

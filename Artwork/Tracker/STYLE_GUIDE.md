@@ -40,6 +40,13 @@ of a race.
 | Human | Strong jaw and brows, blue eyes, chestnut hair and beard, natural warm skin. | Glossy plastic skin, exaggerated round eyes, orange or red mood washes. |
 | Troll | Long lean face and hooked nose, blue skin, long lower-jaw tusks, swept pointed ears, purple mohawk. | An orc jaw painted blue, short button nose, later Zandalari motifs. |
 | Undead | Gaunt formerly human face, hollow cheeks, dry grey-green skin and exposed bone, damaged nose, sparse hair. | A healthy grey human, a bare clean skull, wet gore or glowing haze. |
+| Xaryu (Mage) | Josh "Xaryu" Lujan's lean face, brown eyes, dark expressive brows, exposed widow's-peak hairline with high temples, longer swept-back dark hair falling behind the ears to jaw level with feathered ends, moustache and small goatee; visible painted tonal planes and grouped brushstrokes. | A generic wizard face, photographic skin, heavy full beard, short cropped hair, headband, circlet, hat or any accessory obscuring his hairline. |
+
+Xaryu is a streamer homage available to every class, with the same expressions
+and floating-head treatment as the race portraits. Likeness references are his
+[public profile portrait](https://x.com/xaryu), including its unobstructed hairline.
+The existing Human and Orc sheets supply the painting style, not the facial identity.
+His face and hairstyle identify this mage homage; no headwear is needed.
 
 ## Expression and rendering
 

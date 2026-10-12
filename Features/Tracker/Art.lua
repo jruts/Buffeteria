@@ -11,6 +11,7 @@ Art.CHOICES = {
 	{ key = "HUMAN", label = "Human", prefix = "Human" },
 	{ key = "TROLL", label = "Troll", prefix = "Troll" },
 	{ key = "UNDEAD", label = "Undead", prefix = "Undead" },
+	{ key = "XARYU", label = "Xaryu (Mage)", prefix = "Xaryu" },
 }
 local byKey = {}
 for _, choice in ipairs(Art.CHOICES) do byKey[choice.key] = choice end

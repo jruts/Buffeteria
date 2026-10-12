@@ -11,7 +11,7 @@ ns.Database.RANGES = {
 }
 -- Allowed values, the first being the default.
 local CHOICES = {
-	headStyle = { "ORC", "GNOME", "NIGHTELF", "TAUREN", "HUMAN", "TROLL", "UNDEAD" },
+	headStyle = { "ORC", "GNOME", "NIGHTELF", "TAUREN", "HUMAN", "TROLL", "UNDEAD", "XARYU" },
 	buffDisplay = { "PROBLEMS", "ALL", "MISSING", "EXPIRING" },
 	iconsPerRow = { 2, 3, 4 },
 	iconPosition = { "BOTTOM", "LEFT", "TOP", "RIGHT", "AUTO" },

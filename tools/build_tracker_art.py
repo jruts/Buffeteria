@@ -45,5 +45,5 @@ def build(prefix):
 
 
 if __name__ == "__main__":
-    for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead"):
+    for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu"):
         build(prefix)
