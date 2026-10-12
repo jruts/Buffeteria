@@ -182,6 +182,12 @@ AddOns menu to compare them. Live uses `/buff`; Dev uses `/buffdev` (or
 **Buffeteria-Dev**. Each version keeps its own character settings; Dev starts
 with defaults and does not change Live's preferences.
 
+Dev's tracker has an orange **DEV** label above the head (**DEV / PREVIEW** while
+previewing). A fresh Dev tracker starts 140 pixels to the right of Live's default
+position; any position you already saved is preserved. Hovering the head also
+identifies the copy. Having both folders installed does not mean both are enabled:
+with one copy enabled, seeing one head is expected. Use the AddOns menu to switch.
+
 After every workspace change, run:
 
 ```text

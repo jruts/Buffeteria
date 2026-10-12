@@ -97,7 +97,8 @@ end
 local function build()
 	frame = CreateFrame("Frame", ns.globalPrefix .. "_Tracker", UIParent)
 	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2 + LABEL_HEIGHT)
-	frame:SetPoint("CENTER", UIParent, "CENTER", 0, -180)
+	-- Keep a fresh Dev tracker distinct from the release's starting position.
+	frame:SetPoint("CENTER", UIParent, "CENTER", ns.isDev and 140 or 0, -180)
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 
@@ -169,10 +170,10 @@ local function build()
 	castBtn.label:SetJustifyH("CENTER")
 	castBtn.label:SetWordWrap(false)
 
-	-- "PREVIEW" tag above the tracker.
+	-- Always identify the development copy, even when preview is off.
 	frame.tag = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmallOutline")
 	frame.tag:SetPoint("BOTTOM", frame, "TOP", 0, 2)
-	frame.tag:SetText("|cffff9900PREVIEW|r")
+	frame.tag:SetText(ns.isDev and "|cffff9900DEV|r" or "|cffff9900PREVIEW|r")
 	frame.tag:Hide()
 
 	-- Secure "remove unwanted buff from me" button (e.g. Salvation on a tank), top-right corner.
@@ -202,7 +203,7 @@ local function iconPlacement(count, iconSize)
 	local side = ns.db.iconPosition
 	if side == "AUTO" then
 		local belowGap = BORDER + LABEL_HEIGHT + GAP
-		local aboveGap = (ns.Preview.active or editing) and 24 or GAP
+		local aboveGap = (ns.isDev or ns.Preview.active or editing) and 24 or GAP
 		local headLeft, headBottom, headTop = castBtn:GetLeft(), castBtn:GetBottom(), castBtn:GetTop()
 		if count == 0 or not headLeft or not headBottom or not headTop then
 			return columns, "BOTTOM", 0, -belowGap
@@ -233,7 +234,7 @@ local function iconPlacement(count, iconSize)
 		return columns, side, BORDER + GAP, height / 2
 	elseif side == "TOP" then
 		-- Keep the preview tag and Edit Mode label clear above the face.
-		local gap = (ns.Preview.active or editing) and 24 or GAP
+		local gap = (ns.isDev or ns.Preview.active or editing) and 24 or GAP
 		return columns, side, 0, gap + height
 	end
 	return columns, "BOTTOM", 0, -BORDER - LABEL_HEIGHT - GAP
@@ -355,7 +356,9 @@ function Tracker.Refresh()
 		return
 	end
 	if not InCombatLockdown() then frame:Show() end
-	frame.tag:SetShown(preview and true or false)
+	frame.tag:SetText(ns.isDev and (preview and "|cffff9900DEV / PREVIEW|r" or "|cffff9900DEV|r") or "|cffff9900PREVIEW|r")
+	-- Edit Mode already displays the full add-on name above this same head.
+	frame.tag:SetShown((ns.isDev and not editing) or (not ns.isDev and preview))
 	local s = preview and ns.Preview.Summary() or ns.Scan.Update()
 	lastSummary = s
 	local mood = ns.Status.Mood(s)
