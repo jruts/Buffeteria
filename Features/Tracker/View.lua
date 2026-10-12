@@ -3,7 +3,7 @@ local _, ns = ...
 local UI, Tracker, set = ns.UI, ns.Tracker, ns.Database.Set
 local View = {}
 Tracker.View = View
-local panel, controls, previewCard, layoutCard, stage, sample, headPicker, headMenu, warnValue, combatNote
+local panel, controls, previewCard, layoutCard, stage, sample, headPicker, headMenu, warnValue, combatNote, hair
 local toggles, headButtons, displayButtons, rowButtons, positionButtons, sliders, moods = {}, {}, {}, {}, {}, {}, {}
 local refreshing = false
 local TOP, CONTROLS_H, PREVIEW_H, LAYOUT_H = -56, 506, 304, 194
@@ -44,12 +44,20 @@ function View.Refresh()
 	if not panel then return end
 	refreshing = true
 	for _, cb in ipairs(toggles) do cb:SetChecked(cb.get() and true or false) end
+	local clean = ns.db.trackerStyle == "CLEAN"
 	for _, choice in ipairs(headButtons) do
-		choice:SetChecked(ns.db.headStyle == choice.style)
-		choice.portrait:SetTexture(Tracker.Art.Texture("happy", choice.style))
+		if choice.style == "CLEAN" then
+			choice:SetChecked(clean)
+		else
+			choice:SetChecked(not clean and ns.db.headStyle == choice.style)
+			choice.portrait:SetTexture(Tracker.Art.Texture("happy", choice.style))
+		end
 	end
-	headPicker.caption:SetText("Head: " .. Tracker.Art.Label())
-	headPicker.portrait:SetTexture(Tracker.Art.Texture("happy"))
+	headPicker.caption:SetText("Head: " .. (clean and "None (clean)" or Tracker.Art.Label()))
+	headPicker.portrait:SetTexture(clean and UI.ICON or Tracker.Art.Texture("happy"))
+	-- Hair only exists on a head.
+	hair:SetEnabled(not clean)
+	hair.text:SetTextColor(clean and 0.5 or 1, clean and 0.5 or 1, clean and 0.5 or 1)
 	for _, option in ipairs(displayButtons) do option:SetChecked(ns.db.buffDisplay == option.mode) end
 	for _, chip in ipairs(rowButtons) do chip:SetChecked(ns.db.iconsPerRow == chip.columns) end
 	for _, chip in ipairs(positionButtons) do chip:SetChecked(ns.db.iconPosition == chip.side) end
@@ -98,20 +106,29 @@ local function headChooser()
 	arrow:SetSize(22, 22); arrow:SetPoint("RIGHT", -4, 0)
 	_G[ns.globalPrefix .. "_HeadPicker"] = headPicker
 	headMenu = UI.Menu(headPicker, ns.globalPrefix .. "_HeadMenu")
-	headMenu:SetSize(210, #Tracker.Art.CHOICES * 24 + 16); headMenu:SetPoint("TOPLEFT", headPicker, "BOTTOMLEFT", 0, -2)
+	headMenu:SetSize(210, (#Tracker.Art.CHOICES + 1) * 24 + 16); headMenu:SetPoint("TOPLEFT", headPicker, "BOTTOMLEFT", 0, -2)
 	headMenu:SetFrameLevel(headPicker:GetFrameLevel() + 25)
 	headMenu:Hide(); headPicker.menu = headMenu
 	tinsert(UISpecialFrames, ns.globalPrefix .. "_HeadMenu")
 	headPicker:SetScript("OnHide", function() headMenu:Hide() end)
 	for i, choice in ipairs(Tracker.Art.CHOICES) do
 		local style = choice.key
-		local item = UI.MenuItem(headMenu, 194, function() set("headStyle", style); headMenu:Hide() end)
+		local item = UI.MenuItem(headMenu, 194, function()
+			set("headStyle", style); set("trackerStyle", "HEAD"); headMenu:Hide()
+		end)
 		item.style = style; item:SetHeight(24); item:SetPoint("TOPLEFT", 8, -8 - (i - 1) * 24)
 		item.caption:SetText(choice.label)
 		item.portrait = item.icon
 		item.portrait:SetSize(22, 22); item.portrait:SetTexCoord(0, 1, 0, 1)
 		headButtons[#headButtons + 1] = item
 	end
+	-- For players who'd rather not have a mascot: a plain spell button, no halo or GIEF.
+	local item = UI.MenuItem(headMenu, 194, function() set("trackerStyle", "CLEAN"); headMenu:Hide() end)
+	item.style = "CLEAN"; item:SetHeight(24); item:SetPoint("TOPLEFT", 8, -8 - #Tracker.Art.CHOICES * 24)
+	item.caption:SetText("None (clean)")
+	item.portrait = item.icon
+	item.portrait:SetSize(22, 22); item.portrait:SetTexCoord(0, 1, 0, 1); item.portrait:SetTexture(UI.ICON)
+	headButtons[#headButtons + 1] = item
 end
 
 function View.Create(host)
@@ -134,7 +151,7 @@ function View.Create(host)
 
 	UI.Section(controls, "Appearance", 16, -162)
 	headChooser()
-	local hair = toggle("Colored hair", function() return ns.db.coloredHair end, function(v) set("coloredHair", v) end, 252, -188)
+	hair = toggle("Colored hair", function() return ns.db.coloredHair end, function(v) set("coloredHair", v) end, 252, -188)
 	hair:ClearAllPoints(); hair:SetPoint("LEFT", headPicker, "RIGHT", 16, 0)
 	slider("iconSize", "IconSize", "Head size", -232)
 	slider("statusIconSize", "StatusIconSize", "Small icons", -262)

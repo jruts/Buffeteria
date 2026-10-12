@@ -83,9 +83,9 @@ The **Extra** tab in `/buff` (or `/buff extra`) holds conveniences beyond buffs.
 (Resurrection), paladins (Redemption), shamans (Ancestral Spirit) and druids
 (Rebirth) see the head demand **GIEF** their resurrection when a group member is
 dead, and a click casts it, before any buff. Other classes have nothing to cast.
-Players who can resurrect are picked first, then the rest by name. Only bodies in
-range count; released ghosts, feigning hunters and players someone else is
-already resurrecting are skipped, and after your resurrection lands the player
+Players who can resurrect are picked first, then the rest by name. Players who
+already released count too. Only players in range count; feigning hunters and
+players someone else is already resurrecting are skipped, and after your resurrection lands the player
 gets a minute to accept. It waits while you're out of mana or reagents, and while
 Rebirth is on cooldown. Combat keeps the head on your combat buff, so resurrecting
 waits until combat ends.
@@ -192,6 +192,18 @@ hair and accessories retain their natural colors. Xaru is the human mage homage
 with swept-back hair, moustache and goatee. Every class can select every head.
 Head and hair choices are saved per character and apply immediately, including
 in combat, without changing the next spell or target.
+
+Prefer no mascot? Pick **None (clean)** at the bottom of the head menu. The
+tracker then shows just the small icons. Only when you have something to cast
+does a plain square button appear, showing the icon of that cast with a border
+colored like the small icons (orange when some buffs are missing or low, red
+when all are missing); click it or use the key binding. It keeps its place
+while hidden, so the small icons don't move. To move the tracker while the
+button is hidden, drag any small icon (when unlocked), or use Edit Mode, which
+marks the button's spot with a faint Buffeteria icon. There is no halo, GIEF call-out,
+face or badge; filters, layout, cooldown shade, tooltips and resurrecting work
+the same, and the Settings preview follows. Colored hair is greyed out, and
+your last head is kept for when you switch back.
 
 Choose which small buff icons appear: **All**, **Missing**,
 **Missing or expiring** (the default), or **Expiring**. A buff counts as

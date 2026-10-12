@@ -6,6 +6,7 @@ local Status, Layout, Tooltip = Tracker.Status, Tracker.Layout, Tracker.Tooltip
 local Art = Tracker.Art
 
 local frame, castBtn, cancelBtn, lastSummary, pulse, shadeTicker, cursorTicker
+local showPlaceholder
 local statusIcons = {}
 local MAIN = 64                                  -- current clickable head size
 local GAP = Layout.GAP
@@ -33,6 +34,10 @@ local DISPLAY = {
 }
 
 local function editing() return Tracker.EditMode.active end
+-- The clean style: a plain spell button instead of the mascot, without halo or GIEF.
+local function clean() return ns.db.trackerStyle == "CLEAN" end
+-- The clean button's border follows the group's state, like the small icons.
+local MOOD_STATUS = { happy = "ok", grumpy = "warn", angry = "bad", idle = "idle" }
 
 -- The cooldown holding up the head's cast, as start time and duration (0, 0 when
 -- ready). With nothing left to cast, the last cast's cooldown still runs out on
@@ -70,7 +75,7 @@ local function updateShade()
 	castBtn.inert = (left > 0 or not castBtn.pending) or nil
 	updateCursor()
 	shadeTicker:SetShown(left > 0)
-	castBtn.shade:SetShown(left > 0)
+	castBtn.shade:SetShown(left > 0 and not castBtn.blank)
 	if left <= 0 then return end
 	local covered = math.min(1, left / duration)
 	castBtn.shade:SetHeight(castBtn:GetHeight() * covered)
@@ -114,6 +119,19 @@ local function statusIcon(i)
 	ic:EnableMouse(true)
 	ic:SetScript("OnEnter", function(self) Tooltip.Icon(self, self.key, lastSummary) end)
 	ic:SetScript("OnLeave", GameTooltip_Hide)
+	-- The small icons are handles too, since the clean style's button is often hidden.
+	ic:RegisterForDrag("LeftButton")
+	ic:SetScript("OnDragStart", function(self)
+		if ns.db.locked or InCombatLockdown() then return end
+		self.dragging = true
+		GameTooltip_Hide()
+		Tracker.StartMoving()
+	end)
+	ic:SetScript("OnDragStop", function(self)
+		if not self.dragging then return end
+		self.dragging = nil
+		Tracker.StopMoving()
+	end)
 	statusIcons[i] = ic
 	return ic
 end
@@ -209,6 +227,16 @@ local function buildCastButton()
 	castBtn.shade:SetVertexColor(0, 0, 0)
 	castBtn.shade:SetAlpha(0.65)
 	castBtn.shade:Hide()
+	-- Clean style only: a dark square behind the icon and a status-colored border.
+	castBtn.bg = castBtn:CreateTexture(nil, "BACKGROUND", nil, -7)
+	castBtn.bg:SetAllPoints(); castBtn.bg:SetTexture(ns.UI.WHITE)
+	castBtn.bg:SetVertexColor(0, 0, 0, 0.6)
+	castBtn.bg:Hide()
+	castBtn.edge = CreateFrame("Frame", nil, castBtn, "BackdropTemplate")
+	castBtn.edge:SetAllPoints()
+	castBtn.edge:SetBackdrop({ edgeFile = ns.UI.WHITE, edgeSize = BORDER })
+	-- Faded rather than hidden: it is a child of the secure button.
+	castBtn.edge:SetAlpha(0)
 	-- "Your part" badge in the top-right corner: casts I still owe, or a check
 	-- once I've served everyone assigned to me. Separate from the group's mood.
 	castBtn.done = castBtn:CreateTexture(nil, "OVERLAY")
@@ -372,13 +400,13 @@ local function showBadge(s)
 	local size = math.max(9, math.floor(MAIN * BADGE_SCALE + 0.5))
 	local check = math.max(8, math.floor(MAIN * DONE_SCALE + 0.5))
 	castBtn.done:SetSize(check, check)
-	castBtn.done:SetShown(Status.MineDone(s))
+	castBtn.done:SetShown(Status.MineDone(s) and not castBtn.blank)
 	if castBtn.owedFont and castBtn.owedSize ~= size then
 		castBtn.owed:SetFont(castBtn.owedFont, size, "OUTLINE")
 		castBtn.owedSize = size
 	end
 	castBtn.owed:SetText(pending > 0 and pending or "")
-	castBtn.owed:SetShown(pending > 0)
+	castBtn.owed:SetShown(pending > 0 and not castBtn.blank)
 end
 
 -- The GIEF call-out on your turn, and the DEV/preview tag above it.
@@ -404,6 +432,45 @@ local function showShout(turn, n)
 	end
 end
 
+-- Where the hidden clean button sits: a faint, grey add-on icon in Edit Mode.
+function showPlaceholder()
+	local want = castBtn.blank and editing()
+	castBtn.icon:SetShown(not castBtn.blank or want or false)
+	if not want then return end
+	castBtn.icon:SetTexture(ns.UI.ICON)
+	castBtn.icon:SetTexCoord(0, 1, 0, 1)
+	castBtn.icon:SetDesaturated(true)
+	castBtn.icon:SetAlpha(0.5)
+end
+
+-- The head's face for the group's mood, or in the clean style the icon of my
+-- next cast. With nothing for me to cast, the clean button is invisible and only
+-- the small icons show; the button keeps its place so they don't jump.
+local function showFace(s, mood)
+	local plain = clean()
+	local icon = plain and s.next and s.next.icon
+	castBtn.blank = (plain and not icon) or nil
+	castBtn.icon:SetAlpha(1)
+	castBtn.icon:SetShown(not castBtn.blank)
+	if castBtn.blank then showPlaceholder() end
+	castBtn.bg:SetShown(icon and true or false)
+	castBtn.edge:SetAlpha(icon and 1 or 0)
+	if not plain then
+		local face = Art.Texture(mood)
+		castBtn.icon:SetTexture(face)
+		castBtn.icon:SetTexCoord(0, 1, 0, 1)
+		castBtn.shade:SetTexture(face)
+		castBtn.icon:SetDesaturated(mood == "idle")
+		return
+	end
+	if not icon then return end
+	castBtn.icon:SetTexture(icon)
+	castBtn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	castBtn.icon:SetDesaturated(false)
+	castBtn.shade:SetTexture(ns.UI.WHITE)
+	castBtn.edge:SetBackdropBorderColor(unpack(Status.Color(MOOD_STATUS[mood])))
+end
+
 -- Show whether clicking does anything for you: a halo and demand on your turn.
 -- The head itself is never brightened or faded.
 local function showRole(s, mood)
@@ -414,12 +481,13 @@ local function showRole(s, mood)
 	local tint = HALO[mood] or HALO.default
 	castBtn.halo:SetVertexColor(tint[1], tint[2], tint[3])
 	pulse.strength = tint[4]
-	castBtn.halo:SetShown(turn)
+	local cue = turn and not clean()
+	castBtn.halo:SetShown(cue)
 	castBtn.halo:SetSize(MAIN / GLOW_SCALE, MAIN / GLOW_SCALE)
-	if turn and (not pulse:IsShown() or n.spell ~= pulse.spell or n.label ~= pulse.target) then pulse.popAt = GetTime() end
+	if cue and (not pulse:IsShown() or n.spell ~= pulse.spell or n.label ~= pulse.target) then pulse.popAt = GetTime() end
 	if n then pulse.spell, pulse.target = n.spell, n.label end
-	pulse:SetShown(turn)
-	showShout(turn, n)
+	pulse:SetShown(cue)
+	showShout(cue, n)
 end
 
 -- Secure attributes can only change out of combat. The target goes in the
@@ -506,10 +574,7 @@ function Tracker.Refresh()
 	local s = Tracker.Compute()
 	lastSummary = s
 	local mood = Status.Mood(s)
-	local face = Art.Texture(mood)
-	castBtn.icon:SetTexture(face)
-	castBtn.shade:SetTexture(face)
-	castBtn.icon:SetDesaturated(mood == "idle")
+	showFace(s, mood)
 	showRole(s, mood)
 	layoutStatusIcons(s)
 	-- In preview the button never casts anything.

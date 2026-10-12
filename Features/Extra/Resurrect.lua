@@ -40,10 +40,10 @@ local function ready(spell)
 	return not (start and duration > GCD and start + duration > GetTime())
 end
 
--- A body waiting for a resurrection: dead, not released, not feigning, online,
--- and not already being resurrected by someone else.
+-- A player waiting for a resurrection: dead or released (a ghost can accept it
+-- too), not feigning, online, and not already being resurrected by someone else.
 local function corpse(unit)
-	return UnitIsDeadOrGhost(unit) and not (UnitIsGhost and UnitIsGhost(unit))
+	return UnitIsDeadOrGhost(unit)
 		and not (UnitIsFeignDeath and UnitIsFeignDeath(unit)) and UnitIsConnected(unit)
 		and not (UnitHasIncomingResurrection and UnitHasIncomingResurrection(unit))
 end

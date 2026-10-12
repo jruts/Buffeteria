@@ -14,6 +14,11 @@ function Sample.Create(parent)
 	preview.head = CreateFrame("Frame", nil, preview)
 	preview.head.icon = preview.head:CreateTexture(nil, "ARTWORK")
 	preview.head.icon:SetAllPoints()
+	-- The clean style's status border.
+	preview.head.edge = CreateFrame("Frame", nil, preview.head, "BackdropTemplate")
+	preview.head.edge:SetAllPoints()
+	preview.head.edge:SetBackdrop({ edgeFile = UI.WHITE, edgeSize = 2 })
+	preview.head.edge:Hide()
 	preview.gief = preview:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 	preview.icons = {}
 	for i, key in ipairs(KEYS) do
@@ -35,6 +40,7 @@ function Sample.Refresh(preview)
 	-- can also be refreshed before the host is measured; wait for usable bounds.
 	local width, height = preview:GetWidth(), preview:GetHeight()
 	if width <= 20 or height <= 20 then return end
+	local clean = ns.db.trackerStyle == "CLEAN"
 	local size, headSize = ns.db.statusIconSize, ns.db.iconSize
 	local keys, states, counts = {}, {}, {}
 	for i, key in ipairs(KEYS) do
@@ -51,12 +57,23 @@ function Sample.Refresh(preview)
 		return a < b
 	end)
 	preview.head:SetSize(headSize, headSize)
-	preview.head.icon:SetTexture(Tracker.Art.Texture(preview.mood))
-	preview.gief:SetText(preview.mood ~= "happy" and CAST[ns.WoW.PlayerClass()]
-		and ("GIEF " .. ns.Buffs.byKey[CAST[ns.WoW.PlayerClass()]].label .. "!") or "")
+	local cast = preview.mood ~= "happy" and CAST[ns.WoW.PlayerClass()]
+	-- The clean style's button is the next cast's icon, shown only with something to cast.
+	preview.head:SetShown(not clean or cast and true or false)
+	if clean and cast then
+		preview.head.icon:SetTexture(UI.BuffIcon(cast))
+		preview.head.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		local status = preview.mood == "angry" and "bad" or "warn"
+		preview.head.edge:SetBackdropBorderColor(unpack(Tracker.Status.Color(status)))
+	else
+		preview.head.icon:SetTexture(Tracker.Art.Texture(preview.mood))
+		preview.head.icon:SetTexCoord(0, 1, 0, 1)
+	end
+	preview.head.edge:SetShown(clean and cast and true or false)
+	preview.gief:SetText(cast and not clean and ("GIEF " .. ns.Buffs.byKey[cast].label .. "!") or "")
 	local font = preview.gief:GetFont()
 	preview.gief:SetFont(font, ns.db.shoutSize, "OUTLINE")
-	local aboveGap = ns.db.shoutSize + 8
+	local aboveGap = clean and 0 or ns.db.shoutSize + 8
 	local options = { columns = ns.db.iconsPerRow, side = ns.db.iconPosition, iconSize = size,
 		sideGap = 4, belowGap = 4, aboveGap = aboveGap }
 	-- Auto previews the same placement routine against the inset's screen bounds.

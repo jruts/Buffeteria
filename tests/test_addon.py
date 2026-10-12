@@ -909,6 +909,75 @@ class AddonTests(unittest.TestCase):
                     assert(ns.db.headStyle == 'ORC')
                 """)
 
+    def test_clean_style_shows_next_spell_without_halo_or_shout_and_keeps_last_head(self):
+        lua = full_addon()
+        lua.execute("""
+            local head, frame = _G[ns.globalPrefix .. '_CastButton'], _G[ns.globalPrefix .. '_Tracker']
+            assert(ns.db.trackerStyle == 'HEAD')
+            ns.Options.Toggle()
+            findWidget('Settings').parent:GetScript('OnClick')(findWidget('Settings').parent)
+            local picker = _G[ns.globalPrefix .. '_HeadPicker']
+            local hair = findWidget('Colored hair').parent
+            local clean
+            for _, w in ipairs(widgets) do if w.style == 'CLEAN' then clean = w end end
+            ns.Database.Set('headStyle', 'GNOME')
+            local s = ns.Tracker.Summary()
+            assert(s.next and s.next.icon and head.halo:IsShown() and frame.gief:IsShown())
+            local spell, unit = head:GetAttribute('spell'), head:GetAttribute('*unit1')
+            picker:GetScript('OnClick')(picker)
+            clean:GetScript('OnClick')(clean)
+            assert(ns.db.trackerStyle == 'CLEAN' and ns.db.headStyle == 'GNOME')
+            assert(picker.caption:GetText() == 'Head: None (clean)' and clean:GetChecked())
+            assert(hair.enabled == false)
+            assert(head.icon.texture == ns.Tracker.Summary().next.icon and not head.icon.desaturated)
+            assert(not head.halo:IsShown() and not frame.gief:IsShown() and head.edge:GetAlpha() == 1 and head.icon:IsShown())
+            assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
+            -- Nothing to cast: the add-on's icon, greyed.
+            local compute = ns.Tracker.Compute
+            ns.Tracker.Compute = function() return {any=true, overall='bad', perKey={FORT={total=1, bad=1, warn=0, casters={}}}, problems={}, unreadable={}, yours={}, needs={}, mine={total=0, pending=0}} end
+            ns.Tracker.Refresh()
+            assert(not head.icon:IsShown() and not head.bg:IsShown() and head.edge:GetAlpha() == 0)
+            assert(not head.done:IsShown() and not head.owed:IsShown())
+            -- Hovering doesn't reveal the hidden button; the small icons drag the tracker.
+            head:GetScript('OnEnter')(head)
+            assert(not head.icon:IsShown())
+            head:GetScript('OnLeave')(head)
+            local moved = false
+            local start = ns.Tracker.StartMoving
+            ns.Tracker.StartMoving = function() moved = true end
+            for _, w in ipairs(widgets) do
+                if w.key and w.tex and w:GetScript('OnDragStart') and w:IsShown() and not moved then
+                    w:GetScript('OnDragStart')(w)
+                end
+            end
+            ns.Tracker.StartMoving = start
+            assert(moved)
+            -- Hovering doesn't reveal the hidden button; the small icons drag the tracker.
+            head:GetScript('OnEnter')(head)
+            assert(not head.icon:IsShown())
+            head:GetScript('OnLeave')(head)
+            local moved = false
+            local start = ns.Tracker.StartMoving
+            ns.Tracker.StartMoving = function() moved = true end
+            for _, w in ipairs(widgets) do
+                if w.key and w.tex and w:GetScript('OnDragStart') and w:IsShown() and not moved then
+                    w:GetScript('OnDragStart')(w)
+                end
+            end
+            ns.Tracker.StartMoving = start
+            assert(moved)
+            ns.Tracker.Compute = compute
+            -- Picking a head brings the mascot back.
+            picker:GetScript('OnClick')(picker)
+            for _, w in ipairs(widgets) do
+                if w.style == 'GNOME' then w:GetScript('OnClick')(w) end
+            end
+            assert(ns.db.trackerStyle == 'HEAD' and hair.enabled and head.edge:GetAlpha() == 0 and head.icon:IsShown())
+            assert(head.icon.texture:find('Gnome'))
+            ns.Database.Init()
+            assert(ns.db.trackerStyle == 'HEAD')
+        """)
+
     def test_head_picker_updates_both_hosts_moods_glow_and_preserves_cast_in_combat(self):
         for addon_name, player_class in (("Buffeteria", "PALADIN"), (DEV_NAME, "ROGUE")):
             with self.subTest(addon_name=addon_name, player_class=player_class):
@@ -2390,9 +2459,10 @@ class AddonTests(unittest.TestCase):
                     assert(nextCast(false, true).who == 'R')
                     NOW = NOW + 61
                     assert(nextCast(false, true).who == 'S')
-                    -- Released ghosts, feigning hunters and my own death are skipped.
+                    -- Released ghosts are resurrected too; feigning hunters and my own death are skipped.
                     UnitIsGhost = function(unit) return unit == 'party2' end
-                    UnitIsFeignDeath = function(unit) return unit == 'party1' end
+                    assert(nextCast(false, true).who == 'S')
+                    UnitIsFeignDeath = function(unit) return unit == 'party1' or unit == 'party2' end
                     assert(nextCast(false, true) == nil)
                     UnitIsGhost, UnitIsFeignDeath = nil, nil
                     DEAD.player = true

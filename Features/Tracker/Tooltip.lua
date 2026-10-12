@@ -92,7 +92,7 @@ function Tooltip.Icon(owner, key, s)
 		if pk.warn > 0 then GameTooltip:AddLine(pk.warn .. " running low", unpack(Status.COLORS.warn)) end
 		if pk.bad + pk.warn == 0 then GameTooltip:AddLine("everyone has it", unpack(Status.COLORS.ok)) end
 		if s.yours and s.yours[key] then
-			GameTooltip:AddLine("Your job: click the head to cast it.", unpack(BLUE))
+			GameTooltip:AddLine("Your job: click the " .. (ns.db.trackerStyle == "CLEAN" and "button" or "head") .. " to cast it.", unpack(BLUE))
 		elseif pk.casters and next(pk.casters) then
 			local names = {}
 			for caster in pairs(pk.casters) do names[#names + 1] = ns.WoW.Short(caster) end
