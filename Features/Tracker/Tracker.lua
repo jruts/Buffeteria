@@ -263,22 +263,50 @@ function Tracker.Summary() return lastSummary end
 
 ------------------------------------------------------------------------
 -- Blizzard Edit Mode: show + highlight the tracker so it can be moved
--- together with the rest of the HUBuffs.
+-- together with the rest of the HUD.
 ------------------------------------------------------------------------
+-- Same atlas layout as Blizzard's EditModeSystemSelectionBaseMixin. Use only
+-- its artwork; the system mixin requires a registered Blizzard HUD system.
+local EDIT_SELECTION_LAYOUT = {
+	TopRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = 8 },
+	TopLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = 8 },
+	BottomLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = -8 },
+	BottomRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = -8 },
+	TopEdge = { atlas = "_%s-NineSlice-EdgeTop" },
+	BottomEdge = { atlas = "_%s-NineSlice-EdgeBottom" },
+	LeftEdge = { atlas = "!%s-NineSlice-EdgeLeft" },
+	RightEdge = { atlas = "!%s-NineSlice-EdgeRight" },
+	Center = { atlas = "%s-NineSlice-Center", x = -8, y = 8, x1 = 8, y1 = -8 },
+}
+
 local function buildEditOverlay()
 	local o = CreateFrame("Button", nil, frame)
 	o:SetAllPoints()
 	o:SetFrameLevel(frame:GetFrameLevel() + 20)
-	o.tex = o:CreateTexture(nil, "OVERLAY")
-	o.tex:SetAllPoints()
-	o.tex:SetColorTexture(0.25, 0.55, 1, 0.35)
-	o.label = o:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	o.label:SetPoint("CENTER")
+	o.Selection = CreateFrame("Frame", nil, o)
+	o.Selection:SetAllPoints()
+	o.Selection:SetFrameLevel(o:GetFrameLevel())
+	local function selectArtwork(selected)
+		NineSliceUtil.ApplyLayout(o.Selection, EDIT_SELECTION_LAYOUT,
+			selected and "editmode-actionbar-selected" or "editmode-actionbar-highlight")
+	end
+	o:SetScript("OnShow", function() selectArtwork(false) end)
+	o.label = o:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
+	-- The tracker is too narrow for the system name inside the selection.
+	o.label:SetPoint("BOTTOM", o, "TOP", 0, 10)
 	o.label:SetText("Buffeteria")
 	o:RegisterForDrag("LeftButton")
-	o:SetScript("OnDragStart", function() frame:StartMoving() end)
+	o:SetScript("OnDragStart", function()
+		if InCombatLockdown() then return end
+		selectArtwork(true)
+		frame:StartMoving()
+	end)
 	o:SetScript("OnDragStop", savePos)
-	o:SetScript("OnClick", function() ns.Options.Toggle() end)
+	o:SetScript("OnClick", function()
+		if InCombatLockdown() then return end
+		selectArtwork(true)
+		ns.Options.Toggle()
+	end)
 	o:Hide()
 	frame.editOverlay = o
 end
@@ -287,8 +315,9 @@ local function hookEditMode()
 	if not (EventRegistry and EventRegistry.RegisterCallback) then return end
 	buildEditOverlay()
 	EventRegistry:RegisterCallback("EditMode.Enter", function()
+		if InCombatLockdown() then return end
 		editing = true
-		frame:Show()
+		Tracker.Refresh()
 		frame.editOverlay:Show()
 	end, Tracker)
 	EventRegistry:RegisterCallback("EditMode.Exit", function()

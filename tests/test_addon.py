@@ -109,6 +109,41 @@ class AddonTests(unittest.TestCase):
             assert(Buffeteria_CastButton:GetAttribute('spell'))
         """)
 
+    def test_edit_mode_movement_options_and_visibility(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.db.showTracker = false
+            ns.Tracker.Refresh()
+            assert(not Buffeteria_Tracker:IsShown())
+            EventRegistry:TriggerEvent('EditMode.Enter')
+            local overlay = Buffeteria_Tracker.editOverlay
+            assert(Buffeteria_Tracker:IsShown() and overlay:IsShown())
+            overlay:GetScript('OnDragStart')(overlay)
+            assert(Buffeteria_Tracker.moving)
+            Buffeteria_Tracker:SetPoint('CENTER', UIParent, 'CENTER', 37, -81)
+            overlay:GetScript('OnDragStop')(overlay)
+            assert(not Buffeteria_Tracker.moving)
+            assert(ns.db.pos[3] == 37 and ns.db.pos[4] == -81)
+            overlay:GetScript('OnClick')(overlay)
+            assert(Buffeteria_Prefs:IsShown())
+            Buffeteria_Prefs.CloseButton:GetScript('OnClick')()
+            assert(not Buffeteria_Prefs:IsShown())
+            settingsPage:Show() -- It starts shown in the mock; force its OnShow.
+            settingsPage:GetScript('OnShow')(settingsPage)
+            assert(findWidget('My preferences').parent.parent == settingsPage)
+            ns.Options.Toggle()
+            assert(findWidget('My preferences').parent.parent == Buffeteria_Prefs)
+            COMBAT = true
+            overlay:GetScript('OnDragStart')(overlay)
+            assert(not Buffeteria_Tracker.moving)
+            COMBAT = false
+            EventRegistry:TriggerEvent('EditMode.Exit')
+            assert(not overlay:IsShown() and not Buffeteria_Tracker:IsShown())
+            COMBAT = true
+            EventRegistry:TriggerEvent('EditMode.Enter')
+            assert(not overlay:IsShown() and not Buffeteria_Tracker:IsShown())
+        """)
+
     def test_lua51_syntax(self):
         lua = runtime()
         compile_lua = lua.eval("function(s,n) local f,e=loadstring(s,n); assert(f,e) end")

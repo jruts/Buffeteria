@@ -21,8 +21,8 @@ function Options.Refresh()
 end
 
 local function build()
-	win = CreateFrame("Frame", "Buffeteria_Prefs", UIParent, "BasicFrameTemplateWithInset")
-	win:SetSize(340, 686)
+	win = CreateFrame("Frame", "Buffeteria_Prefs", UIParent)
+	win:SetSize(340, 714)
 	win:SetPoint("CENTER")
 	win:SetMovable(true)
 	win:EnableMouse(true)
@@ -31,17 +31,21 @@ local function build()
 	win:SetScript("OnDragStop", win.StopMovingOrSizing)
 	win:SetFrameStrata("DIALOG")
 	tinsert(UISpecialFrames, "Buffeteria_Prefs")
-	if not win.TitleText then
-		win.TitleText = win:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		win.TitleText:SetPoint("TOP", 0, -6)
-	end
+	-- Match Forever's Edit Mode dialog: translucent fill and native nine-slice border.
+	win.Border = CreateFrame("Frame", nil, win, "DialogBorderTranslucentTemplate")
+	win.Border:SetAllPoints()
+	win.TitleText = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+	win.TitleText:SetPoint("TOP", 0, -16)
 	win.TitleText:SetText("Buffeteria")
+	win.CloseButton = CreateFrame("Button", nil, win, "UIPanelCloseButton")
+	win.CloseButton:SetPoint("TOPRIGHT", -5, -5)
+	win.CloseButton:SetScript("OnClick", function() win:Hide() end)
 
 	-- All controls live on "content", which moves between this window and the
 	-- Settings > AddOns page (whichever is showing).
 	content = CreateFrame("Frame", nil, win)
 	content:SetSize(340, 658)
-	content:SetPoint("TOPLEFT", 0, -26)
+	content:SetPoint("TOPLEFT", 0, -52)
 	personalTab = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 	personalTab:SetSize(148, 24); personalTab:SetPoint("TOPLEFT", 16, -4); personalTab:SetText("My preferences")
 	paladinTab = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
@@ -55,7 +59,7 @@ local function build()
 
 	paladinPanel:Hide(); personalTab:Disable()
 	win:SetScript("OnShow", function()
-		content:SetParent(win); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -26); content:Show()
+		content:SetParent(win); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -52); content:Show()
 		Options.Refresh()
 	end)
 	win:Hide()

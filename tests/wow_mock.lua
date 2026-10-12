@@ -32,6 +32,11 @@ end
 function W:GetAttribute(key) return self.attributes[key] end
 function W:SetScript(event, callback) self.scripts[event] = callback end
 function W:GetScript(event) return self.scripts[event] end
+function W:StartMoving()
+	assert(not InCombatLockdown(), "tracker moved during combat")
+	self.moving = true
+end
+function W:StopMovingOrSizing() self.moving = false end
 function W:SetText(text) self.label = text end
 function W:SetParent(parent) self.parent = parent end
 function W:SetChecked(value) self.checked = value end
@@ -108,3 +113,9 @@ Settings = {
 	RegisterAddOnCategory = function() end,
 	OpenToCategory = function(id) openedCategory = id end,
 }
+EventRegistry = {
+	callbacks = {},
+	RegisterCallback = function(self, event, callback) self.callbacks[event] = callback end,
+	TriggerEvent = function(self, event) self.callbacks[event]() end,
+}
+NineSliceUtil = { ApplyLayout = function(frame, layout, kit) frame.textureKit = kit end }

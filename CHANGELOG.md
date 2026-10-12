@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Updated the options window to Forever's translucent Edit Mode panel style and the tracker selection to native blue/gold nine-slice artwork.
 - Added a Paladins-only tab for built-in, shared class blessing assignments, including assignments for players without Buffeteria.
 - Class assignments support Auto, a specific blessing, or None, and each paladin's own assignments persist between sessions.
 - Explicit personal blessing preferences take priority over the class plan; existing custom rankings are preserved as overrides.
