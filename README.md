@@ -87,6 +87,8 @@ format changed for this feature.
 ## The tracker
 
 Every class has a **Settings** tab in `/buff` and the game's Buffeteria AddOns page.
+Its controls are grouped into four cards: **Tracker**, **Size**, **Show icons**, and
+**Layout**, with a border-color legend underneath.
 It holds **Show tracker**, **Lock tracker**, **Minimap button**, and **Preview**, plus
 the clickable head's size (32–128 pixels; changes apply after combat), a separate
 **Small icon size** slider (16–64 pixels, default: 21; applies immediately), and
@@ -101,8 +103,9 @@ the head's expression and next cast still consider all tracked buffs.
 Blessings, buffs, and auras all use the same full-color icons, with red borders
 when missing, orange when expiring, and green when buffed. Missing takes priority
 if some recipients are missing a buff while others have it running low.
-In **Settings > Icons**, choose **2**, **3**, or **4** icons per row (default: 2).
-Choose **Icon position: Left, Top, Right, Bottom, or Auto** (default: Bottom).
+In the **Layout** card, choose **2**, **3**, or **4** icons per row (default: 2).
+Choose **Icon position: Left, Top, Right, Bottom, or Auto** (default: Bottom) from
+the compass of buttons around **Auto**.
 The four fixed positions keep the chosen side and icons per row, including near
 screen edges. Move the tracker inward if icons extend off-screen.
 **Auto** normally places rows below the face, moves them above near the bottom

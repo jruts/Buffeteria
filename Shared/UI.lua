@@ -77,6 +77,52 @@ function UI.Section(parent, label, x, y)
 	return text
 end
 
+-- A framed settings group: dark panel, shaded header with an icon and gold title.
+function UI.Card(parent, title, icon)
+	local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+	card:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
+		insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+	card:SetBackdropColor(0.04, 0.03, 0.02, 0.72); card:SetBackdropBorderColor(0.55, 0.45, 0.25, 1)
+	local shade = card:CreateTexture(nil, "BORDER")
+	shade:SetPoint("TOPLEFT", 3, -3); shade:SetPoint("TOPRIGHT", -3, -3); shade:SetHeight(25)
+	shade:SetColorTexture(0, 0, 0, 0.45)
+	local badge = card:CreateTexture(nil, "ARTWORK")
+	badge:SetSize(16, 16); badge:SetPoint("TOPLEFT", 10, -7)
+	badge:SetTexture(icon); badge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	card.title = UI.Text(card, "GameFontNormal", 32, -9, nil, title)
+	local rule = goldRule(card)
+	rule:SetPoint("TOPLEFT", 6, -28); rule:SetPoint("TOPRIGHT", -6, -28)
+	return card
+end
+
+-- A selectable pill button styled like the window's tabs. The label lives on its
+-- own font string so lookups by label return the caption, whose parent is the chip.
+function UI.Chip(parent, label, width, onClick)
+	local chip = CreateFrame("Button", nil, parent, "BackdropTemplate")
+	chip:SetSize(width, 22)
+	chip:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+	chip.caption = chip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	chip.caption:SetPoint("CENTER", 0, 0); chip.caption:SetText(label)
+	chip:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+	function chip:SetChecked(value)
+		self.checked = value and true or false
+		if self.checked then
+			self:SetBackdropColor(0.32, 0.22, 0.04, 0.95); self:SetBackdropBorderColor(1, 0.82, 0, 1)
+			self.caption:SetTextColor(1, 0.82, 0)
+		else
+			self:SetBackdropColor(0, 0, 0, 0.6); self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+			self.caption:SetTextColor(0.75, 0.75, 0.75)
+		end
+	end
+	function chip:GetChecked() return self.checked end
+	chip:SetChecked(false)
+	chip:SetScript("OnClick", function(self) onClick(self) end)
+	return chip
+end
+
 -- An icon embedded in a font string, trimmed like an action button.
 function UI.InlineIcon(texture, size)
 	size = size or 14
