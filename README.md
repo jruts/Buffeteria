@@ -191,7 +191,9 @@ Existing tracker visibility and display choices are preserved.
   just needing a buff never triggers them. In combat, only Battle Shout and Inner
   Fire are demanded.
 - **Mash away.** A cast counts once it actually goes off, so pressing the button or
-  key binding during the global cooldown never skips a target. A Prayer, Gift, Arcane
+  key binding during the global cooldown never skips a target. Presses during the
+  cooldown are simply held, so they don't flood you with "Spell is not ready yet"
+  (in combat the press still goes through, with that error muted). A Prayer, Gift, Arcane
   Brilliance or Greater Blessing counts for everyone it covers, so you aren't sent to
   recast it on them one by one. The tracker also updates as soon as anyone gains or
   loses a buff, so when another caster gets there first the button moves on.

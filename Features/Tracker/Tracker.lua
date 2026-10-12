@@ -13,6 +13,8 @@ local BORDER = 2
 local SCREEN_MARGIN = 4
 local GLOW_SCALE = 0.625  -- silhouette size within each glow; see tools/make_orc_glow.py
 local OTHERS_ALPHA = 0.5  -- small icons for buffs that are someone else's job
+local GCD = 1.5           -- assumed global cooldown when the client hides cooldowns
+local lastCastAt = -math.huge
 -- Per display mode: whether a buff's icon shows, and the count on it.
 local DISPLAY = {
 	ALL = function(pk) return true, pk.bad + pk.warn end,
@@ -159,7 +161,32 @@ local function buildCastButton()
 		if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
 	end)
 	castBtn:SetScript("OnEnter", function(self) Tooltip.Head(self, lastSummary) end)
+	-- Hold presses during the global cooldown instead of letting the client
+	-- answer each one with "Spell is not ready yet". Combat locks the attributes,
+	-- so there the press goes through with its error muted.
+	castBtn:SetScript("PreClick", function(self, button, down)
+		self.held = nil
+		local n = self.pending
+		if button ~= "LeftButton" or down or self.dragged or not n then return end
+		local left = ns.WoW.SpellCooldownLeft(n.spellID or n.spell)
+		if left == nil then left = InCombatLockdown() and lastCastAt + GCD - GetTime() or 0 end
+		if left <= 0 then return end
+		if not InCombatLockdown() then
+			self:SetAttribute("*type1", "")
+			self.held = "masked"
+		elseif UIErrorsFrame then
+			UIErrorsFrame:UnregisterEvent("UI_ERROR_MESSAGE")
+			self.held = "muted"
+		end
+	end)
 	castBtn:SetScript("PostClick", function(self, button, down)
+		local held = self.held
+		self.held = nil
+		if held == "muted" then UIErrorsFrame:RegisterEvent("UI_ERROR_MESSAGE") end
+		if held == "masked" then
+			if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
+			return
+		end
 		if down or self.dragged then return end
 		if button == "RightButton" then
 			if not InCombatLockdown() then ns.Options.Toggle() end
@@ -319,6 +346,7 @@ end
 -- stay current while the client hides auras. Then move on to the next cast.
 local function onCast(spellID)
 	local now, n = GetTime(), castBtn.pending
+	lastCastAt = now
 	local hidden = issecretvalue and issecretvalue(spellID)
 	local fromButton = n and now - (castBtn.clickedAt or 0) < 1 and (hidden or spellID == n.spellID)
 	if fromButton then Tracker.Actions.MarkCast(n) end

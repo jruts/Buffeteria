@@ -976,6 +976,60 @@ class AddonTests(unittest.TestCase):
             assert(button.icon.vertexColor[1] == 1)
         """)
 
+    def test_tracker_holds_presses_during_global_cooldown(self):
+        lua = full_addon()
+        lua.execute("""
+            local button, frame = Buffeteria_CastButton, Buffeteria_Tracker
+            local errorsOn = true
+            UIErrorsFrame = {
+                UnregisterEvent = function(_, e) assert(e == 'UI_ERROR_MESSAGE'); errorsOn = false end,
+                RegisterEvent = function(_, e) assert(e == 'UI_ERROR_MESSAGE'); errorsOn = true end,
+            }
+            local cd = { startTime = 0, duration = 0 }
+            C_Spell.GetSpellCooldown = function() return cd end
+            local function press(mouseButton)
+                local typeDuringClick
+                button:GetScript('PreClick')(button, mouseButton or 'LeftButton', false)
+                typeDuringClick = button:GetAttribute('*type1')
+                local errorsDuringClick = errorsOn
+                button:GetScript('PostClick')(button, mouseButton or 'LeftButton', false)
+                return typeDuringClick, errorsDuringClick
+            end
+            assert(button.pending)
+            -- Ready: the press casts, and is remembered for the cast that lands.
+            local t, e = press()
+            assert(t == nil and e and button.clickedAt == WOW_TIME)
+            -- Global cooldown: the press does nothing at all.
+            button.clickedAt = nil
+            cd = { startTime = WOW_TIME - 0.5, duration = 1.5 }
+            t, e = press()
+            assert(t == '' and e and not button.clickedAt)
+            assert(not button:GetAttribute('*type1'))
+            -- Right-click still opens options while the cooldown runs.
+            local toggles = 0
+            ns.Options.Toggle = function() toggles = toggles + 1 end
+            t = press('RightButton')
+            assert(t == nil and toggles == 1)
+            -- Once it ends, presses cast again.
+            WOW_TIME = WOW_TIME + 1
+            t = press()
+            assert(t == nil and button.clickedAt == WOW_TIME)
+            -- In combat attributes are locked: the press goes through quietly.
+            cd = { startTime = WOW_TIME, duration = 1.5 }
+            COMBAT = true
+            t, e = press()
+            assert(t == nil and not e and errorsOn)
+            -- Hidden cooldowns fall back to the time since my last cast.
+            C_Spell.GetSpellCooldown = nil
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 1)
+            t, e = press()
+            assert(not e and errorsOn)
+            WOW_TIME = WOW_TIME + 2
+            t, e = press()
+            assert(e)
+            COMBAT = false
+        """)
+
     def test_minimap_drag_does_not_click_or_announce(self):
         lua = full_addon()
         lua.execute("""

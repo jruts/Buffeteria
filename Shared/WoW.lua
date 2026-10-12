@@ -46,6 +46,23 @@ function ns.WoW.SpellUsable(spell)
 	return not ok or usable or not noPower
 end
 
+-- Seconds until the spell can be cast, the global cooldown included. Nil when the
+-- client doesn't say (no API, or values kept secret during combat).
+function ns.WoW.SpellCooldownLeft(spell)
+	local ok, start, duration
+	if C_Spell and C_Spell.GetSpellCooldown then
+		local info
+		ok, info = pcall(C_Spell.GetSpellCooldown, spell)
+		if ok and info then start, duration = info.startTime, info.duration end
+	elseif GetSpellCooldown then
+		ok, start, duration = pcall(GetSpellCooldown, spell)
+	end
+	if not ok or start == nil or duration == nil then return nil end
+	if issecretvalue and (issecretvalue(start) or issecretvalue(duration)) then return nil end
+	if start == 0 or duration == 0 then return 0 end
+	return math.max(0, start + duration - GetTime())
+end
+
 function ns.WoW.ItemCount(id)
 	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) or 0 end
 	return GetItemCount and GetItemCount(id) or 0
