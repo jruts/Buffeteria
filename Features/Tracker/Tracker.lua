@@ -144,18 +144,12 @@ local function buildCastButton()
 	castBtn.icon = castBtn:CreateTexture(nil, "ARTWORK")
 	castBtn.icon:SetAllPoints()
 	castBtn.icon:SetTexture(Art.Texture("grumpy"))
-	-- "Your turn" cue: a soft gold glow matching the chosen head's silhouette
-	-- and a faint shimmer on the face.
+	-- "Your turn" cue stays behind the head so facial detail remains crisp.
 	castBtn.halo = castBtn:CreateTexture(nil, "BACKGROUND", nil, -8)
 	castBtn.halo:SetPoint("CENTER", castBtn, "CENTER", 0, 0)
 	castBtn.halo:SetTexture(Art.Glow())
 	castBtn.halo:SetVertexColor(1, 0.78, 0.15)
 	castBtn.halo:Hide()
-	castBtn.glow = castBtn:CreateTexture(nil, "OVERLAY")
-	castBtn.glow:SetAllPoints(castBtn.icon)
-	castBtn.glow:SetTexture(Art.Texture("grumpy"))
-	castBtn.glow:SetBlendMode("ADD")
-	castBtn.glow:Hide()
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
 	ns.UI.PressFeedback(castBtn, castBtn.icon, function(self)
 		if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
@@ -268,7 +262,6 @@ local function build()
 		local wave = 0.5 + 0.5 * math.sin(now * 4)
 		-- Flare up when the spell or target changes, then settle into breathing.
 		local flare = 1 - math.min(1, (now - (pulse.popAt or 0)) / 0.5)
-		castBtn.glow:SetAlpha(0.03 + 0.1 * wave + 0.25 * flare)
 		castBtn.halo:SetAlpha(math.min(1, 0.45 + 0.3 * wave + 0.35 * flare))
 		local aura = MAIN / GLOW_SCALE * (1 + 0.04 * wave + 0.1 * flare)
 		castBtn.halo:SetSize(aura, aura)
@@ -300,15 +293,13 @@ local function showShout(turn, n)
 	end
 end
 
--- Show whether clicking does anything for you: a glowing head demanding the
--- buff on your turn. The head itself is never faded.
-local function showRole(s, face)
+-- Show whether clicking does anything for you: a halo and demand on your turn.
+-- The head itself is never brightened or faded.
+local function showRole(s)
 	local n = s.next
 	local turn = n ~= nil
 	castBtn.icon:SetAlpha(1)
-	castBtn.glow:SetTexture(face)
 	castBtn.halo:SetTexture(Art.Glow())
-	castBtn.glow:SetShown(turn)
 	castBtn.halo:SetShown(turn)
 	castBtn.halo:SetSize(MAIN / GLOW_SCALE, MAIN / GLOW_SCALE)
 	if turn and (not pulse:IsShown() or n.spell ~= pulse.spell or n.label ~= pulse.target) then pulse.popAt = GetTime() end
@@ -396,7 +387,7 @@ function Tracker.Refresh()
 	local face = Art.Texture(mood)
 	castBtn.icon:SetTexture(face)
 	castBtn.icon:SetDesaturated(mood == "idle")
-	showRole(s, face)
+	showRole(s)
 	layoutStatusIcons(s)
 	-- In preview the button never casts anything.
 	applySecure(preview and {} or s)

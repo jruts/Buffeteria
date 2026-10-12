@@ -490,10 +490,10 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
-            -- Something to cast: glowing head, spell badge, and a click prompt.
+            -- Something to cast: halo behind the face and a click prompt.
             ns.Tracker.Refresh()
             local action = ns.Tracker.Summary().next
-            assert(action and head.glow:IsShown() and head.halo:IsShown())
+            assert(action and head.halo:IsShown() and not head.glow)
             assert(head.halo.texture:find('OrcGlow$') and head.icon:GetAlpha() == 1)
             assert(frame.gief:IsShown())
             assert(frame.gief:GetText() == 'GIEF ' .. ns.Buffs.byKey[action.key].label .. '!')
@@ -517,7 +517,7 @@ class AddonTests(unittest.TestCase):
             }}
             ns.Tracker.Compute = function() return s end
             ns.db.buffDisplay = 'ALL'; ns.Tracker.Refresh()
-            assert(not head.glow:IsShown() and not head.halo:IsShown())
+            assert(not head.glow and not head.halo:IsShown())
             assert(not frame.gief:IsShown() and frame.tag.point[2] == frame)
             assert(head.icon:GetAlpha() == 1)
             local alpha = {}
@@ -647,7 +647,7 @@ class AddonTests(unittest.TestCase):
                             assert(choiceButton(other.key):GetChecked() == (other.key == choice.key))
                         end
                         assert(head.icon.texture == ns.Tracker.Art.Texture(ns.Tracker.Status.Mood(ns.Tracker.Summary())))
-                        assert(head.glow.texture == head.icon.texture and head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
+                        assert(not head.glow and head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
                         assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
                         assert(frame.point == point and head:GetWidth() == 64)
                     end
@@ -670,7 +670,7 @@ class AddonTests(unittest.TestCase):
                             WOW_TIME = 100 + (phase - 1) * 5
                             ns.Tracker.Refresh()
                             assert(head.icon.texture == ns.mediaPath .. choice.prefix .. suffix)
-                            assert(head.glow.texture == head.icon.texture)
+                            assert(not head.glow)
                             assert(head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
                             assert(not head.icon.desaturated and not head:GetAttribute('spell') and not head:GetAttribute('unit'))
                         end
@@ -681,7 +681,7 @@ class AddonTests(unittest.TestCase):
                     ns.Tracker.Compute = function() return {any=false, overall='idle', perKey={}} end
                     ns.Tracker.Refresh()
                     assert(head.icon.texture:find('UndeadGrumpy$') and head.icon.desaturated)
-                    assert(not head.halo:IsShown() and not head.glow:IsShown())
+                    assert(not head.halo:IsShown() and not head.glow)
                     ns.Tracker.Compute = compute
                 """)
 

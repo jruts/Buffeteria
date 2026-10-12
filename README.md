@@ -139,10 +139,11 @@ the rows' spacing and alignment without resizing the face.
 
 Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, or Undead** using the portrait menu in the
 **Tracker** card. Orc remains the default. Each head has happy, grumpy, and
-furious artwork with green, orange, and red status colors, plus its own matching
-cast glow. All portraits are floating heads without necks or shoulders. Their
-natural skin, fur, and bone colors stay consistent across moods, with subtle
-green, amber, or red lighting. The gnome has rounded ears and fair skin; the
+furious artwork, plus its own matching external cast halo. All portraits are
+floating heads without necks or shoulders. Their natural skin, fur, and bone
+colors and neutral lighting stay consistent across moods; facial expressions
+convey the mood without colored rims, skin washes, or bloom.
+The gnome has rounded ears and fair skin; the
 Undead is a gaunt, skeletal Forsaken. The choice
 is saved per character and changes immediately, including during combat;
 the next spell and target are unchanged. Use **Preview** to see the expressions.
@@ -173,9 +174,8 @@ preview tag and Edit Mode label.
 Existing tracker visibility and display choices are preserved.
 
 - **Character head:** release a click to cast your next buff on the right target.
-  The transparent mascot smiles with green highlights when everyone has their
-  tracked buffs, turns grumpy with orange highlights when some are missing or
-  running low, and furious with red highlights when all tracked buffs are missing
+  The transparent mascot smiles when everyone has their tracked buffs, turns
+  grumpy when some are missing or running low, and furious when all tracked buffs are missing
   across the group. With nothing to track, the head is grey and grumpy.
   Players whose buffs can't be read (usually because they are out of range) don't
   change the mood; hovering lists them as out of range, and they count again once
@@ -184,7 +184,8 @@ Existing tracker visibility and display choices are preserved.
 - **Is it my turn?** The mood is the whole group's, so the head also shows what *you* should
   do. When you have something to cast, a gold glow breathes around it
   (flaring up whenever the next spell changes) and it demands the buff above the face,
-  for example **GIEF Fortitude!** Hover to see the spell and target. When
+  for example **GIEF Fortitude!** The halo stays behind the head; the face is never
+  brightened by an additive shimmer. Hover to see the spell and target. When
   there's nothing for you to cast, there is no glow and clicking does nothing; hover
   to see which buffs you're missing and who is supposed to cast them. The glow and
   GIEF only appear when you can make the cast yourself, including on yourself;
@@ -267,8 +268,10 @@ untouched. The source TOC remains `Buffeteria.toc` for release packaging; deploy
 generates `Buffeteria-Dev.toc` and separate Dev bindings. Lua and artwork are copied
 unchanged. This does not publish a release or update CurseForge.
 
-The new mascot source sheets and their ImageGen prompts are kept under
-`Artwork/Tracker/`. Run `python tools/build_tracker_art.py` with Pillow to rebuild
+The mascot source sheets and their exact built-in ImageGen prompts are kept under
+`Artwork/Tracker/`. [The tracker art guide](Artwork/Tracker/STYLE_GUIDE.md) defines
+Classic race features, lighting, expressions, and reference sources.
+Run `python tools/build_tracker_art.py` with Pillow to rebuild
 all seven heads' runtime portraits and silhouette glows in `Media/`.
 These are uncompressed 256×256 RGBA TGA textures for the game; source artwork
 and build tools are not deployed.
