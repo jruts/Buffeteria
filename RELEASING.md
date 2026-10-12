@@ -31,7 +31,7 @@ In [repository Actions settings](https://github.com/jruts/Buffeteria/settings/se
 
 - Under **Variables**, create `CF_PROJECT_ID` with the numeric project ID.
 - Under **Secrets**, create `CF_API_KEY` with an upload API token generated at
-  [CurseForge API Tokens](https://authors.curseforge.com/#/user/api-tokens).
+  [CurseForge API Tokens](https://authors.curseforge.com/#/settings/api-tokens).
   Use the author upload token, not a third-party download API key.
   Paste it directly into GitHub; do not commit it or put it in chat.
 
