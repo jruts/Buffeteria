@@ -1,5 +1,16 @@
 # Buffeteria
 
+## v0.6.6
+
+- Added a badge on the tracker head showing your own buffing share: a gold count
+  of players (and your aura) still to serve, or a faint green check when your
+  assignments are complete. Out-of-range players do not count against the check.
+- Increased default sizes for new characters to a 96-pixel head and 32-pixel
+  small icons. Existing saved sizes are preserved.
+- Fixed a returning paladin's saved plan overwriting newer group edits after
+  a reload or time offline. Plan cells retain their original revision and author,
+  and login synchronization always includes the paladin's own cells.
+
 ## v0.6.5
 
 - Fix missing navigation tabs caused by painting the Settings sample before it
