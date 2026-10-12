@@ -1,11 +1,10 @@
 -- Buffeteria: the assignment solver.
 -- Pure Lua, no WoW API: every client runs it on the same roster and gets the same answer.
 local _, ns = ...
-ns = ns or {}
-local D = ns.Data
+local Buffs = ns.Buffs
 
-local S = {}
-ns.Solver = S
+local Solver = {}
+ns.Solver = Solver
 
 --[[ Input roster:
 	members = { [fullName] = {
@@ -30,7 +29,7 @@ local function sortedKeys(t)
 	return out
 end
 
-local NB = #D.BLESSING_KEYS
+local NB = #Buffs.BLESSING_KEYS
 
 -- Weighted Borda points: rank 1 = NB points, rank 2 = NB-1 ...; excluded = 0.
 -- Majority rules for the Greater Blessing; anyone who excluded it gets a personal override.
@@ -43,7 +42,7 @@ local function blessingPoints(member, key)
 end
 
 local globalIndex = {}
-for i, k in ipairs(D.BLESSING_KEYS) do globalIndex[k] = i end
+for i, k in ipairs(Buffs.BLESSING_KEYS) do globalIndex[k] = i end
 
 local function solvePaladins(roster, names, out)
 	local paladins, byClass = {}, {}
@@ -58,18 +57,18 @@ local function solvePaladins(roster, names, out)
 	local function knows(p, b) local c = roster.members[p].caps or {}; return c[b] or c["g" .. b] end
 	local function knownCount(p)
 		local c = 0
-		for _, b in ipairs(D.BLESSING_KEYS) do if knows(p, b) then c = c + 1 end end
+		for _, b in ipairs(Buffs.BLESSING_KEYS) do if knows(p, b) then c = c + 1 end end
 		return c
 	end
 
 	-- 1) Global order: total points over everyone.
 	local total = {}
-	for _, b in ipairs(D.BLESSING_KEYS) do
+	for _, b in ipairs(Buffs.BLESSING_KEYS) do
 		total[b] = 0
 		for _, n in ipairs(names) do total[b] = total[b] + blessingPoints(roster.members[n], b) end
 	end
 	local globalOrder = {}
-	for i, b in ipairs(D.BLESSING_KEYS) do globalOrder[i] = b end
+	for i, b in ipairs(Buffs.BLESSING_KEYS) do globalOrder[i] = b end
 	table.sort(globalOrder, function(a, b)
 		if total[a] ~= total[b] then return total[a] > total[b] end
 		return globalIndex[a] < globalIndex[b]
@@ -92,12 +91,12 @@ local function solvePaladins(roster, names, out)
 	for _, class in ipairs(sortedKeys(byClass)) do
 		local members = byClass[class]
 		local score = {}
-		for _, b in ipairs(D.BLESSING_KEYS) do
+		for _, b in ipairs(Buffs.BLESSING_KEYS) do
 			score[b] = 0
 			for _, n in ipairs(members) do score[b] = score[b] + blessingPoints(roster.members[n], b) end
 		end
 		local order = {}
-		for _, b in ipairs(D.BLESSING_KEYS) do if score[b] > 0 then order[#order + 1] = b end end
+		for _, b in ipairs(Buffs.BLESSING_KEYS) do if score[b] > 0 then order[#order + 1] = b end end
 		table.sort(order, function(a, b)
 			if score[a] ~= score[b] then return score[a] > score[b] end
 			return globalIndex[a] < globalIndex[b]
@@ -215,7 +214,7 @@ local function solvePaladins(roster, names, out)
 end
 
 local function solveGroupBuffs(roster, names, out)
-	for _, buff in ipairs(D.GROUP_BUFFS) do
+	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
 		local casters, groupsWanting = {}, {}
 		for _, n in ipairs(names) do
 			local m = roster.members[n]
@@ -240,7 +239,7 @@ local function solveGroupBuffs(roster, names, out)
 	end
 end
 
-function S.Solve(roster)
+function Solver.Solve(roster)
 	local out = { pally = {}, home = {}, overrides = {}, groups = {}, expected = {} }
 	local names = sortedKeys(roster.members)
 	for _, n in ipairs(names) do out.expected[n] = {} end
@@ -248,5 +247,3 @@ function S.Solve(roster)
 	solveGroupBuffs(roster, names, out)
 	return out
 end
-
-return S

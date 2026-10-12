@@ -1,9 +1,9 @@
 -- Buffeteria: the on-screen tracker (status colour + one-click cast button).
 local _, ns = ...
-local D = ns.Data
+local Buffs = ns.Buffs
 
-local T = {}
-ns.Tracker = T
+local Tracker = {}
+ns.Tracker = Tracker
 
 local frame, ring, castBtn, cancelBtn, statusIcons, lastSummary
 local editing = false
@@ -12,19 +12,9 @@ local GAP = 2
 local COLS = 2                                   -- small icons per row under the big one
 local ICON_SIZE = (MAIN - GAP * (COLS - 1)) / COLS -- half size, so two fill the width exactly
 local BORDER = 2
-local ICON_FILE = "Interface\\AddOns\\Buffeteria\\Media\\Icon"
-ns.ICON_FILE = ICON_FILE
-local KEY_ICON = {} -- buff key -> icon texture
-
-local function colorOf(status) return ns.COLOR[status] or ns.COLOR.idle end
-
-local function keyIcon(key)
-	if not KEY_ICON[key] then
-		local b = D.byKey[key]
-		KEY_ICON[key] = ns.SpellIcon(b.groupIds[1]) or ns.SpellIcon(b.ids[1]) or 134400
-	end
-	return KEY_ICON[key]
-end
+local ICON_FILE = ns.UI.ICON
+local colorOf = ns.Status.Color
+local keyIcon = ns.UI.BuffIcon
 
 local function fmtTime(sec)
 	if not sec then return "" end
@@ -33,12 +23,12 @@ end
 
 local function showTooltip(owner)
 	GameTooltip:SetOwner(owner, "ANCHOR_BOTTOMRIGHT")
-	GameTooltip:AddLine("Buffeteria" .. ((ns.Preview and ns.Preview.active) and " |cffff9900(preview)|r" or ""))
+	GameTooltip:AddLine("Buffeteria" .. (ns.Preview.active and " |cffff9900(preview)|r" or ""))
 	local s = lastSummary
 	if not s or not s.any then
 		GameTooltip:AddLine("Nothing on the menu yet.", 0.7, 0.7, 0.7)
 	elseif #s.problems == 0 then
-		GameTooltip:AddLine("Everyone is stuffed. All buffs up.", unpack(ns.COLOR.ok))
+		GameTooltip:AddLine("Everyone is stuffed. All buffs up.", unpack(ns.Status.COLORS.ok))
 	else
 		local shown = 0
 		for _, p in ipairs(s.problems) do
@@ -46,14 +36,14 @@ local function showTooltip(owner)
 			if shown > 20 then GameTooltip:AddLine(("...and %d more"):format(#s.problems - 20), 0.7, 0.7, 0.7); break end
 			local m = ns.roster.members[p.who]
 			local cls = p.class or (m and m.class)
-			local who = cls and ns.ClassColorName(p.who, cls) or ns.Short(p.who)
-			local label = D.byKey[p.key].label
+			local who = cls and ns.WoW.ClassColorName(p.who, cls) or ns.WoW.Short(p.who)
+			local label = Buffs.byKey[p.key].label
 			if p.status == "bad" then
-				GameTooltip:AddDoubleLine(who, label .. " missing", 1, 1, 1, unpack(ns.COLOR.bad))
+				GameTooltip:AddDoubleLine(who, label .. " missing", 1, 1, 1, unpack(ns.Status.COLORS.bad))
 			elseif p.status == "warn" then
-				GameTooltip:AddDoubleLine(who, label .. " " .. fmtTime(p.rem), 1, 1, 1, unpack(ns.COLOR.warn))
+				GameTooltip:AddDoubleLine(who, label .. " " .. fmtTime(p.rem), 1, 1, 1, unpack(ns.Status.COLORS.warn))
 			else
-				GameTooltip:AddDoubleLine(who, "doesn't want " .. label, 1, 1, 1, unpack(ns.COLOR.warn))
+				GameTooltip:AddDoubleLine(who, "doesn't want " .. label, 1, 1, 1, unpack(ns.Status.COLORS.warn))
 			end
 		end
 	end
@@ -104,11 +94,11 @@ local function build()
 	castBtn:SetScript("OnLeave", GameTooltip_Hide)
 	castBtn:SetScript("PostClick", function(self, button, down)
 		if button == "RightButton" then
-			if not down and not InCombatLockdown() then ns.Prefs.Toggle() end
+			if not down and not InCombatLockdown() then ns.Options.Toggle() end
 			return
 		end
-		if self.pendingWho and self.pendingKey then ns.Scan.MarkCast(self.pendingWho, self.pendingKey) end
-		C_Timer.After(0.2, T.Refresh)
+		if self.pendingWho and self.pendingKey then ns.Actions.MarkCast(self.pendingWho, self.pendingKey) end
+		C_Timer.After(0.2, Tracker.Refresh)
 	end)
 	castBtn:RegisterForDrag("LeftButton")
 	castBtn:SetScript("OnDragStart", function()
@@ -149,7 +139,7 @@ local function build()
 	frame:Hide()
 end
 
-local RANK = { bad = 0, warn = 1, ok = 2 }
+local PRIORITY = ns.Status.PRIORITY
 local function layoutStatusIcons(s)
 	local keys, state = {}, {}
 	for key, pk in pairs(s.perKey) do
@@ -161,8 +151,8 @@ local function layoutStatusIcons(s)
 	end
 	-- Worst first, then blessings before the other buffs.
 	table.sort(keys, function(a, b)
-		if state[a] ~= state[b] then return RANK[state[a]] < RANK[state[b]] end
-		local ka, kb = D.byKey[a].kind, D.byKey[b].kind
+		if state[a] ~= state[b] then return PRIORITY[state[a]] < PRIORITY[state[b]] end
+		local ka, kb = Buffs.byKey[a].kind, Buffs.byKey[b].kind
 		if ka ~= kb then return ka == "blessing" end
 		return a < b
 	end)
@@ -180,12 +170,12 @@ local function layoutStatusIcons(s)
 			ic:EnableMouse(true)
 			ic:SetScript("OnEnter", function(self)
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-				GameTooltip:AddLine(D.byKey[self.key].label)
+				GameTooltip:AddLine(Buffs.byKey[self.key].label)
 				local pk = lastSummary and lastSummary.perKey[self.key]
 				if pk then
-					if pk.bad > 0 then GameTooltip:AddLine(pk.bad .. " missing", unpack(ns.COLOR.bad)) end
-					if pk.warn > 0 then GameTooltip:AddLine(pk.warn .. " running low", unpack(ns.COLOR.warn)) end
-					if pk.bad + pk.warn == 0 then GameTooltip:AddLine("everyone has it", unpack(ns.COLOR.ok)) end
+					if pk.bad > 0 then GameTooltip:AddLine(pk.bad .. " missing", unpack(ns.Status.COLORS.bad)) end
+					if pk.warn > 0 then GameTooltip:AddLine(pk.warn .. " running low", unpack(ns.Status.COLORS.warn)) end
+					if pk.bad + pk.warn == 0 then GameTooltip:AddLine("everyone has it", unpack(ns.Status.COLORS.ok)) end
 				end
 				GameTooltip:Show()
 			end)
@@ -235,9 +225,9 @@ local function applySecure(s)
 	end
 end
 
-function T.Refresh()
+function Tracker.Refresh()
 	if not frame then return end
-	local preview = ns.Preview and ns.Preview.active
+	local preview = ns.Preview.active
 	if editing then frame:Show() end
 	if not editing and not preview and (not ns.db.showTracker or not next(ns.roster.members)) then
 		if not InCombatLockdown() then frame:Hide() end
@@ -269,17 +259,11 @@ function T.Refresh()
 	end
 end
 
-function T.Summary() return lastSummary end
-
--- "Greater Blessing of Kings" -> "Greater Kings" so it fits the narrow bar.
-function T.ShortSpell(name)
-	if not name then return "" end
-	return (name:gsub("^Greater Blessing of ", "Greater "):gsub("^Blessing of ", ""):gsub("^Prayer of ", "Prayer: "))
-end
+function Tracker.Summary() return lastSummary end
 
 ------------------------------------------------------------------------
 -- Blizzard Edit Mode: show + highlight the tracker so it can be moved
--- together with the rest of the HUD.
+-- together with the rest of the HUBuffs.
 ------------------------------------------------------------------------
 local function buildEditOverlay()
 	local o = CreateFrame("Button", nil, frame)
@@ -294,12 +278,10 @@ local function buildEditOverlay()
 	o:RegisterForDrag("LeftButton")
 	o:SetScript("OnDragStart", function() frame:StartMoving() end)
 	o:SetScript("OnDragStop", savePos)
-	o:SetScript("OnClick", function() ns.Prefs.Toggle() end)
+	o:SetScript("OnClick", function() ns.Options.Toggle() end)
 	o:Hide()
 	frame.editOverlay = o
 end
-
-function T.IsEditing() return editing end
 
 local function hookEditMode()
 	if not (EventRegistry and EventRegistry.RegisterCallback) then return end
@@ -308,21 +290,22 @@ local function hookEditMode()
 		editing = true
 		frame:Show()
 		frame.editOverlay:Show()
-	end, T)
+	end, Tracker)
 	EventRegistry:RegisterCallback("EditMode.Exit", function()
 		editing = false
 		frame.editOverlay:Hide()
-		T.Refresh()
-	end, T)
+		Tracker.Refresh()
+	end, Tracker)
 end
 
-function T.Init()
+function Tracker.Init()
 	build()
 	hookEditMode()
 	if ns.db.pos then
 		frame:ClearAllPoints()
 		frame:SetPoint(ns.db.pos[1], UIParent, ns.db.pos[2], ns.db.pos[3], ns.db.pos[4])
 	end
-	ns.OnSolved = T.Refresh
-	C_Timer.NewTicker(1, T.Refresh)
+	ns.Events.On("AssignmentsChanged", Tracker.Refresh)
+	ns.Events.On("PreviewChanged", Tracker.Refresh)
+	C_Timer.NewTicker(1, Tracker.Refresh)
 end

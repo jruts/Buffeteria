@@ -1,13 +1,10 @@
 -- Buffeteria: addon messages. Preferences, capabilities and class plans travel;
 -- every client computes the assignments itself.
 local _, ns = ...
-local D = ns.Data
-
 local Comm = {}
 ns.Comm = Comm
 
-local PREFIX = "BUFFETERIA"
-local VERSION = "2"
+local PREFIX, VERSION = ns.Protocol.PREFIX, ns.Protocol.VERSION
 local queued = {}           -- keep every class edit through lockdown/throttle
 local lastSent, lastReq = 0, 0
 
@@ -39,8 +36,8 @@ end
 
 -- S|version|wants|ranking|excluded|caps|explicitBlessings
 local function stateMessage()
-	local p = ns.MyPrefs()
-	return table.concat({ "S", VERSION, keyList(p.wants), table.concat(p.ranking, ","), keyList(p.excluded), keyList(ns.MyCaps()), p.blessingsOverride and "1" or "0" }, "|")
+	local p = ns.Preferences.Get()
+	return table.concat({ "S", VERSION, keyList(p.wants), table.concat(p.ranking, ","), keyList(p.excluded), keyList(ns.Roster.Capabilities()), p.blessingsOverride and "1" or "0" }, "|")
 end
 
 local function send(msg)
@@ -67,7 +64,8 @@ end
 
 local function broadcastState()
 	Comm.Send(stateMessage())
-	if ns.Paladins then ns.BuildRoster(); ns.Paladins.Broadcast() end
+	ns.Roster.Build()
+	ns.Paladins.Broadcast()
 end
 
 -- Broadcast my state. force = skip the anti-spam window (e.g. after a prefs change).
@@ -96,21 +94,21 @@ local function onMessage(prefix, msg, _, sender)
 	if prefix ~= PREFIX or not msg then return end
 	local full = sender
 	if not full then return end
-	if full and not full:find("-") then
+	if not full:find("-") then
 		full = full .. "-" .. (GetNormalizedRealmName and GetNormalizedRealmName() or "")
 	end
-	if full == ns.FullName("player") then return end
+	if full == ns.WoW.FullName("player") then return end
 
 	local kind, ver, a, b, c, d, e = strsplit("|", msg)
 	if kind == "S" then
 		if ver ~= VERSION then
-			if not Comm.warned then Comm.warned = true; ns.Print(ns.Short(full) .. " runs a different Buffeteria version. Assignments may disagree.") end
+			if not Comm.warned then Comm.warned = true; ns.WoW.Print(ns.WoW.Short(full) .. " runs a different Buffeteria version. Assignments may disagree.") end
 			return
 		end
-		if not ns.BuildRoster().members[full] then return end
-		ns.peers[full] = { wants = toSet(a), ranking = toList(b), excluded = toSet(c), caps = toSet(d), blessingsOverride = e == "1", time = GetTime() }
-		ns.Resolve()
-	elseif kind == "P" and ver == VERSION and ns.Paladins then
+		if not ns.Roster.Build().members[full] then return end
+		ns.Roster.peers[full] = { wants = toSet(a), ranking = toList(b), excluded = toSet(c), caps = toSet(d), blessingsOverride = e == "1" }
+		ns.Assignments.Resolve()
+	elseif kind == "P" and ver == VERSION then
 		ns.Paladins.Receive(full, a, b, c, d, e)
 	elseif kind == "R" and ver == VERSION and not replyPending then
 		replyPending = true

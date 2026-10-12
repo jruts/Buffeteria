@@ -82,5 +82,33 @@ in [RELEASING.md](RELEASING.md).
 
 Run `python tests/test_addon.py` with `lupa` installed. The tests use Lua 5.1 and a
 mock WoW environment to check assignments, synchronization, saved data, editor
-navigation, and tracker decisions. Layout and protected casting still need an
-in-game check.
+navigation, tracker decisions, and startup in the manifest's actual load order
+for all nine classes. Layout and protected casting still need an in-game check.
+
+## Code organization
+
+Each feature owns its logic and, when needed, its view:
+
+| Directory | Responsibility |
+| --- | --- |
+| `Features/Buffs` | Spell catalog and class defaults |
+| `Features/Preferences` | Personal buff choices, reset behavior, and preference controls |
+| `Features/Roster` | Group members, peer preferences, and spell capabilities |
+| `Features/Assignments` | Pure assignment solver, recomputation, summaries, and announcements |
+| `Features/Paladins` | Shared class plans and their editor |
+| `Features/Sync` | Message protocol, transport, and retry queue |
+| `Features/Tracker` | Aura observations, next-cast selection, status, secure buttons, and preview |
+| `Features/Minimap` | Minimap button and positioning |
+| `Features/Options` | Window and Settings page hosting the feature views |
+
+`App` initializes the runtime snapshots and saved variables, routes WoW events,
+and exposes commands. `Shared` contains the WoW compatibility helpers, reused UI
+controls, and internal notifications. The existing saved-variable keys and
+version 2 message format are preserved.
+
+Keep new behavior in its owning feature. Use its namespace (`ns.Preferences`,
+`ns.Paladins`, etc.) for public operations; keep implementation helpers local.
+Use `ns.Events.On` and `ns.Events.Emit` for refresh notifications instead of
+replacing another feature's callbacks. Extract shared code only when multiple
+features actually need it. Update `Buffeteria.toc` when adding a runtime file;
+the manifest lists dependencies before their consumers and loads bootstrap last.

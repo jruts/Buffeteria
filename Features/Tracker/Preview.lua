@@ -1,11 +1,11 @@
--- Buffeteria: preview mode. Fills the tracker with a fake 25-player raid
+-- Buffeteria: preview mode. Fills the tracker with a fake raid
 -- that cycles through "all fed", "running low" and "missing" so you can see
 -- how it looks. Nothing is cast and nothing is sent to other players.
 local _, ns = ...
-local D = ns.Data
+local Buffs = ns.Buffs
 
-local P = { active = false }
-ns.Preview = P
+local Preview = { active = false }
+ns.Preview = Preview
 
 local PHASE_SECONDS = 5
 local FAKE = {
@@ -25,7 +25,7 @@ local PHASES = { "bad", "warn", "ok" }
 -- Deterministic pseudo-random so each phase looks the same every cycle.
 local function roll(i, j, phase) return ((i * 7 + j * 13 + phase * 31) % 17) end
 
-function P.Summary()
+function Preview.Summary()
 	local phaseIndex = math.floor(GetTime() / PHASE_SECONDS) % #PHASES
 	local phase = PHASES[phaseIndex + 1]
 	local s = { overall = phase, perKey = {}, problems = {}, any = true }
@@ -48,24 +48,18 @@ function P.Summary()
 		if phase == "bad" then
 			table.insert(s.problems, { who = "Shieldwalla", class = "WARRIOR", key = "SALV", status = "unwanted" })
 		end
-		table.sort(s.problems, function(a, b)
-			if a.status ~= b.status then return a.status == "bad" end
-			if a.who ~= b.who then return a.who < b.who end
-			return a.key < b.key
-		end)
-		local b = D.byKey.KINGS
-		s.next = { spell = ns.SpellName(b.groupIds[1]) or "Greater Blessing of Kings", icon = ns.SpellIcon(b.groupIds[1]),
-			label = ns.ClassName("WARRIOR"), status = phase }
+		table.sort(s.problems, ns.Status.CompareProblems)
+		local b = Buffs.byKey.KINGS
+		s.next = { spell = ns.WoW.SpellName(b.groupIds[1]) or "Greater Blessing of Kings", icon = ns.WoW.SpellIcon(b.groupIds[1]),
+			label = ns.WoW.ClassName("WARRIOR"), status = phase }
 	end
 	return s
 end
 
-function P.Set(on)
-	P.active = on and true or false
-	ns.Print(P.active and "preview on: a fake raid is on the menu (nothing will be cast)." or "preview off.")
-	if ns.Tracker then ns.Tracker.Refresh() end
-	if ns.Minimap then ns.Minimap.Refresh() end
-	if ns.Prefs and ns.Prefs.Refresh then ns.Prefs.Refresh() end
+function Preview.Set(on)
+	Preview.active = on and true or false
+	ns.WoW.Print(Preview.active and "preview on: a fake raid is on the menu (nothing will be cast)." or "preview off.")
+	ns.Events.Emit("PreviewChanged")
 end
 
-function P.Toggle() P.Set(not P.active) end
+function Preview.Toggle() Preview.Set(not Preview.active) end

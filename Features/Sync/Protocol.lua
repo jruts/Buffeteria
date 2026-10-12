@@ -1,0 +1,3 @@
+-- Shared wire constants. Keep version 2 compatible with existing group members.
+local _, ns = ...
+ns.Protocol = { PREFIX = "BUFFETERIA", VERSION = "2" }

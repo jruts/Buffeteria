@@ -8,13 +8,27 @@
 # CurseForge publishing uses the repository Actions variable CF_PROJECT_ID.
 ## IconTexture: Interface\AddOns\Buffeteria\Media\Icon
 
-Data.lua
-Solver.lua
-Core.lua
-Paladins.lua
-Comm.lua
-Scan.lua
-Tracker.lua
-Minimap.lua
-Preview.lua
-Prefs.lua
+App/State.lua
+Shared/Events.lua
+Shared/WoW.lua
+Features/Buffs/Catalog.lua
+Shared/UI.lua
+Features/Sync/Protocol.lua
+Features/Tracker/Status.lua
+App/Database.lua
+Features/Preferences/Model.lua
+Features/Roster/Roster.lua
+Features/Assignments/Solver.lua
+Features/Assignments/Assignments.lua
+Features/Paladins/Plan.lua
+Features/Sync/Comm.lua
+Features/Tracker/Scan.lua
+Features/Tracker/Actions.lua
+Features/Tracker/Preview.lua
+Features/Tracker/Tracker.lua
+Features/Minimap/Minimap.lua
+Features/Preferences/View.lua
+Features/Paladins/View.lua
+Features/Options/Window.lua
+App/Commands.lua
+App/Bootstrap.lua

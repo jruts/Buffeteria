@@ -2,15 +2,34 @@
 local W = {}
 W.__index = W
 widgets = {}
-local function widget(kind, name, parent)
-	local w = setmetatable({ kind = kind, parent = parent, shown = true, scripts = {} }, W)
+local function widget(kind, name, parent, template)
+	local w = setmetatable({ kind = kind, parent = parent, shown = true, scripts = {}, attributes = {},
+		secure = template and template:find("SecureActionButtonTemplate") ~= nil }, W)
 	widgets[#widgets + 1] = w
 	if name then _G[name] = w end
 	return w
 end
-for _, method in ipairs({ "SetSize", "SetWidth", "SetPoint", "ClearAllPoints", "SetMovable", "EnableMouse", "RegisterForDrag",
+for _, method in ipairs({ "ClearAllPoints", "SetMovable", "EnableMouse", "RegisterForDrag",
 	"SetFrameStrata", "SetAllPoints", "SetTexCoord", "SetTexture", "SetDesaturated", "SetColorTexture", "SetJustifyH",
-	"SetJustifyV", "RegisterForClicks", "RegisterEvent", "StartMoving", "StopMovingOrSizing" }) do W[method] = function() end end
+	"SetJustifyV", "RegisterForClicks", "RegisterEvent", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen",
+	"SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "SetHighlightTexture", "SetPushedTexture",
+	"SetWordWrap", "SetNormalTexture", "SetVertexColor", "SetOwner", "AddLine", "AddDoubleLine" }) do W[method] = function() end end
+function W:SetSize(width, height) self.width, self.height = width, height end
+function W:SetWidth(width) self.width = width end
+function W:SetHeight(height) self.height = height end
+function W:GetWidth() return self.width or 140 end
+function W:GetHeight() return self.height or 140 end
+function W:SetPoint(...) self.point = {...} end
+function W:GetPoint() return unpack(self.point or {"CENTER", UIParent, "CENTER", 0, 0}) end
+function W:GetCenter() return 100, 100 end
+function W:GetEffectiveScale() return 1 end
+function W:GetFrameLevel() return self.level or 0 end
+function W:SetFrameLevel(level) self.level = level end
+function W:SetAttribute(key, value)
+	assert(not (self.secure and InCombatLockdown()), "secure attribute changed during combat")
+	self.attributes[key] = value
+end
+function W:GetAttribute(key) return self.attributes[key] end
 function W:SetScript(event, callback) self.scripts[event] = callback end
 function W:GetScript(event) return self.scripts[event] end
 function W:SetText(text) self.label = text end
@@ -31,8 +50,11 @@ function W:Show() self:SetShown(true) end
 function W:Hide() self:SetShown(false) end
 function W:CreateFontString() return widget("FontString", nil, self) end
 function W:CreateTexture() return widget("Texture", nil, self) end
-function CreateFrame(kind, name, parent) return widget(kind, name, parent) end
+function CreateFrame(kind, name, parent, template) return widget(kind, name, parent, template) end
 UIParent = widget("Frame")
+Minimap = widget("Frame")
+GameTooltip = widget("Frame")
+function GameTooltip_Hide() GameTooltip:Hide() end
 UISpecialFrames = {}; SlashCmdList = {}; tinsert = table.insert
 DEFAULT_CHAT_FRAME = { AddMessage = function() end }
 PLAYER_CLASS = "PALADIN"
@@ -42,11 +64,38 @@ function GetNormalizedRealmName() return "Realm" end
 function UnitIsDeadOrGhost() return false end
 function UnitIsConnected() return true end
 function IsInRaid() return false end
-function GetNumSubgroupMembers() return 1 end
-function GetTime() return 100 end
+GROUP_SIZE = 1
+LE_PARTY_CATEGORY_INSTANCE = 2
+function GetNumSubgroupMembers() return GROUP_SIZE end
+function IsInGroup(category) return category == nil and GROUP_SIZE > 0 end
+function UnitIsVisible() return true end
+COMBAT = false
+function InCombatLockdown() return COMBAT end
+function IsShiftKeyDown() return false end
+function IsPlayerSpell() return true end
+WOW_TIME = 100
+function GetTime() return WOW_TIME end
 function time() return 1000 end
 timers = {}
-C_Timer = { After = function(_, callback) timers[#timers + 1] = callback end }
+tickers = {}
+C_Timer = {
+	After = function(_, callback) timers[#timers + 1] = callback end,
+	NewTicker = function(_, callback) tickers[#tickers + 1] = callback end,
+}
+C_Spell = { GetSpellName = function(id) return tostring(id) end, GetSpellTexture = function(id) return id end }
+C_Item = { GetItemCount = function() return 10 end }
+C_UnitAuras = { GetAuraDataByIndex = function() return nil end }
+delivered = {}
+C_ChatInfo = {
+	RegisterAddonMessagePrefix = function() end,
+	SendAddonMessage = function(_, message) delivered[#delivered + 1] = message; return 0 end,
+}
+function strsplit(separator, text)
+	local parts = {}
+	for part in (text .. separator):gmatch("(.-)" .. separator) do parts[#parts + 1] = part end
+	return unpack(parts)
+end
+function SendChatMessage() end
 function runTimers()
 	while #timers > 0 do local todo = timers; timers = {}; for _, callback in ipairs(todo) do callback() end end
 end
@@ -57,4 +106,5 @@ end
 Settings = {
 	RegisterCanvasLayoutCategory = function(panel) settingsPage = panel; return {GetID = function() return 1 end} end,
 	RegisterAddOnCategory = function() end,
+	OpenToCategory = function(id) openedCategory = id end,
 }

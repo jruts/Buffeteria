@@ -1,11 +1,11 @@
 -- Buffeteria: minimap button (no libraries needed).
 local _, ns = ...
 
-local M = {}
-ns.Minimap = M
+local MinimapButton = {}
+ns.Minimap = MinimapButton
 
 local btn
-local ICON = "Interface\\AddOns\\Buffeteria\\Media\\Icon"
+local ICON = ns.UI.ICON
 local RADIUS_PAD = 10
 
 local function place()
@@ -32,8 +32,8 @@ local function onDragUpdate()
 end
 
 local function statusColor()
-	local s = ns.Tracker.Summary and ns.Tracker.Summary()
-	return ns.COLOR[(s and s.overall) or "idle"] or ns.COLOR.idle, s
+	local s = ns.Tracker.Summary()
+	return ns.Status.Color(s and s.overall), s
 end
 
 local function showTooltip(self)
@@ -51,14 +51,14 @@ local function showTooltip(self)
 	GameTooltip:Show()
 end
 
-function M.Refresh()
+function MinimapButton.Refresh()
 	if not btn then return end
 	btn:SetShown(not ns.db.minimap.hide)
 	local c = statusColor()
 	btn.ring:SetVertexColor(c[1], c[2], c[3])
 end
 
-function M.Init()
+function MinimapButton.Init()
 	btn = CreateFrame("Button", "Buffeteria_MinimapButton", Minimap)
 	btn:SetSize(31, 31)
 	btn:SetFrameStrata("MEDIUM")
@@ -95,12 +95,12 @@ function M.Init()
 	btn.ring:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 
 	btn:SetScript("OnClick", function(_, button)
-		if IsShiftKeyDown() then ns.Announce()
+		if IsShiftKeyDown() then ns.Assignments.Announce()
 		elseif button == "RightButton" then
 			ns.db.showTracker = not ns.db.showTracker
 			ns.Tracker.Refresh()
 		else
-			ns.Prefs.Toggle()
+			ns.Options.Toggle()
 		end
 	end)
 	btn:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", onDragUpdate) end)
@@ -109,6 +109,7 @@ function M.Init()
 	btn:SetScript("OnLeave", GameTooltip_Hide)
 
 	place()
-	M.Refresh()
-	C_Timer.NewTicker(2, M.Refresh)
+	MinimapButton.Refresh()
+	ns.Events.On("PreviewChanged", MinimapButton.Refresh)
+	C_Timer.NewTicker(2, MinimapButton.Refresh)
 end
