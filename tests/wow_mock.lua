@@ -17,6 +17,7 @@ for _, method in ipairs({ "ClearAllPoints", "SetMovable", "EnableMouse", "Regist
 	"SetOrientation", "SetValueStep", "EnableMouseWheel", "SetClipsChildren", "AddMaskTexture", "SetAtlas",
 	"SetTitle", "SetPortraitToAsset", "SetFontString", "SetTextColor", "SetFontObject", "SetBlendMode", "SetRotation" }) do W[method] = function() end end
 function W:SetSize(width, height) self.width, self.height = width, height end
+function W:SetScale(scale) self.scale = scale end
 function W:SetWidth(width) self.width = width end
 function W:SetHeight(height) self.height = height end
 function W:SetTexCoord(...) self.texCoord = {...} end
@@ -42,7 +43,10 @@ function W:SetTexture(texture) self.texture = texture end
 function W:SetDesaturated(value) self.desaturated = value end
 function W:SetVertexColor(...) self.vertexColor = {...} end
 function W:SetAlpha(alpha) self.alpha = alpha end
-function W:SetFont(path, size, flags) self.font = {path, size, flags} end
+function W:SetFont(path, size, flags)
+	assert(type(size) == "number" and size > 0, "FontString:SetFont(): height must be > 0")
+	self.font = {path, size, flags}
+end
 function W:GetFont() return unpack(self.font or {"Fonts\FRIZQT__.TTF", 12, ""}) end
 function W:GetAlpha() return self.alpha or 1 end
 function W:SetBackdropBorderColor(...) self.borderColor = {...} end

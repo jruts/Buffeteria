@@ -5,41 +5,47 @@ local _, ns = ...
 local Buffs, GOLD = ns.Buffs, ns.UI.GOLD
 local RankList = {}
 ns.Preferences.RankList = RankList
-local ROW_H, ICON = 30, 22
+local ROW_H, ROW, ICON = 40, 30, 24
 local GREY, RED = ns.UI.COLOR.GREY, ns.UI.COLOR.RED
 -- Drag state: the slot being moved, where the cursor grabbed it, and the lifted copy.
-local list, rows, ghost, served, onMoved
+local list, rows, ghost, served, onMoved, cutoff
 local dragging, grabY, ghostY, dropping, moved
 
 -- Paint one ranking row (or the lifted copy) for a key.
 local function paintRow(r, key, rank, below, mine)
-	r.icon:SetShown(key ~= "|"); r.border:SetShown(key ~= "|")
+	local divider = key == "|"
+	r.icon:SetShown(not divider); r.border:SetShown(not divider); r.rule:SetShown(divider)
+	for _, edge in ipairs(r.edges) do edge:SetShown(not divider) end
+	r.check:SetShown(not divider and mine[key] ~= nil)
 	r.text:ClearAllPoints()
-	if key == "|" then
+	if divider then
+		-- A heading for the blessings below it, not a row of its own.
 		r.rank:SetText(""); r.served:SetText("")
-		r.text:SetPoint("CENTER", 0, 0)
-		r.text:SetText(RED .. "Not wanted below|r")
-		r.bg:SetColorTexture(0.32, 0.06, 0.03, 0.75)
-		r.accent:SetColorTexture(0.9, 0.2, 0.1, 1)
+		r.text:SetPoint("LEFT", 4, -2)
+		r.text:SetText(RED .. "Excluded from my ranking|r")
+		r.bg:SetColorTexture(0, 0, 0, 0)
+		r.accent:SetColorTexture(0, 0, 0, 0)
 		return
 	end
-	r.text:SetPoint("LEFT", r.icon, "RIGHT", 9, 0); r.text:SetPoint("RIGHT", r.served, "LEFT", -6, 0)
+	r.text:SetPoint("LEFT", r.icon, "RIGHT", 10, mine[key] and 6 or 0)
+	r.text:SetPoint("RIGHT", r.grip, "LEFT", -28, 0)
 	r.icon:SetTexture(ns.UI.BuffIcon(key))
 	r.icon:SetDesaturated(below)
 	if below then
-		r.border:SetVertexColor(0.5, 0.5, 0.5)
-		r.rank:SetText(""); r.served:SetText("")
+		r.border:SetVertexColor(0.25, 0.25, 0.25)
+		r.rank:SetText(""); r.served:SetText(mine[key] and ns.Roster.Name(mine[key]) or "")
 		r.text:SetText(GREY .. Buffs.byKey[key].label .. "|r")
-		r.accent:SetColorTexture(0.35, 0.35, 0.35, 1)
-		r.bg:SetColorTexture(0, 0, 0, 0.35)
+		r.accent:SetColorTexture(0, 0, 0, 0)
+		r.bg:SetColorTexture(0.12, 0.03, 0.02, 0.35)
 	else
-		r.border:SetVertexColor(unpack(GOLD))
+		r.border:SetVertexColor(0, 0, 0)
 		r.rank:SetText(tostring(rank))
 		r.text:SetText(Buffs.byKey[key].label)
 		-- The paladin actually serving this blessing to you.
-		r.served:SetText(mine[key] and ns.Roster.Name(mine[key]) or (GREY .. "-|r"))
-		r.accent:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
-		r.bg:SetColorTexture(0, 0, 0, 0.6)
+		r.served:SetText(mine[key] and ns.Roster.Name(mine[key]) or "")
+		-- A thin gold accent marks blessings someone is actually casting on you.
+		if mine[key] then r.accent:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.9) else r.accent:SetColorTexture(0, 0, 0, 0) end
+		r.bg:SetColorTexture(0, 0, 0, 0.4)
 	end
 end
 
@@ -50,16 +56,23 @@ end
 
 local function setGrip(r, lit)
 	for _, dot in ipairs(r.dots) do
-		if lit then dot:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1) else dot:SetColorTexture(0.65, 0.65, 0.65, 0.7) end
+		if lit then dot:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1) else dot:SetColorTexture(0.55, 0.55, 0.55, 0.8) end
 	end
 end
 
 -- Repaint every row; returns how many blessings are ranked above the divider.
 local function refreshRows()
 	local rank, below, mine = 0, false, served()
+	local prefix, assigned, gap = 0, 0, false
 	for i, key in ipairs(ns.Preferences.Order()) do
 		local r = rows[i]
 		if key == "|" then below = true elseif not below then rank = rank + 1 end
+		if key ~= "|" then
+			if mine[key] then
+				assigned = assigned + 1
+				if not gap and not below then prefix = i end
+			else gap = true end
+		end
 		if i == dragging then
 			-- The empty slot the lifted row will drop into.
 			showContent(r, false)
@@ -73,6 +86,13 @@ local function refreshRows()
 			paintRow(r, key, rank, below and key ~= "|", mine)
 		end
 		r.grip:SetShown(key ~= "|" and i ~= dragging)
+	end
+	-- A cutoff is honest only when assignments form a contiguous ranked prefix.
+	cutoff:SetShown(ns.db.blessingsOverride and not dragging and prefix > 0 and prefix == assigned)
+	if prefix > 0 then
+		-- Centered in the gap below the last assigned row.
+		cutoff:ClearAllPoints(); cutoff:SetPoint("TOPLEFT", 0, -prefix * ROW_H + ROW_H - ROW)
+		cutoff.label:SetText(assigned .. (assigned == 1 and " blessing" or " blessings") .. " assigned now")
 	end
 	return rank
 end
@@ -153,36 +173,45 @@ end
 -- Rank number, framed icon, blessing, the paladin serving it, and a grip.
 local function rowVisuals(r)
 	r.offset = 0
-	r:SetHeight(ROW_H - 2)
+	r:SetHeight(ROW)
 	r.bg = r:CreateTexture(nil, "BACKGROUND")
 	r.bg:SetAllPoints()
+	-- A faint one-pixel edge around each row.
+	r.edges = {}
+	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" } }) do
+		local edge = ns.UI.Line(r, 1, 1, 1, 0.07, false, "BORDER")
+		edge:SetPoint(side[1]); edge:SetPoint(side[2])
+		r.edges[#r.edges + 1] = edge
+	end
 	r.accent = r:CreateTexture(nil, "BORDER")
-	r.accent:SetPoint("TOPLEFT"); r.accent:SetPoint("BOTTOMLEFT"); r.accent:SetWidth(3)
+	r.accent:SetPoint("TOPLEFT"); r.accent:SetPoint("BOTTOMLEFT"); r.accent:SetWidth(2)
 	r.rank = r:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-	r.rank:SetPoint("LEFT", 5, 0); r.rank:SetWidth(18); r.rank:SetJustifyH("CENTER")
-	r.icon = r:CreateTexture(nil, "ARTWORK")
-	r.icon:SetSize(ICON, ICON)
-	r.icon:SetPoint("LEFT", 30, 0)
-	r.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
-	-- Action-button style slot ring around the icon.
-	r.border = r:CreateTexture(nil, "OVERLAY")
-	r.border:SetSize(ICON * 2.1, ICON * 2.1); r.border:SetPoint("CENTER", r.icon, "CENTER", 0, 0)
-	r.border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-	-- Six-dot drag handle.
+	r.rank:SetPoint("LEFT", 4, 0); r.rank:SetWidth(20); r.rank:SetJustifyH("CENTER")
+	r.icon, r.border = ns.UI.Icon(r, ICON)
+	r.border:SetPoint("LEFT", 30, 0)
+	-- Three-bar drag handle.
 	r.grip = CreateFrame("Frame", nil, r)
-	r.grip:SetSize(8, 14); r.grip:SetPoint("RIGHT", -8, 0)
+	r.grip:SetSize(12, 10); r.grip:SetPoint("RIGHT", -10, 0)
 	r.dots = {}
-	for d = 0, 5 do
-		local dot = r.grip:CreateTexture(nil, "OVERLAY")
-		dot:SetSize(2, 2); dot:SetPoint("TOPLEFT", (d % 2) * 5, -math.floor(d / 2) * 5 - 1)
-		r.dots[#r.dots + 1] = dot
+	for d = 0, 2 do
+		local bar = r.grip:CreateTexture(nil, "OVERLAY")
+		bar:SetSize(12, 2); bar:SetPoint("TOPLEFT", 0, -d * 4)
+		r.dots[#r.dots + 1] = bar
 	end
 	setGrip(r, false)
 	r.served = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	r.served:SetPoint("RIGHT", r.grip, "LEFT", -8, 0); r.served:SetJustifyH("RIGHT"); r.served:SetWordWrap(false)
+	r.served:SetPoint("LEFT", r.icon, "RIGHT", 10, -7); r.served:SetJustifyH("LEFT"); r.served:SetWordWrap(false)
+	r.served:SetPoint("RIGHT", r.grip, "LEFT", -28, 0)
+	r.served:SetTextColor(0.75, 0.75, 0.75)
 	r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	r.text:SetJustifyH("LEFT"); r.text:SetWordWrap(false)
-	r.content = { r.accent, r.rank, r.served, r.text }
+	r.check = r:CreateTexture(nil, "OVERLAY")
+	r.check:SetSize(18, 18); r.check:SetPoint("RIGHT", r.grip, "LEFT", -8, 0)
+	r.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+	-- The red rule after the "Excluded" heading.
+	r.rule = ns.UI.Line(r, 0.9, 0.25, 0.15, 0.6)
+	r.rule:SetPoint("LEFT", r.text, "RIGHT", 8, 0); r.rule:SetPoint("RIGHT", r, "RIGHT", -4, -2)
+	r.content = { r.accent, r.rank, r.served, r.text, r.check, r.rule }
 	-- Gold outline, shown on the empty drop slot and the lifted row.
 	r.outline = {}
 	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", "H" }, { "BOTTOMLEFT", "BOTTOMRIGHT", "H" },
@@ -232,6 +261,19 @@ function RankList.Create(parent, servedBy, movedCallback)
 	rows = {}
 	for i = 1, #Buffs.BLESSINGS + 1 do rows[i] = createRow(i) end
 	ghost = createGhost()
+	-- "N blessings assigned now": a gold label between two gold rules.
+	cutoff = CreateFrame("Frame", nil, list)
+	cutoff:SetHeight(ROW_H - ROW)
+	cutoff.label = cutoff:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	cutoff.label:SetPoint("CENTER", 0, 0)
+	local font = cutoff.label:GetFont()
+	cutoff.label:SetFont(font, 10)
+	for _, side in ipairs({ { "LEFT", "LEFT", "RIGHT", -8 }, { "RIGHT", "RIGHT", "LEFT", 8 } }) do
+		local rule = ns.UI.Line(cutoff, GOLD[1], GOLD[2], GOLD[3], 0.5)
+		rule:SetPoint(side[1], cutoff, side[2], side[1] == "LEFT" and 4 or -4, 0)
+		rule:SetPoint(side[3], cutoff.label, side[1], side[4], 0)
+	end
+	cutoff:Hide()
 	-- Closing the window mid-drag keeps the order reached so far.
 	list:SetScript("OnHide", function()
 		if not dragging then return end
@@ -246,6 +288,7 @@ function RankList.Create(parent, servedBy, movedCallback)
 		self:SetWidth(width)
 		for _, r in ipairs(rows) do r:SetWidth(width) end
 		ghost:SetWidth(width)
+		cutoff:SetWidth(width)
 	end
 	return list
 end

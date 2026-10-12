@@ -28,6 +28,7 @@ Features/Tracker/Scan.lua
 Features/Tracker/Actions.lua
 Features/Tracker/Preview.lua
 Features/Tracker/Layout.lua
+Features/Tracker/SettingsPreview.lua
 Features/Tracker/Tooltip.lua
 Features/Tracker/EditMode.lua
 Features/Tracker/Tracker.lua

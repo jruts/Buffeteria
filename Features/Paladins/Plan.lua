@@ -65,10 +65,38 @@ end
 -- (offline, loading screen, data not loaded) keeps their cells; leaving the group
 -- clears everyone else's.
 function Plan.Prune(roster)
-	if IsInGroup and IsInGroup() then return end
+	local grouped = IsInGroup and IsInGroup()
+	if Plan.wasGrouped and not grouped then Plan.undo = nil end
+	Plan.wasGrouped = grouped
+	if grouped then return end
 	for paladin in pairs(Plan.cells) do
 		if not roster.members[paladin] then Plan.cells[paladin] = nil end
 	end
+end
+
+-- Bulk undo records the exact registers written by this operation. A newer
+-- local or remote edit is never replaced by undoing an older bulk action.
+local function bulk(action)
+	local before = {}
+	for _, paladin in ipairs(ns.Roster.Paladins()) do
+		before[paladin] = {}
+		for slot in pairs(slots) do
+			before[paladin][slot] = { key = Plan.Get(paladin, slot), cell = (Plan.cells[paladin] or {})[slot] }
+		end
+	end
+	local count = action()
+	if count == 0 then return count end
+	local undo = {}
+	for paladin, row in pairs(before) do
+		for slot, previous in pairs(row) do
+			local current = (Plan.cells[paladin] or {})[slot]
+			if current ~= previous.cell then
+				undo[#undo + 1] = { paladin = paladin, slot = slot, key = previous.key, written = current }
+			end
+		end
+	end
+	Plan.undo = undo
+	return count
 end
 
 function Plan.Get(paladin, slot)
@@ -217,15 +245,45 @@ end
 -- the solver picks for it now, so the whole plan is filled in and shared.
 -- Manual choices (including None) stay as they are.
 function Plan.Fill()
-	return editAll(function(key) return key == "AUTO" end, function(paladin, slot)
+	return bulk(function() return editAll(function(key) return key == "AUTO" end, function(paladin, slot)
 		if slot == AURA then return ns.Assignments.Aura(paladin) end
 		return ns.Assignments.ClassBlessing(slot, paladin)
-	end)
+	end) end)
 end
 
 -- Return every cell of the group's paladins to Auto.
 function Plan.Clear()
-	return editAll(function(key) return key ~= "AUTO" end, function() return "AUTO" end)
+	return bulk(function() return editAll(function(key) return key ~= "AUTO" end, function() return "AUTO" end) end)
+end
+
+local function canRestore(item)
+	local m = paladinMember(ns.Assignments.roster, item.paladin)
+	if not m or (Plan.cells[item.paladin] or {})[item.slot] ~= item.written
+		or (Buffs.byKey[item.key] and not castable(m, item.key)) then return false end
+	if Buffs.byKey[item.key] then
+		for other, row in pairs(Plan.cells) do
+			local cell = row[item.slot]
+			if other ~= item.paladin and paladinMember(ns.Assignments.roster, other)
+				and cell and cell.key == item.key and newer(cell, item.written) then return false end
+		end
+	end
+	return true
+end
+
+function Plan.CanUndo()
+	for _, item in ipairs(Plan.undo or {}) do if canRestore(item) then return true end end
+	return false
+end
+
+function Plan.Undo()
+	if not ns.WoW.IsPaladin() then return 0 end
+	local count = 0
+	for _, item in ipairs(Plan.undo or {}) do
+		if canRestore(item) then edit(item.paladin, item.slot, item.key); count = count + 1 end
+	end
+	Plan.undo = nil
+	if count > 0 then changed() end
+	return count
 end
 
 function Plan.Broadcast()

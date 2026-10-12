@@ -13,19 +13,20 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
 - **You order, the kitchen cooks.** Each player ranks the paladin blessings they want
   (drag to reorder) and lights up the buffs they care about (Fortitude, Spirit, Shadow
   Protection, Mark of the Wild, Arcane Intellect). In `/buff`, these appear as
-  talent-style trees: Blessings (each ranked blessing names the paladin serving it),
-  Buffs (each buff names its caster; warriors also get Battle Shout and priests
-  Inner Fire), and Tanks
-  (buffs wanted while tanking: Righteous Fury for paladins and Thorns from a druid).
-- **Smart assignments.** With one paladin you get your #1 blessing, with two your #1 and
-  #2, and so on. Greater Blessings cover a whole class, so each class gets what most of
-  its players ranked highest. Priests, druids and mages split the raid groups by
+  three named panels: **Blessings**, **Buffs** (including Battle Shout for warriors
+  and Inner Fire for priests), and **Tank role** (Righteous Fury for paladins and
+  Thorns from a druid). Each buff row names its caster; missing casters are grey.
+- **Smart assignments.** Paladins serve your highest available blessings, subject
+  to their spells and the class plan. Greater Blessings cover a whole class, so
+  each class gets what most of its players ranked highest. Priests, druids and mages split the raid groups by
   work: a group is one cast for someone with the group spell (Prayer, Gift, Arcane
   Brilliance) but one cast per player without it, so the work evens out. On a tie, a
   caster keeps their own group, where they are in range. Everyone should update
   together: copies that split groups differently disagree on who buffs which group.
-- **No Salvation on the tank.** Drag a blessing below the line and you'll get a
-  different personal blessing from that paladin instead.
+- **Personal exclusions.** In **Use my ranking**, drag Salvation below
+  **Excluded from my ranking** to avoid it while tanking. **Follow class plan**
+  uses the shared plan, including manual assignments; exclusions belong to your
+  personal ranking.
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
   same preferences. Players without the add-on get sensible class defaults.
 
@@ -37,17 +38,17 @@ first; mages, warlocks, priests, druids, paladins, and shamans want Wisdom first
 hunters want Kings first (Might doesn't raise ranged attack power). Kings and
 Salvation follow for everyone. Casters don't want Might, and warriors and rogues
 don't want Wisdom. Players without the add-on are planned from the same defaults,
-and so are classes Auto and **Auto-fill** cover on the Paladins tab. If your saved
+and so are classes Auto and **Lock in Auto picks** cover on the Paladins tab. If your saved
 ranking still matches the old Kings-first default, it moves to the new one; a
 ranking you reordered is kept.
 
-Warriors see **Battle Shout** in the Buffs tree. It is on by default; click it to
+Warriors see **Battle Shout** in the Buffs panel. It is on by default; click it to
 skip it. The tracker reminds you when your own shout is missing or has less than
 30 seconds left (it lasts only two minutes, so the expiring-buff setting would
 always flag it), and the big button casts it once you have enough rage. Other
 classes never see it, and warriors without Buffeteria aren't tracked for it.
 
-Priests likewise see **Inner Fire** in the Buffs tree, on by default and skippable.
+Priests likewise see **Inner Fire** in the Buffs panel, on by default and skippable.
 The tracker reminds you when it is missing (including after its charges run out)
 or has less than 60 seconds of its ten minutes left, and the big button casts it
 once you have the mana. Other classes never see it, and priests without
@@ -61,10 +62,10 @@ The client hides buffs during combat, so the tracker dates them from the last
 reading before the pull and from your own recasts. A buff you lose early
 (clicked off, or Inner Fire's charges used up) can't be seen until combat ends.
 
-In **My preferences > Tanks**, **Role: Auto** follows your assigned Tank role or
-raid main-tank assignment. Click Role to cycle through **Tank**, **Not tank**, and
-**Auto** when you need an override, including solo play or groups without assigned
-roles. Righteous Fury (paladins only) and Thorns are enabled by default; click their
+In **My preferences > Tank role**, choose **Auto**, **Tank**, or **Not tank**
+explicitly. Auto shows its resolved role and follows your assigned Tank role or
+raid main-tank assignment. Use Tank or Not tank for solo play or groups without
+assigned roles. Righteous Fury (paladins only) and Thorns are enabled by default; click their
 icons to opt out individually. These choices are saved and only requested while
 tanking. The panel names the caster or shows when none is available.
 
@@ -78,15 +79,20 @@ must cast manually. `/buff who` and **Announce to group** still list the group's
 ## Paladin assignments
 
 Paladins have a **Paladins** tab in `/buff` and Settings > AddOns > Buffeteria.
-The window is styled like the game's Talents panel. Each paladin gets a talent tree,
-with the nine classes' blessings shown as talent buttons and the paladin's aura as
-a button in the tree's header. Gold buttons are
-assignments you set, green ones follow Auto, and grey ones have nothing. The trees
-share the board: one paladin fills it, two split it, three take a third each. With
-more than three paladins, scroll horizontally with the mouse wheel or the scrollbar.
-Click a class's blessing to cycle through the choices; right-click cycles backward. You can also
-assign paladins without the addon. For those paladins, choose blessings you know they
-can cast.
+The window uses Blizzard's portrait frame, inset panels, native controls and spell
+icons. The **Class blessings** grid has classes as rows and paladins as columns;
+five paladins fit side by side, with horizontal scrolling for larger rosters.
+Class rows show group counts and the number of players using personal rankings;
+absent classes are dimmed but remain editable. Each paladin's header includes an
+aura picker and an explicit class coverage count.
+
+Click a blessing or aura to open its picker. For Buffeteria users the picker lists
+only known spells. For paladins without the add-on, it labels the spellbook as
+unverified and permits manual choices; choose only spells they can cast.
+Right-click a slot to reset it to **Auto**, or Shift-click to set **None**.
+Auto has a boxed **A** badge, manual choices have a gold border, None has a
+pass icon, and conflicts have a red border and read **Conflict**; state is not
+communicated by color alone. A legend under the grid repeats these cues.
 
 - **Auto** uses Buffeteria's normal class assignment solver. Every class is planned,
   including classes not in the group yet (from their class defaults), so all
@@ -101,9 +107,13 @@ talent goes to the paladin who has it. Without Buffeteria, a paladin is assumed 
 know only the untalented auras. The tracker reminds you when your assigned aura
 isn't running, and the big button turns it on.
 
-**Auto-fill** turns every Auto blessing and aura into Buffeteria's current pick and
-shares it, so the plan stays put when people join or leave. Your manual choices,
-including None, stay as they are. **Clear** sets every slot back to Auto.
+**Lock in Auto picks** turns every resolved Auto blessing and aura into
+Buffeteria's current pick and shares it, so the plan stays put when people join or
+leave. Your manual choices, including None, stay as they are.
+**Reset all to Auto** resets the whole plan. **Undo** reverses the last bulk
+action where its cells have not since been edited; it preserves newer group
+edits and newer claims on the same blessing. Undo history ends when you leave
+the group or reload.
 
 Edits are shared with the group's Buffeteria users. A paladin's own assignments are
 saved between sessions; assignments for other paladins stay with the current group,
@@ -114,8 +124,13 @@ Use **Announce to group** to communicate the plan to players without the addon.
 Buffeteria cannot provide a cast button on a client that doesn't have it installed.
 
 An explicit personal blessing preference takes priority over this class plan.
-Dragging the blessing ranking enables **Override the Paladins class plan**; you can
-also tick it to use your existing ranking. Untick it to follow the class plan again.
+The Blessings panel has two explicit modes, **Follow class plan** and
+**Use my ranking**, each showing the blessings it would select. Hover either for
+the corresponding casters. Dragging the ranking selects Use my ranking visibly;
+switch back to Follow class plan to keep your ranking without applying it.
+Checkmarks identify blessings actually assigned to you. A gold cutoff appears
+only when assignments form a contiguous prefix of your personal ranking; it is
+computed from the plan, not from paladin count alone.
 Players without Buffeteria, and users who haven't enabled a personal override, follow
 the Paladins tab. When no manual assignment is set, class defaults apply.
 
@@ -127,43 +142,41 @@ format changed for this feature.
 ## The tracker
 
 Every class has a **Settings** tab in `/buff` and the game's Buffeteria AddOns page.
-Its controls are grouped into four cards: **Tracker**, **Size**, **Show icons**, and
-**Layout**, with a border-color legend underneath.
-It holds **Show tracker**, **Lock tracker**, **Minimap button**, **Preview**, and
-**Cover for others** (see below), plus
-the clickable head's size (32–128 pixels; changes apply after combat), a separate
-**Small icon size** slider (16–64 pixels, default: 21; applies immediately), a
-**Shout-out text** slider for the GIEF call-out (10–24 pixels, default: 16), and
-the expiring-buff threshold (1–15 minutes). Changing the small icon size updates
-the rows' spacing and alignment without resizing the face.
+Its controls are grouped by **Display**, **Behavior**, **Appearance**, **Buff
+icons**, and **Layout**, with an isolated **Tracker preview** beside them.
+Display contains Show tracker, Lock tracker and Minimap button. Behavior contains
+**Help with overdue buffs** (see below). Appearance contains the head selector,
+Colored hair and three size sliders: head (32–128 pixels), small icons (16–64
+pixels, default 21), and shout-out text (10–24 pixels, default 16).
 
-Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, Undead, or Xaru** using the portrait menu in the
-**Tracker** card. Orc remains the default. Each head has happy, grumpy, and
-furious artwork, plus its own matching external cast halo. All portraits are
-floating heads without necks or shoulders. Their natural skin, fur, and bone
-colors and neutral lighting stay consistent across moods. **Colored hair** in the
-Tracker card is on by default: happy hair is subtly green, annoyed hair is orange,
-and angry hair is red. Untick it to restore the original hair colors. This choice
-is saved per character and changes immediately, including during combat. Skin,
-facial hair, and accessories retain their natural colors; there are no colored
-rims, skin washes, or bloom.
-The gnome has rounded ears and fair skin; the
-Undead is a gaunt, skeletal Forsaken. Xaru is a hand-painted human mage homage
-to the streamer, with his exposed widow's-peak hairline, longer swept-back dark hair,
-moustache and goatee, and no headwear. Every class can select it.
-Your head choice
-is saved per character and changes immediately, including during combat;
-the next spell and target are unchanged. Use **Preview** to see the expressions.
+The preview uses sample raid data, the same head artwork, icon filters, border
+colors and layout calculation as the real tracker. Switch its Happy, Grumpy and
+Angry examples to inspect expressions; large combinations are scaled to fit the
+inset. It remains visible when Show tracker is off, updates while editing, and
+never casts or changes the real tracker's target, position or preview mode.
+Head sizing on the real tracker waits until after combat; the Settings header
+shows this note only in combat. The sample can resize immediately.
 
-Choose which small buff icons appear: **Always show all**, **Missing only**,
-**Missing or expiring** (the default), or **Expiring only**. A buff counts as
+Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, Undead, or Xaru** using
+the native-arrow portrait menu. Each head has happy, grumpy and angry artwork
+and a matching cast halo. All are floating heads without necks or shoulders.
+**Colored hair** is on by default: subtly green when happy, orange when grumpy,
+and red when angry. Untick it to restore original hair colors. Skin, facial
+hair and accessories retain their natural colors. Xaru is the human mage homage
+with swept-back hair, moustache and goatee. Every class can select every head.
+Head and hair choices are saved per character and apply immediately, including
+in combat, without changing the next spell or target.
+
+Choose which small buff icons appear: **All**, **Missing**,
+**Missing or expiring** (the default), or **Expiring**. A buff counts as
 expiring when at least one recipient has less than the configured time left.
 The counts follow the selected filter. These filters affect the small icons;
 the head's expression and next cast still consider all tracked buffs.
 Blessings, buffs, and auras all use the same full-color icons, with red borders
 when missing, orange when expiring, and green when buffed. Missing takes priority
 if some recipients are missing a buff while others have it running low.
-In the **Layout** card, choose **2**, **3**, or **4** icons per row (default: 2).
+The border legend stays inside Buff icons. **Expiring below** selects the
+1–15 minute warning threshold. In the **Layout** panel, choose **2**, **3**, or **4** icons per row (default: 2).
 Choose **Icon position: Left, Top, Right, Bottom, or Auto** (default: Bottom) from
 the compass of buttons around **Auto**.
 The four fixed positions keep the chosen side and icons per row, including near
@@ -210,7 +223,7 @@ Existing tracker visibility and display choices are preserved.
   Brilliance or Greater Blessing counts for everyone it covers, so you aren't sent to
   recast it on them one by one. The tracker also updates as soon as anyone gains or
   loses a buff, so when another caster gets there first the button moves on.
-- **Cover for others** (on by default, in Settings): with nothing of your own to
+- **Help with overdue buffs** (on by default, in Settings): with nothing of your own to
   cast, you are offered your class's group buffs and Thorns on players whose
   assigned caster hasn't served them after 30 seconds, or right away when that
   caster is dead or out of sight. Several helpers take turns 10 seconds apart, so
@@ -228,6 +241,15 @@ Existing tracker visibility and display choices are preserved.
   mages see the GIEF call-out; other classes see what it looks like to wait for
   a buff. Run it again to return to the
   real group.
+
+The window remembers your last tab. On first opening, paladins in a raid start on
+Paladins; other players start on My preferences. The same panels are used in
+Settings > AddOns. A shared footer contains **Announce to group**; hover it to
+see the exact plan and whether it goes to Raid, Party or your local chat.
+The tab bar sits below the native title bar. `/buff preferences` opens personal
+preferences directly; `/buff paladins` opens the paladin-only assignment editor.
+`/buff settings` selects Settings, including when another tab was remembered.
+Dev uses `/buffdev preferences`, `/buffdev paladins`, and `/buffdev settings`.
 
 ## Commands
 

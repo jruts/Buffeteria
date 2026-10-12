@@ -42,6 +42,197 @@ def full_addon(player_class="PALADIN", login=True, addon_name="Buffeteria"):
 
 
 class AddonTests(unittest.TestCase):
+    def test_unsized_settings_preview_does_not_abort_navigation_initialization(self):
+        lua = full_addon()
+        lua.execute("""
+            local refresh = ns.Tracker.SettingsPreview.Refresh
+            local sample = ns.Tracker.SettingsPreview.Create(UIParent)
+            sample:SetSize(0, 0)
+            refresh(sample)
+            assert(not sample.gief.font and not sample.visibleCount)
+            sample:SetSize(20, 20)
+            refresh(sample)
+            assert(not sample.gief.font)
+            sample:SetSize(300, 205)
+            refresh(sample)
+            assert(sample.gief.font[2] > 0 and sample.visibleCount > 0)
+            -- Enforce the client's zero-size initial frame behavior specifically
+            -- for the settings sample, rather than the mock's generic 140px default.
+            local create = ns.Tracker.SettingsPreview.Create
+            ns.Tracker.SettingsPreview.Create = function(parent)
+                local preview = create(parent)
+                preview:SetSize(0, 0)
+                return preview
+            end
+            ns.Tracker.SettingsPreview.Refresh = function(preview)
+                assert(preview:GetWidth() > 20 and preview:GetHeight() > 20,
+                    'options must lay out the settings sample before painting')
+                refresh(preview)
+            end
+            ns.Options.Toggle()
+            assert(findWidget('My preferences').parent:IsVisible())
+            assert(findWidget('Paladins').parent:IsVisible())
+            assert(findWidget('Settings').parent:IsVisible())
+            local settings = findWidget('Settings').parent
+            assert(settings.point and settings.point[2] == findWidget('Paladins').parent)
+            settings:GetScript('OnClick')(settings)
+            assert(findWidget('Tracker settings'):IsVisible())
+        """)
+
+    def test_navigation_tabs_clear_the_title_bar_and_direct_commands_select_panels(self):
+        for player_class in ("PALADIN", "ROGUE"):
+            with self.subTest(player_class=player_class):
+                lua = full_addon(player_class, addon_name=DEV_NAME)
+                lua.execute("""
+                    SlashCmdList.BUFFETERIADEV('preferences')
+                    local preferences = findWidget('My preferences').parent
+                    local settings = findWidget('Settings').parent
+                    local paladins = findWidget('Paladins').parent
+                    local content = preferences:GetParent()
+                    assert(content.point[1] == 'TOPLEFT' and content.point[3] == -30)
+                    assert(settings:IsVisible() and settings:GetFrameLevel() > content:GetFrameLevel())
+                    assert(settings:GetHeight() == 28)
+                    assert(paladins:IsVisible() == (PLAYER_CLASS == 'PALADIN'))
+                    SlashCmdList.BUFFETERIADEV('settings')
+                    assert(ns.db.optionsTab == 'SETTINGS' and openedCategory == 1)
+                    settingsPage:GetScript('OnShow')(settingsPage)
+                    assert(findWidget('Tracker settings'):IsVisible())
+                    SlashCmdList.BUFFETERIADEV('paladins')
+                    assert(BuffeteriaDev_Prefs:IsShown())
+                    assert(findWidget('Class blessings'):IsVisible() == (PLAYER_CLASS == 'PALADIN'))
+                    assert(ns.db.optionsTab == (PLAYER_CLASS == 'PALADIN' and 'PALADIN' or 'PERSONAL'))
+                    SlashCmdList.BUFFETERIADEV('preferences')
+                    assert(BuffeteriaDev_Prefs:IsShown() and findWidget('Blessings'):IsVisible())
+                    settings:GetScript('OnClick')(settings)
+                    assert(findWidget('Tracker settings'):IsVisible())
+                """)
+
+    def test_settings_sample_filters_layout_and_combat_do_not_touch_cast_button(self):
+        for player_class in ("PALADIN", "ROGUE", "PRIEST", "DRUID", "MAGE", "WARRIOR"):
+            with self.subTest(player_class=player_class):
+                lua = full_addon(player_class)
+                lua.execute("""
+                    ns.Options.Toggle()
+                    findWidget('Settings').parent:GetScript('OnClick')(findWidget('Settings').parent)
+                    local panel = findWidget('Tracker settings').parent
+                    local sample, head, frame = panel.preview, Buffeteria_CastButton, Buffeteria_Tracker
+                    local spell, unit, point = head:GetAttribute('spell'), head:GetAttribute('*unit1'), frame.point
+                    assert(not sample.head.secure and not sample.head:GetScript('OnClick'))
+                    assert(not ns.Tracker.Preview.active)
+                    ns.Database.Set('showTracker', false)
+                    COMBAT = true
+                    ns.Database.Set('iconSize', 128)
+                    ns.Database.Set('statusIconSize', 64)
+                    assert(head:GetWidth() == 64 and sample.head:GetWidth() <= 128)
+                    assert(not frame:IsShown() and sample:IsVisible())
+                    for _, side in ipairs({'LEFT','RIGHT','TOP','BOTTOM','AUTO'}) do
+                        for columns = 2, 4 do
+                            ns.Database.Set('iconPosition', side)
+                            ns.Database.Set('iconsPerRow', columns)
+                            assert(sample.fitScale > 0 and sample.fitScale <= 1)
+                            for _, icon in ipairs(sample.icons) do
+                                if icon:IsShown() then
+                                    local x, y = icon.point[4], icon.point[5]
+                                    assert(x >= -sample:GetWidth()/2 and x + icon:GetWidth() <= sample:GetWidth()/2)
+                                    assert(y <= sample:GetHeight()/2 and y - icon:GetHeight() >= -sample:GetHeight()/2)
+                                end
+                            end
+                        end
+                    end
+                    for _, mode in ipairs({'ALL','MISSING','EXPIRING','PROBLEMS'}) do
+                        ns.Database.Set('buffDisplay', mode)
+                        local n = 0
+                        for _, icon in ipairs(sample.icons) do
+                            if icon:IsShown() then
+                                n = n + 1
+                                assert(mode ~= 'MISSING' or icon.state == 'bad')
+                                assert(mode ~= 'EXPIRING' or icon.state == 'warn')
+                                assert(mode ~= 'PROBLEMS' or icon.state ~= 'ok')
+                            end
+                        end
+                        assert(n == (mode == 'MISSING' and 2 or mode == 'EXPIRING' and 2 or 4))
+                    end
+                    ns.Database.Set('warnMinutes', 1)
+                    ns.Database.Set('buffDisplay', 'EXPIRING')
+                    assert(sample.visibleCount == 0)
+                    ns.Database.Set('buffDisplay', 'ALL')
+                    findWidget('Happy').parent:GetScript('OnClick')(findWidget('Happy').parent)
+                    assert(sample.head.icon.texture:find('Happy$') and sample.visibleCount == 4)
+                    assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
+                    assert(frame.point == point and not ns.Tracker.Preview.active)
+                    ns.Options.Toggle()
+                    ns.Options.Toggle()
+                    assert(findWidget('Tracker settings'):IsVisible() and ns.db.optionsTab == 'SETTINGS')
+                    COMBAT = false
+                    ns.Database.Set('showTracker', true)
+                    ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+                    assert(head:GetWidth() == 128)
+                """)
+
+    def test_bulk_undo_preserves_newer_registers_and_new_claims(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.Paladins.Set('A-Realm', 'ROGUE', 'KINGS')
+            ns.Paladins.Set('B-Realm', 'ROGUE', 'MIGHT')
+            runTimers()
+            ns.Paladins.Clear(); runTimers()
+            assert(ns.Paladins.CanUndo())
+            -- A different paladin claims Kings after Reset. Undo must not steal it.
+            ns.Paladins.Set('B-Realm', 'ROGUE', 'KINGS'); runTimers()
+            ns.Paladins.Undo(); runTimers()
+            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'AUTO')
+            assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
+            assert(not ns.Paladins.CanUndo())
+            ns.Paladins.Clear(); runTimers()
+            ns.Paladins.Fill(); runTimers()
+            local own = ns.Paladins.Get('A-Realm', 'WARRIOR')
+            -- Even an identical value from another writer is a newer register.
+            ns.Paladins.Receive('B-Realm', 'A-Realm', '1', own,
+                tostring(ns.Paladins.revision + 10), 'B-Realm')
+            local written = ns.Paladins.cells['A-Realm'].WARRIOR
+            ns.Paladins.Undo(); runTimers()
+            assert(ns.Paladins.cells['A-Realm'].WARRIOR == written)
+            assert(ns.Paladins.Get('B-Realm', 'WARRIOR') == 'AUTO')
+            ns.Paladins.Set('A-Realm', 'ROGUE', 'NONE'); runTimers()
+            ns.Paladins.Clear(); runTimers()
+            assert(ns.Paladins.Undo() > 0); runTimers()
+            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'NONE')
+            ns.Paladins.Clear(); runTimers()
+            GROUP_SIZE = 0; ns.Assignments.Resolve(); runTimers()
+            assert(not ns.Paladins.CanUndo())
+        """)
+
+    def test_blessing_mode_previews_preserve_saved_and_shared_preferences(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.Paladins.Set('A-Realm', 'PALADIN', 'KINGS')
+            ns.Paladins.Set('B-Realm', 'PALADIN', 'WISDOM'); runTimers()
+            ns.db.order = {'MIGHT','KINGS','WISDOM','LIGHT','SANCT','|','SALV'}
+            ns.db.blessingsOverride = false
+            local roster = ns.Assignments.roster
+            local member = roster.members['A-Realm']
+            local result, messages = ns.Assignments.result, #delivered
+            local follow, personal = ns.Preferences.BlessingOutcome(false), ns.Preferences.BlessingOutcome(true)
+            assert(follow.KINGS and follow.WISDOM and not follow.MIGHT)
+            assert(personal.MIGHT and personal.KINGS and not personal.WISDOM)
+            assert(ns.Assignments.roster == roster and roster.members['A-Realm'] == member)
+            assert(ns.Assignments.result == result and not ns.db.blessingsOverride)
+            assert(ns.db.order[1] == 'MIGHT' and #delivered == messages)
+        """)
+
+    def test_buff_icons_retry_uncached_data_and_use_all_available_ranks(self):
+        lua = full_addon()
+        lua.execute("""
+            local original = ns.WoW.SpellIcon
+            ns.WoW.SpellIcon = function() return 134400 end
+            assert(ns.UI.BuffIcon('SANCT') == 'Interface\\\\Icons\\\\Spell_Nature_LightningShield')
+            ns.WoW.SpellIcon = function(id) if id == 20912 then return 987654 end end
+            assert(ns.UI.BuffIcon('SANCT') == 987654)
+            ns.WoW.SpellIcon = function() return nil end
+            assert(ns.UI.BuffIcon('SANCT') == 987654)
+            ns.WoW.SpellIcon = original
+        """)
+
     def test_dev_identity_and_settings_are_independent_for_every_class(self):
         for player_class in ("WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "PALADIN", "SHAMAN"):
             with self.subTest(player_class=player_class):
@@ -371,14 +562,14 @@ class AddonTests(unittest.TestCase):
                     assert(tab:IsVisible() and not findWidget('Show tracker'):IsVisible())
                     tab:GetScript('OnClick')(tab)
                     assert(findWidget('Tracker settings'):IsVisible())
-                    assert(not findWidget('Your buffet'):IsVisible())
-                    assert(not findWidget('Blessings and auras'):IsVisible())
+                    assert(not findWidget('Blessings'):IsVisible())
+                    assert(not findWidget('Class blessings'):IsVisible())
                     local show = findWidget('Show tracker').parent
                     show:SetChecked(false); show:GetScript('OnClick')(show)
                     assert(not ns.db.showTracker and not Buffeteria_Tracker:IsShown())
                     show:SetChecked(true); show:GetScript('OnClick')(show)
                     assert(ns.db.showTracker and Buffeteria_Tracker:IsShown())
-                    local mode = findWidget('Missing only').parent
+                    local mode = findWidget('Missing').parent
                     mode:GetScript('OnClick')(mode)
                     assert(ns.db.buffDisplay == 'MISSING' and mode:GetChecked())
                     assert(not findWidget('Missing or expiring').parent:GetChecked())
@@ -435,7 +626,7 @@ class AddonTests(unittest.TestCase):
                     assert(tab.parent.parent == Buffeteria_Prefs)
                     local personal = findWidget('My preferences').parent
                     personal:GetScript('OnClick')(personal)
-                    assert(findWidget('Your buffet'):IsVisible())
+                    assert(findWidget('Blessings'):IsVisible())
                     assert(not findWidget('Show tracker'):IsVisible())
                 """)
 
@@ -682,7 +873,7 @@ class AddonTests(unittest.TestCase):
                     ns.Database.Init()
                     settingsPage:GetScript('OnShow')(settingsPage)
                     assert(not ns.db.coloredHair and not toggle:GetChecked())
-                    assert(picker.caption:GetText() == 'Xaru' and ns.db.headStyle == 'XARYU')
+                    assert(picker.caption:GetText() == 'Head: Xaru' and ns.db.headStyle == 'XARYU')
                 """)
 
     def test_saved_head_choice_defaults_validates_and_survives_login(self):
@@ -717,7 +908,7 @@ class AddonTests(unittest.TestCase):
                         error('missing head choice ' .. style)
                     end
                     assert(#ns.Tracker.Art.CHOICES == 8 and picker:IsVisible() and not picker.menu:IsShown())
-                    assert(picker.caption:GetText() == 'Orc')
+                    assert(picker.caption:GetText() == 'Head: Orc')
                     local spell, unit, point = head:GetAttribute('spell'), head:GetAttribute('*unit1'), frame.point
                     COMBAT = true
                     for _, choice in ipairs(ns.Tracker.Art.CHOICES) do
@@ -726,7 +917,7 @@ class AddonTests(unittest.TestCase):
                         local chip = choiceButton(choice.key)
                         assert(chip:IsVisible() and chip.portrait.texture == ns.mediaPath .. choice.prefix .. 'ColoredHappy')
                         chip:GetScript('OnClick')(chip)
-                        assert(not picker.menu:IsShown() and picker.caption:GetText() == choice.label)
+                        assert(not picker.menu:IsShown() and picker.caption:GetText() == 'Head: ' .. choice.label)
                         assert(picker.portrait.texture == ns.mediaPath .. choice.prefix .. 'ColoredHappy')
                         assert(ns.db.headStyle == choice.key and chip:GetChecked())
                         for _, other in ipairs(ns.Tracker.Art.CHOICES) do
@@ -739,12 +930,12 @@ class AddonTests(unittest.TestCase):
                     end
                     COMBAT = false
                     settingsPage:GetScript('OnShow')(settingsPage)
-                    assert(choiceButton('XARYU'):GetChecked() and picker.caption:GetText() == 'Xaru')
+                    assert(choiceButton('XARYU'):GetChecked() and picker.caption:GetText() == 'Head: Xaru')
                     picker:GetScript('OnClick')(picker)
                     choiceButton('GNOME'):GetScript('OnClick')(choiceButton('GNOME'))
                     assert(ns.db.headStyle == 'GNOME')
                     ns.Options.Toggle()
-                    assert(choiceButton('GNOME'):GetChecked() and picker.caption:GetText() == 'Gnome')
+                    assert(choiceButton('GNOME'):GetChecked() and picker.caption:GetText() == 'Head: Gnome')
                     picker:GetScript('OnClick')(picker)
                     picker:GetScript('OnClick')(picker)
                     assert(not picker.menu:IsShown())
@@ -1324,21 +1515,21 @@ class AddonTests(unittest.TestCase):
             ns.Paladins.Init(); ns.Assignments.roster = ns.Roster.Build(); ns.Assignments.result = ns.Solver.Solve(ns.Assignments.roster)
             ns.Tracker.Preview = {active=false}; ns.Tracker.Refresh = function() end
         """)
-        for name in ("Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("""
             ns.Options.Toggle()
             local tab = findWidget('Paladins').parent
             assert(tab:IsVisible())
             tab:GetScript('OnClick')(tab)
-            local heading = findWidget('Blessings and auras')
+            local heading = findWidget('Class blessings')
             assert(heading:IsVisible())
             local columns = heading.parent.columns
             assert(#columns == 2 and columns[1].paladin == 'A-Realm' and columns[2].paladin == 'B-Realm')
             local rows = 0
             for _, w in pairs(columns[1].rows) do
                 rows = rows + 1
-                w:GetScript('OnClick')(w, 'RightButton') -- Auto -> None
+                IsShiftKeyDown = function() return true end; w:GetScript('OnClick')(w, 'LeftButton'); IsShiftKeyDown = function() return false end
             end
             assert(rows == 9)
             runTimers()
@@ -1351,20 +1542,20 @@ class AddonTests(unittest.TestCase):
             assert(heading:IsVisible() and Buffeteria_Prefs:IsShown())
             local mine = findWidget('My preferences').parent; mine:GetScript('OnClick')(mine)
             assert(not heading:IsVisible())
-            local override = findWidget('Override the Paladins class plan').parent
-            override:SetChecked(true); override:GetScript('OnClick')(override)
+            local override = findWidget('Use my ranking').parent
+            override:GetScript('OnClick')(override)
             assert(ns.db.blessingsOverride)
             -- Wanted buffs are talent buttons: gold when wanted, grey when not.
-            local fort = findWidget('Your buffet').parent.wants.FORT
+            local fort = findWidget('Blessings').parent.parent.wants.FORT
             local wanted = ns.db.wants.FORT and true or false
             fort:GetScript('OnClick')(fort)
             assert((ns.db.wants.FORT and true or false) == not wanted)
             assert(fort.state == (wanted and 'grey' or 'gold'))
             -- The third tree now hosts role-based tank requests.
-            assert(findWidget('Tanks'):IsVisible())
-            local panel = findWidget('Your buffet').parent
+            assert(findWidget('Tank role'):IsVisible())
+            local panel = findWidget('Blessings').parent.parent
             assert(panel.tankButtons.RFURY:IsShown() and panel.tankButtons.THORNS:IsShown())
-            panel.tankRole:GetScript('OnClick')(); runTimers()
+            panel.roles[2]:GetScript('OnClick')(panel.roles[2]); runTimers()
             assert(ns.db.tankRole == 'TANK' and ns.Preferences.Get().wants.RFURY)
             -- Dragging a blessing lifts it, reorders while moving, and saves on release.
             local list, rankRows, ghost = panel.rankList, panel.rankRows, panel.rankGhost
@@ -1377,7 +1568,7 @@ class AddonTests(unittest.TestCase):
             rankRows[1]:GetScript('OnMouseDown')(rankRows[1], 'LeftButton')
             assert(ghost:IsShown() and list:GetScript('OnUpdate'))
             assert(not rankRows[1].text.shown and ghost.text:GetText():find(ns.Buffs.byKey[first].label, 1, true))
-            cursor = 425; list:GetScript('OnUpdate')(list, 0.01)
+            cursor = 409; list:GetScript('OnUpdate')(list, 0.01)
             assert(ns.db.order[3] == first and not ns.db.blessingsOverride)
             assert(rankRows[1].offset ~= 0 and rankRows[2].offset ~= 0)
             held = false
@@ -1391,92 +1582,91 @@ class AddonTests(unittest.TestCase):
             assert(rankRows[3].text.shown and rankRows[1].offset == 0)
         """)
 
-    def test_paladin_columns_follow_roster_and_scroll_in_both_hosts(self):
+    def test_paladin_grid_fits_five_and_scrolls_larger_rosters_in_both_hosts(self):
         lua = full_addon()
         lua.execute("""
             ns.Options.Toggle()
-            local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
-            local panel = findWidget('Blessings and auras').parent
-            local function shownSeats()
-                local n = 0
-                for _, seat in ipairs(panel.seats) do if seat:IsShown() then n = n + 1 end end
-                return n
-            end
-            -- Paladins share the board: two paladins get half of it each, no empty seats.
-            assert(#panel.columns == 2 and shownSeats() == 0 and Buffeteria_Prefs:GetWidth() == 652)
-            assert(panel.columns[1].width == 317 and panel.columns[2].width == 317)
+            findWidget('Paladins').parent:GetScript('OnClick')(findWidget('Paladins').parent)
+            local panel = findWidget('Class blessings').parent
+            assert(#panel.columns == 2 and Buffeteria_Prefs:GetWidth() == 900)
             assert(not panel.scrollbar:IsShown())
-            -- Add paladins through the real roster -> solver -> refresh event path.
             function UnitFullName(unit)
                 if unit == 'player' then return 'A', 'Realm' end
                 return 'Party' .. unit:match('%d+'), 'Realm'
             end
-            GROUP_SIZE = 2
+            GROUP_SIZE = 4
             ns.Assignments.Resolve(); runTimers()
-            assert(#panel.columns == 3 and shownSeats() == 0 and Buffeteria_Prefs:GetWidth() == 652)
-            assert(panel.columns[1].width == 210)
-            assert(panel.columns[2].paladin == 'Party1-Realm')
-            assert(panel.columns[3].paladin == 'Party2-Realm')
-            assert(not panel.scrollbar:IsShown())
-            -- More paladins than trees scroll horizontally without dropping any columns.
+            assert(#panel.columns == 5 and not panel.scrollbar:IsShown())
+            assert(panel.columns[5].paladin == 'Party4-Realm')
+            for _, column in ipairs(panel.columns) do
+                assert(column:GetWidth() >= 130)
+                local cells = 0
+                for _, cell in pairs(column.rows) do cells = cells + 1; assert(cell:IsVisible()) end
+                assert(cells == 9)
+            end
             GROUP_SIZE = 9
             ns.Assignments.Resolve(); runTimers()
-            assert(#panel.columns == 10 and Buffeteria_Prefs:GetWidth() == 652)
-            assert(panel.scrollbar:IsShown())
-            for _, column in ipairs(panel.columns) do assert(column:IsVisible()) end
+            assert(#panel.columns == 10 and panel.scrollbar:IsShown())
             panel.viewport:GetScript('OnMouseWheel')(panel.viewport, -1)
             assert(panel.viewport.horizontalScroll > 0)
             panel.scrollbar:SetValue(panel.scrollbar.maximum)
             assert(panel.viewport.horizontalScroll == panel.scrollbar.maximum)
-            -- Settings uses the same controls, sized to its own available width.
             settingsPage:SetSize(650, 800)
             settingsPage:GetScript('OnShow')(settingsPage)
             assert(panel:GetParent():GetParent() == settingsPage)
-            assert(panel:GetParent():GetWidth() == 618 and panel.scrollbar:IsShown())
-            settingsPage:SetWidth(800); settingsPage:GetScript('OnSizeChanged')(settingsPage)
-            assert(panel:GetParent():GetWidth() == 768)
-            -- Remove everyone else: one tree fills the board and stale columns stop accepting edits.
+            assert(panel:GetParent():GetWidth() == 820 and panel:GetParent().scale < 1)
+            settingsPage:SetWidth(1000); settingsPage:GetScript('OnSizeChanged')(settingsPage)
+            assert(panel:GetParent():GetWidth() == 968)
             GROUP_SIZE = 0
             ns.Assignments.Resolve(); runTimers()
-            assert(panel.columns[1].paladin == 'A-Realm' and shownSeats() == 0)
-            assert(panel.columns[1].width == panel:GetParent():GetWidth() - 16)
-            assert(not panel.scrollbar:IsShown())
+            assert(panel.columns[1].paladin == 'A-Realm' and not panel.scrollbar:IsShown())
             assert(panel.viewport.horizontalScroll == 0)
             for i = 2, #panel.columns do
                 assert(not panel.columns[i]:IsShown() and panel.columns[i].paladin == nil)
             end
             ns.Options.Toggle()
-            assert(Buffeteria_Prefs:GetWidth() == 652 and panel:GetParent():GetWidth() == 652)
-            local mine = findWidget('My preferences').parent; mine:GetScript('OnClick')(mine)
-            assert(not panel:IsVisible())
+            assert(Buffeteria_Prefs:GetWidth() == 900 and panel:GetParent():GetWidth() == 900)
         """)
 
-    def test_each_paladin_column_edits_its_own_capabilities_and_handles_empty_roster(self):
+    def test_assignment_picker_capabilities_resets_and_departed_paladins(self):
         lua = full_addon()
         lua.execute("""
             ns.Options.Toggle()
-            local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
-            local panel = findWidget('Blessings and auras').parent
+            findWidget('Paladins').parent:GetScript('OnClick')(findWidget('Paladins').parent)
+            local panel = findWidget('Class blessings').parent
             ns.Assignments.roster.members['A-Realm'].caps = {WISDOM=true}
             ns.Assignments.roster.members['B-Realm'].hasAddon = false
             ns.Events.Emit('AssignmentsChanged')
             local a, b = panel.columns[1].rows.ROGUE, panel.columns[2].rows.ROGUE
             a:GetScript('OnClick')(a, 'LeftButton')
-            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'WISDOM')
-            assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'AUTO')
+            assert(panel.picker:IsShown() and ns.Paladins.Get('A-Realm', 'ROGUE') == 'AUTO')
+            assert(panel.picker.choices[1].key == 'AUTO')
+            assert(panel.picker.choices[2].key == 'WISDOM' and panel.picker.choices[3].key == 'NONE')
+            panel.picker.choices[2]:GetScript('OnClick')(panel.picker.choices[2]); runTimers()
+            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'WISDOM' and not panel.picker:IsShown())
+            a:GetScript('OnClick')(a, 'RightButton'); runTimers()
+            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'AUTO' and a.auto:IsShown())
+            IsShiftKeyDown = function() return true end
+            a:GetScript('OnClick')(a, 'LeftButton'); runTimers()
+            IsShiftKeyDown = function() return false end
+            assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'NONE' and not a.auto:IsShown())
             b:GetScript('OnClick')(b, 'LeftButton')
+            assert(panel.picker.help:GetText():find('unverified'))
+            assert(panel.picker.choices[2].key == 'KINGS')
+            panel.picker.choices[2]:GetScript('OnClick')(panel.picker.choices[2]); runTimers()
             assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
             a:GetScript('OnEnter')(a)
             assert(GameTooltip:GetText() == 'A - ROGUE')
             a:GetScript('OnLeave')(a); assert(not GameTooltip:IsShown())
+            b:GetScript('OnClick')(b, 'LeftButton')
+            local oldChoice = panel.picker.choices[2]
             ns.Assignments.roster.members = {}
             ns.Events.Emit('AssignmentsChanged')
-            assert(findWidget('No paladins in the group'):IsVisible())
+            assert(findWidget('No paladins in the group'):IsVisible() and not panel.picker:IsShown())
             for _, column in ipairs(panel.columns) do assert(not column:IsShown()) end
-            -- Pooled controls cannot edit a departed paladin.
+            oldChoice:GetScript('OnClick')(oldChoice)
             b:GetScript('OnClick')(b, 'LeftButton')
             assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
-            for _, seat in ipairs(panel.seats) do assert(seat:IsShown()) end
         """)
 
     def test_non_paladins_do_not_see_assignment_tab(self):
@@ -1485,7 +1675,7 @@ class AddonTests(unittest.TestCase):
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
             ns.Assignments.roster = ns.Roster.Build(); ns.Tracker.Preview = {active=false}
         """)
-        for name in ("Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("ns.Options.Toggle(); assert(not findWidget('Paladins').parent:IsVisible())")
 
@@ -2128,12 +2318,12 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             ns.Options.Toggle()
             local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
-            local panel = findWidget('Blessings and auras').parent
+            local panel = findWidget('Class blessings').parent
             -- B has no add-on, so only baseline auras are assumed: it gets Devotion,
             -- and A takes Concentration, which only A knows.
             assert(ns.Assignments.result.auras['B-Realm'] == 'DEVO' and ns.Assignments.result.auras['A-Realm'] == 'CONC')
             local aura = panel.columns[1].aura
-            assert(aura.state == 'green' and panel.columns[1].note:GetText():find('Concentration Aura'))
+            assert(aura.state == 'green' and aura.detail == 'Auto: Concentration Aura')
             ns.Paladins.Set('A-Realm', 'ROGUE', 'NONE'); runTimers()
             panel.fill:GetScript('OnClick')(panel.fill); runTimers()
             for _, class in ipairs(ns.Buffs.CLASS_KEYS) do
@@ -2146,8 +2336,12 @@ class AddonTests(unittest.TestCase):
             local wire = false
             for _, msg in ipairs(delivered) do if msg:match('^P|2|B%-Realm|10|DEVO|') then wire = true end end
             assert(wire)
-            -- Cycling the aura button skips auras the paladin can't cast.
-            aura:GetScript('OnClick')(aura, 'LeftButton'); runTimers()
+            -- The aura picker exposes available auras without cycling.
+            aura:GetScript('OnClick')(aura, 'LeftButton')
+            for _, choice in ipairs(panel.picker.choices) do
+                if choice.key == 'SANCTITY' then choice:GetScript('OnClick')(choice) end
+            end
+            runTimers()
             assert(ns.Paladins.Get('A-Realm', 'AURA') == 'SANCTITY')
             aura:GetScript('OnEnter')(aura)
             assert(GameTooltip:GetText() == 'A - Aura')
@@ -2172,7 +2366,7 @@ class AddonTests(unittest.TestCase):
             assert(message:match('^S|2|') and message:find('RFURY') and message:find('THORNS'))
             for _, msg in ipairs(delivered) do assert(#msg <= 255) end
             ns.Options.Toggle()
-            local panel = findWidget('Your buffet').parent
+            local panel = findWidget('Blessings').parent.parent
             local thorns = panel.tankButtons.THORNS
             thorns:GetScript('OnClick')(thorns); runTimers()
             assert(not ns.Preferences.Get().wants.THORNS)
@@ -2180,9 +2374,9 @@ class AddonTests(unittest.TestCase):
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_ROLES_ASSIGNED'); runTimers()
             assert(not ns.Assignments.result.expected['A-Realm'].RFURY)
             assert(ns.db.tankBuffs.RFURY and not ns.db.tankBuffs.THORNS)
-            panel.tankRole:GetScript('OnClick')(); runTimers() -- Auto -> Tank
+            panel.roles[2]:GetScript('OnClick')(panel.roles[2]); runTimers()
             assert(ns.Assignments.result.expected['A-Realm'].RFURY == 'A-Realm')
-            panel.tankRole:GetScript('OnClick')(); runTimers() -- Tank -> Not tank
+            panel.roles[3]:GetScript('OnClick')(panel.roles[3]); runTimers()
             assert(not ns.Preferences.Get().wants.RFURY)
             ns.Database.Init(); ns.Preferences.Init() -- keep choices on reload
             assert(ns.db.tankRole == 'OFF' and not ns.db.tankBuffs.THORNS)
@@ -2280,7 +2474,7 @@ class AddonTests(unittest.TestCase):
             assert(not button:GetAttribute('spell'))
             C_Spell.IsSpellUsable = nil
             ns.Options.Toggle()
-            local panel = findWidget('Your buffet').parent
+            local panel = findWidget('Blessings').parent.parent
             local shout = panel.wants.BSHOUT
             assert(shout:IsShown())
             shout:GetScript('OnClick')(shout); runTimers()
@@ -2395,7 +2589,7 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.wants.BSHOUT == false and not ns.Preferences.Get().wants.BSHOUT)
             assert(not ns.Roster.Capabilities().BSHOUT)
             ns.Options.Toggle()
-            assert(not findWidget('Your buffet').parent.wants.BSHOUT:IsShown())
+            assert(not findWidget('Blessings').parent.parent.wants.BSHOUT:IsShown())
             ns.db.wants.BSHOUT = true
             assert(not ns.Preferences.Get().wants.BSHOUT)
         """)
@@ -2438,7 +2632,7 @@ class AddonTests(unittest.TestCase):
             assert(not button:GetAttribute('spell'))
             C_Spell.IsSpellUsable = nil
             ns.Options.Toggle()
-            local panel = findWidget('Your buffet').parent
+            local panel = findWidget('Blessings').parent.parent
             local fire = panel.wants.IFIRE
             assert(fire:IsShown() and not panel.wants.BSHOUT:IsShown())
             fire:GetScript('OnClick')(fire); runTimers()
@@ -2462,7 +2656,7 @@ class AddonTests(unittest.TestCase):
             local s = ns.Tracker.Summary()
             assert(not s.perKey.IFIRE and not (s.next and s.next.key == 'IFIRE'))
             ns.Options.Toggle()
-            local panel = findWidget('Your buffet').parent
+            local panel = findWidget('Blessings').parent.parent
             assert(not panel.wants.IFIRE:IsShown())
             -- Level 12: the spell arrives and so does the tracking.
             learned = true
@@ -2477,7 +2671,7 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.wants.IFIRE == false and not ns.Preferences.Get().wants.IFIRE)
             assert(not ns.Roster.Capabilities().IFIRE)
             ns.Options.Toggle()
-            assert(not findWidget('Your buffet').parent.wants.IFIRE:IsShown())
+            assert(not findWidget('Blessings').parent.parent.wants.IFIRE:IsShown())
             ns.db.wants.IFIRE = true
             assert(not ns.Preferences.Get().wants.IFIRE)
         """)
@@ -2499,7 +2693,7 @@ class AddonTests(unittest.TestCase):
             assert(not ns.Preferences.Get().wants.RFURY)
             assert(ns.Roster.Capabilities().THORNS and not ns.Roster.Capabilities().RFURY)
             ns.Options.Toggle()
-            assert(not findWidget('Your buffet').parent.tankButtons.RFURY:IsShown())
+            assert(not findWidget('Blessings').parent.parent.tankButtons.RFURY:IsShown())
             ns.db.wants = {}
             ns.Comm.OnMessage('BUFFETERIA', 'S|2|THORNS|KINGS||MIGHT|0', 'PARTY', 'B-Realm'); runTimers()
             ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {} -- isolate the tank cast

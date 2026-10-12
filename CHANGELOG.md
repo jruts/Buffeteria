@@ -1,5 +1,30 @@
 # Buffeteria
 
+## Unreleased
+
+- Fix missing navigation tabs caused by painting the Settings sample before it
+  has dimensions. Lay out controls first and defer unsized previews safely.
+
+- Move navigation below the native title bar and add direct preferences/paladins
+  commands. The settings command now selects Settings regardless of the remembered tab.
+
+- Redesigned My preferences into Blessings, Buffs and Tank role panels, with
+  named buff rows, explicit Follow class plan / Use my ranking modes, and
+  Auto / Tank / Not tank choices. Removed the redundant planned-buff summary.
+- Replaced paladin talent trees with a class-by-paladin grid. Five paladins fit
+  without scrolling; slots open spell pickers, right-click resets to Auto and
+  Shift-click selects None. Class counts, personal rankings and assignment states are visible.
+- Renamed bulk actions to Lock in Auto picks and Reset all to Auto, with one-step
+  Undo that preserves subsequent group edits.
+- Regrouped Settings and added an isolated tracker preview that updates while
+  editing, even in combat, without affecting protected casting. Kept the icon
+  border legend inside the panel and replaced the text dropdown arrow.
+- Added a shared announcement footer with channel/message preview, remembered
+  tabs, class icons, and reliable spell-icon lookup.
+- Restyled the whole window with the client's own art: options-frame tabs,
+  tooltip-bordered panels, checkboxes, radio buttons, sliders, red panel buttons
+  and tooltip-style dropdown menus, replacing the gold-filled boxes.
+
 ## v0.6.4
 
 Update Buffeteria together with your group: group buff assignments now account for each caster's available group spells.

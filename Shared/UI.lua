@@ -1,59 +1,154 @@
--- Controls and textures used by more than one feature.
+-- Controls and textures used by more than one feature. Everything here is drawn
+-- with art shipped in the game client (tooltip, checkbox, radio, slider, tab and
+-- panel-button files), so the window reads as part of the default interface.
 local _, ns = ...
 local UI = { ICON = ns.mediaPath .. "Icon", WHITE = "Interface\\Buttons\\WHITE8X8", GOLD = { 1, 0.82, 0 } }
 ns.UI = UI
 -- Inline color codes for font strings.
-UI.COLOR = { GREY = "|cff808080", RED = "|cffff5040" }
+UI.COLOR = { GREY = "|cff808080", RED = "|cffff5040", GREEN = "|cff40c040" }
+-- Shared palette: panel fill, idle and selected borders, and body text.
+UI.PANEL = { 0.02, 0.018, 0.015, 0.78 }
+UI.EDGE = { 0.42, 0.38, 0.32, 1 }
+UI.IDLE = { 0.32, 0.3, 0.27, 1 }
+UI.GOLD_EDGE = { 0.75, 0.6, 0.3, 1 }
+UI.TEXT = { 0.9, 0.9, 0.9 }
+local TOOLTIP_EDGE = "Interface\\Tooltips\\UI-Tooltip-Border"
+local HIGHLIGHT = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
 local icons = {}
-
--- Talent tree backgrounds per class, in talent-tab order.
-UI.TREE_ART = {
-	WARRIOR = { "WarriorArms", "WarriorFury", "WarriorProtection" },
-	ROGUE = { "RogueAssassination", "RogueCombat", "RogueSubtlety" },
-	HUNTER = { "HunterBeastMastery", "HunterMarksmanship", "HunterSurvival" },
-	MAGE = { "MageArcane", "MageFire", "MageFrost" },
-	WARLOCK = { "WarlockCurses", "WarlockSummoning", "WarlockDestruction" },
-	PRIEST = { "PriestDiscipline", "PriestHoly", "PriestShadow" },
-	DRUID = { "DruidBalance", "DruidFeralCombat", "DruidRestoration" },
-	PALADIN = { "PaladinHoly", "PaladinProtection", "PaladinCombat" },
-	SHAMAN = { "ShamanElementalCombat", "ShamanEnhancement", "ShamanRestoration" },
-}
--- Talent slot tints: learned, available, unavailable, and conflict.
-UI.SLOT_COLORS = { gold = UI.GOLD, green = { 0.1, 1, 0.1 }, grey = { 0.5, 0.5, 0.5 }, red = { 1, 0.25, 0.2 } }
--- Visible area of the four-piece talent art (TopLeft 256x256, TopRight 64x256,
--- BottomLeft 256x128, BottomRight 64x128), as the native talent frame shows it.
-local ART_W, ART_H = 296, 332
+-- Spell data may be unavailable on login; never cache a question-mark result.
+local FALLBACK_ICONS = { SANCT = "Interface\\Icons\\Spell_Nature_LightningShield" }
 
 function UI.BuffIcon(key)
 	if not icons[key] then
 		local buff = ns.Buffs.byKey[key]
-		icons[key] = (buff.groupIds[1] and ns.WoW.SpellIcon(buff.groupIds[1])) or ns.WoW.SpellIcon(buff.ids[1]) or 134400
+		if not buff then return 134400 end
+		for _, ids in ipairs({ buff.groupIds, buff.ids }) do
+			for _, id in ipairs(ids) do
+				local icon = ns.WoW.SpellIcon(id)
+				if icon and icon ~= 134400 and icon ~= "Interface\\Icons\\INV_Misc_QuestionMark" then
+					icons[key] = icon
+					return icon
+				end
+			end
+		end
 	end
-	return icons[key]
+	return icons[key] or FALLBACK_ICONS[key] or 134400
 end
 
--- A dark panel with the tooltip border; edge 12 suits cards, 10 or less small controls.
+-- Prefer the client's class atlas, with the native character-create sheet fallback.
+function UI.ClassIcon(texture, class)
+	local atlas = "classicon-" .. class:lower()
+	if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+		texture:SetAtlas(atlas); return
+	end
+	local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class]
+	local index = ({ WARRIOR = 0, MAGE = 1, ROGUE = 2, DRUID = 3, HUNTER = 4,
+		SHAMAN = 5, PRIEST = 6, WARLOCK = 7, PALADIN = 8 })[class] or 0
+	texture:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
+	texture:SetTexCoord(unpack(coords or { (index % 4) / 4, (index % 4 + 1) / 4,
+		math.floor(index / 4) / 4, (math.floor(index / 4) + 1) / 4 }))
+end
+
+-- Set a client texture file. Modern clients return false for a missing file;
+-- report that so callers can fall back to a plain look instead of a green box.
+function UI.SetFile(texture, path)
+	return texture:SetTexture(path) ~= false
+end
+
+-- A dark panel with the tooltip border; edge 12+ suits panels, 10 or less small controls.
 function UI.Backdrop(frame, edgeSize, background, border)
 	local inset = edgeSize >= 12 and 3 or 2
-	frame:SetBackdrop({ bgFile = UI.WHITE, edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = edgeSize,
+	frame:SetBackdrop({ bgFile = UI.WHITE, edgeFile = TOOLTIP_EDGE, edgeSize = edgeSize,
 		insets = { left = inset, right = inset, top = inset, bottom = inset } })
 	if background then frame:SetBackdropColor(unpack(background)) end
 	if border then frame:SetBackdropBorderColor(unpack(border)) end
 end
 
-function UI.Checkbox(parent, label, x, y, onClick)
-	local button = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-	button:SetSize(24, 24)
-	button:SetPoint("TOPLEFT", x, y)
-	button.text = button.text or button.Text or button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	button.text:ClearAllPoints()
-	button.text:SetPoint("LEFT", button, "RIGHT", 2, 0)
-	button.text:SetText(label)
-	button:SetScript("OnClick", function(self) onClick(self:GetChecked() and true or false) end)
-	return button
+-- Fill a texture with a gradient from `low` (bottom or left) to `high` (top or
+-- right), each { r, g, b, a }; clients without gradients get the flat `low` color.
+function UI.Gradient(texture, orientation, low, high)
+	texture:SetTexture(UI.WHITE)
+	if CreateColor and texture.SetGradient
+		and pcall(texture.SetGradient, texture, orientation, CreateColor(unpack(low)), CreateColor(unpack(high))) then
+		return
+	end
+	if texture.SetGradientAlpha then
+		texture:SetGradientAlpha(orientation, low[1], low[2], low[3], low[4], high[1], high[2], high[3], high[4])
+		return
+	end
+	texture:SetColorTexture(unpack(low))
 end
 
--- A standard push button, with an optional tooltip.
+function UI.Text(parent, font, x, y, width, label)
+	local region = parent:CreateFontString(nil, "OVERLAY", font)
+	region:SetPoint("TOPLEFT", x, y)
+	if width then region:SetWidth(width) end
+	region:SetJustifyH("LEFT"); region:SetText(label or "")
+	return region
+end
+
+-- A one-pixel line; horizontal unless `vertical`.
+function UI.Line(parent, r, g, b, a, vertical, layer)
+	local line = parent:CreateTexture(nil, layer or "ARTWORK")
+	line:SetColorTexture(r, g, b, a)
+	if vertical then line:SetWidth(1) else line:SetHeight(1) end
+	return line
+end
+
+-- The gold divider used under headings, with a dark shadow beneath it.
+local function goldRule(parent)
+	local line = UI.Line(parent, 0.75, 0.6, 0.3, 0.55)
+	local shade = UI.Line(parent, 0, 0, 0, 0.5)
+	shade:SetPoint("TOPLEFT", line, "BOTTOMLEFT"); shade:SetPoint("TOPRIGHT", line, "BOTTOMRIGHT")
+	return line
+end
+
+function UI.Rule(parent, x, y, width)
+	local rule = goldRule(parent)
+	rule:SetPoint("TOPLEFT", x, y); rule:SetWidth(width)
+	return rule
+end
+
+-- A section heading whose rule runs from the end of its text to the right edge.
+function UI.Section(parent, label, x, y, right)
+	local heading = UI.Text(parent, "GameFontNormal", x, y, nil, label)
+	local rule = goldRule(parent)
+	-- The heading's top sits at `y`, so both ends share one vertical position.
+	rule:SetPoint("TOPLEFT", heading, "TOPRIGHT", 8, -6)
+	rule:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -(right or x), y - 6)
+	return heading
+end
+
+-- A page title and help line at the top of a tab. Both belong to `parent` so a
+-- feature view can be found by its heading.
+function UI.PageHeader(parent, title, help)
+	local heading = UI.Text(parent, "GameFontNormalLarge", 16, -8, nil, title)
+	local note = UI.Text(parent, "GameFontHighlightSmall", 16, -30, nil, help)
+	note:SetTextColor(0.7, 0.7, 0.7)
+	return heading, note
+end
+
+-- A recessed panel: dark fill inside the tooltip border, tinted bronze.
+function UI.Panel(parent)
+	local frame = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+	UI.Backdrop(frame, 14, UI.PANEL, UI.EDGE)
+	return frame
+end
+
+-- A titled panel: a large gold heading over a softly shaded header band.
+-- The icon argument is accepted for older callers and ignored.
+function UI.Card(parent, title)
+	local card = UI.Panel(parent)
+	local band = card:CreateTexture(nil, "BORDER")
+	band:SetPoint("TOPLEFT", 4, -4); band:SetPoint("TOPRIGHT", -4, -4); band:SetHeight(30)
+	UI.Gradient(band, "VERTICAL", { 0, 0, 0, 0 }, { 1, 0.82, 0.4, 0.07 })
+	card.title = UI.Text(card, "GameFontNormalLarge", 12, -10, nil, title)
+	local divider = UI.Line(card, 0.6, 0.5, 0.3, 0.35)
+	divider:SetPoint("TOPLEFT", 6, -34); divider:SetPoint("TOPRIGHT", -6, -34)
+	return card
+end
+
+-- A standard red panel button, with an optional tooltip.
 function UI.Button(parent, label, width, onClick, tip)
 	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
 	button:SetSize(width, 22)
@@ -69,67 +164,100 @@ function UI.Button(parent, label, width, onClick, tip)
 	return button
 end
 
-function UI.Text(parent, font, x, y, width, label)
-	local region = parent:CreateFontString(nil, "OVERLAY", font)
-	region:SetPoint("TOPLEFT", x, y)
-	if width then region:SetWidth(width) end
-	region:SetJustifyH("LEFT"); region:SetText(label or "")
-	return region
+function UI.Checkbox(parent, label, x, y, onClick)
+	local button = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+	button:SetSize(26, 26)
+	button:SetPoint("TOPLEFT", x, y)
+	button.text = button.text or button.Text or button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	button.text:SetFontObject("GameFontHighlight")
+	button.text:ClearAllPoints()
+	button.text:SetPoint("LEFT", button, "RIGHT", 2, 1)
+	button.text:SetText(label)
+	button:SetScript("OnClick", function(self) onClick(self:GetChecked() and true or false) end)
+	return button
+end
+
+-- The client's checkbox as a display-only mark, for rows that are clicked as a whole.
+function UI.CheckMark(parent, size)
+	local box = parent:CreateTexture(nil, "ARTWORK")
+	box:SetSize(size, size); box:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
+	local check = parent:CreateTexture(nil, "OVERLAY")
+	check:SetSize(size, size); check:SetPoint("CENTER", box, "CENTER", 0, 0)
+	check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+	return box, check
+end
+
+-- The client's radio button art: unchecked ring, checked dot, and hover glow.
+local RADIO = "Interface\\Buttons\\UI-RadioButton"
+function UI.RadioMark(parent, size)
+	local ring = parent:CreateTexture(nil, "ARTWORK")
+	ring:SetSize(size, size); ring:SetTexture(RADIO); ring:SetTexCoord(0, 0.25, 0, 1)
+	local dot = parent:CreateTexture(nil, "OVERLAY")
+	dot:SetAllPoints(ring); dot:SetTexture(RADIO); dot:SetTexCoord(0.25, 0.5, 0, 1)
+	return ring, dot
+end
+
+-- A labelled radio option. The caption is its own font string so a lookup by
+-- label returns it, whose parent is the clickable option.
+function UI.Radio(parent, label, width, onClick)
+	local option = CreateFrame("Button", nil, parent)
+	option:SetSize(width, 20)
+	option.ring, option.dot = UI.RadioMark(option, 16)
+	option.ring:SetPoint("LEFT", 0, 0)
+	local glow = option:CreateTexture(nil, "HIGHLIGHT")
+	glow:SetAllPoints(option.ring); glow:SetTexture(RADIO); glow:SetTexCoord(0.5, 0.75, 0, 1); glow:SetBlendMode("ADD")
+	option.caption = option:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	option.caption:SetPoint("LEFT", option.ring, "RIGHT", 6, 0); option.caption:SetText(label)
+	function option:SetChecked(value)
+		self.checked = value and true or false
+		self.dot:SetShown(self.checked)
+		if self.checked then self.caption:SetTextColor(unpack(UI.GOLD)) else self.caption:SetTextColor(unpack(UI.TEXT)) end
+	end
+	function option:GetChecked() return self.checked end
+	option:SetChecked(false)
+	option:SetScript("OnClick", function(self) onClick(self) end)
+	return option
+end
+
+-- A spell icon with a one-pixel frame; `icon.frame` takes a vertex color.
+function UI.Icon(parent, size, layer)
+	local frame = parent:CreateTexture(nil, "BORDER")
+	frame:SetSize(size + 2, size + 2); frame:SetColorTexture(1, 1, 1, 1); frame:SetVertexColor(0, 0, 0)
+	local icon = parent:CreateTexture(nil, layer or "ARTWORK")
+	icon:SetSize(size, size); icon:SetPoint("CENTER", frame, "CENTER", 0, 0)
+	icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	icon.frame = frame
+	return icon, frame
 end
 
 -- A small framed box showing one value, like the talent panel's point counter.
 function UI.ValueBox(parent, width, height, font)
 	local box = CreateFrame("Frame", nil, parent, "BackdropTemplate")
 	box:SetSize(width, height)
-	UI.Backdrop(box, 10, { 0, 0, 0, 0.8 }, { 0.6, 0.6, 0.6, 1 })
+	UI.Backdrop(box, 10, { 0, 0, 0, 0.75 }, UI.IDLE)
 	box.value = box:CreateFontString(nil, "OVERLAY", font)
 	box.value:SetPoint("CENTER", 0, 0)
 	return box
 end
 
--- The gold line under talent tree headers, with a dark shadow beneath it.
-local function goldRule(parent)
-	local line = parent:CreateTexture(nil, "ARTWORK")
-	line:SetColorTexture(0.85, 0.66, 0.26, 0.9); line:SetHeight(1)
-	local shade = parent:CreateTexture(nil, "ARTWORK")
-	shade:SetColorTexture(0, 0, 0, 0.6); shade:SetHeight(1)
-	shade:SetPoint("TOPLEFT", line, "BOTTOMLEFT"); shade:SetPoint("TOPRIGHT", line, "BOTTOMRIGHT")
-	return line
-end
-
--- A framed settings group: dark panel, shaded header with an icon and gold title.
-function UI.Card(parent, title, icon)
-	local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-	UI.Backdrop(card, 12, { 0.04, 0.03, 0.02, 0.72 }, { 0.55, 0.45, 0.25, 1 })
-	local shade = card:CreateTexture(nil, "BORDER")
-	shade:SetPoint("TOPLEFT", 3, -3); shade:SetPoint("TOPRIGHT", -3, -3); shade:SetHeight(25)
-	shade:SetColorTexture(0, 0, 0, 0.45)
-	local badge = card:CreateTexture(nil, "ARTWORK")
-	badge:SetSize(16, 16); badge:SetPoint("TOPLEFT", 10, -7)
-	badge:SetTexture(icon); badge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	card.title = UI.Text(card, "GameFontNormal", 32, -9, nil, title)
-	local rule = goldRule(card)
-	rule:SetPoint("TOPLEFT", 6, -28); rule:SetPoint("TOPRIGHT", -6, -28)
-	return card
-end
-
--- A selectable pill button, also used for the window's tabs. The label lives on
--- its own font string so lookups by label return the caption, whose parent is the chip.
+-- A selectable button: dark with a grey edge, or a gold edge and caption when
+-- checked. The label lives on its own font string so lookups by label return the
+-- caption, whose parent is the chip.
 function UI.Chip(parent, label, width, onClick, font)
 	local chip = CreateFrame("Button", nil, parent, "BackdropTemplate")
-	chip:SetSize(width, 22)
+	chip:SetSize(width, 24)
 	UI.Backdrop(chip, 10)
 	chip.caption = chip:CreateFontString(nil, "OVERLAY", font or "GameFontHighlightSmall")
 	chip.caption:SetPoint("CENTER", 0, 0); chip.caption:SetText(label)
-	chip:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+	chip:SetHighlightTexture(HIGHLIGHT, "ADD")
 	function chip:SetChecked(value)
 		self.checked = value and true or false
 		if self.checked then
-			self:SetBackdropColor(0.32, 0.22, 0.04, 0.95); self:SetBackdropBorderColor(UI.GOLD[1], UI.GOLD[2], UI.GOLD[3], 1)
+			self:SetBackdropColor(0.16, 0.11, 0.02, 0.92); self:SetBackdropBorderColor(UI.GOLD[1], UI.GOLD[2], UI.GOLD[3], 1)
 			self.caption:SetTextColor(unpack(UI.GOLD))
 		else
-			self:SetBackdropColor(0, 0, 0, 0.6); self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-			self.caption:SetTextColor(0.75, 0.75, 0.75)
+			self:SetBackdropColor(0.04, 0.035, 0.03, 0.85); self:SetBackdropBorderColor(unpack(UI.IDLE))
+			self.caption:SetTextColor(unpack(UI.TEXT))
 		end
 	end
 	function chip:GetChecked() return self.checked end
@@ -138,174 +266,123 @@ function UI.Chip(parent, label, width, onClick, font)
 	return chip
 end
 
--- Talent rank badge: the small numbered box at a talent button's corner.
-local function badge(parent)
-	local border = parent:CreateTexture(nil, "OVERLAY")
-	border:SetSize(32, 32)
-	border:SetTexture("Interface\\TalentFrame\\TalentFrame-RankBorder")
-	local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	label:SetPoint("CENTER", border, "CENTER", 0, 0)
-	return border, label
-end
-
--- A talent button: icon in a stone slot tinted gold, green, grey, or red.
-function UI.TalentButton(parent)
-	local button = CreateFrame("Button", nil, parent)
-	button:SetSize(37, 37)
-	button.slot = button:CreateTexture(nil, "BACKGROUND")
-	button.slot:SetSize(64, 64); button.slot:SetPoint("CENTER", 0, 0)
-	button.slot:SetTexture("Interface\\Buttons\\UI-EmptySlot-White")
-	button.icon = button:CreateTexture(nil, "BORDER")
-	button.icon:SetAllPoints()
-	-- Zoom past the icon's baked-in bevel so only the slot frames it.
-	button.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
-	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-	button:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
-	function button:SetState(state, texture)
-		local color = UI.SLOT_COLORS[state] or UI.SLOT_COLORS.grey
-		self.state = state
-		self.icon:SetTexture(texture)
-		self.icon:SetDesaturated(state == "grey")
-		self.slot:SetVertexColor(color[1], color[2], color[3])
-	end
-	return button
-end
-
--- Fill a texture with a gradient from `low` (bottom or left) to `high` (top or
--- right), each { r, g, b, a }; clients without gradients get the flat `low` color.
-local function gradient(texture, orientation, low, high)
-	texture:SetTexture(UI.WHITE)
-	if CreateColor and texture.SetGradient
-		and pcall(texture.SetGradient, texture, orientation, CreateColor(unpack(low)), CreateColor(unpack(high))) then
-		return
-	end
-	if texture.SetGradientAlpha then
-		texture:SetGradientAlpha(orientation, low[1], low[2], low[3], low[4], high[1], high[2], high[3], high[4])
-		return
-	end
-	texture:SetColorTexture(unpack(low))
-end
-
--- The etched look: the art as a faint monochrome engraving in `tint`, darkening
--- toward the bottom, with a glow under the header and a tinted top edge.
-local function etch(tree, tint)
-	local clip, r, g, b = tree.clip, tint[1], tint[2], tint[3]
-	if not tree.etched then
-		local layers = {}
-		layers.scrim = clip:CreateTexture(nil, "BORDER", nil, -3)
-		layers.scrim:SetAllPoints()
-		layers.glow = clip:CreateTexture(nil, "BORDER", nil, -2)
-		layers.glow:SetPoint("TOPLEFT"); layers.glow:SetPoint("TOPRIGHT"); layers.glow:SetHeight(150)
-		layers.left = clip:CreateTexture(nil, "BORDER", nil, -1)
-		layers.left:SetPoint("TOPLEFT"); layers.left:SetPoint("BOTTOMLEFT"); layers.left:SetWidth(28)
-		layers.right = clip:CreateTexture(nil, "BORDER", nil, -1)
-		layers.right:SetPoint("TOPRIGHT"); layers.right:SetPoint("BOTTOMRIGHT"); layers.right:SetWidth(28)
-		layers.edge = clip:CreateTexture(nil, "ARTWORK")
-		layers.edge:SetPoint("TOPLEFT"); layers.edge:SetPoint("TOPRIGHT"); layers.edge:SetHeight(2)
-		gradient(layers.scrim, "VERTICAL", { 0.015, 0.012, 0.01, 0.94 }, { 0, 0, 0, 0.5 })
-		gradient(layers.left, "HORIZONTAL", { 0, 0, 0, 0.55 }, { 0, 0, 0, 0 })
-		gradient(layers.right, "HORIZONTAL", { 0, 0, 0, 0 }, { 0, 0, 0, 0.55 })
-		tree.etched = layers
-	end
-	gradient(tree.etched.glow, "VERTICAL", { r, g, b, 0 }, { r, g, b, 0.3 })
-	tree.etched.edge:SetColorTexture(r, g, b, 0.9)
-end
-
-local function layoutArt(tree)
-	local width, height = tree:GetWidth(), tree:GetHeight()
-	local scale = math.max(width / ART_W, height / ART_H)
-	local x0, y0 = (width - ART_W * scale) / 2, (height - ART_H * scale) / 2
-	for _, piece in ipairs(tree.art) do
-		piece.texture:ClearAllPoints()
-		piece.texture:SetPoint("TOPLEFT", tree.clip, "TOPLEFT", x0 + piece.x * scale, -(y0 + piece.y * scale))
-		piece.texture:SetSize(piece.w * scale, piece.h * scale)
-	end
-end
-
--- A talent-tree pane: class artwork cropped to fill, a round icon with a count
--- badge, a title, and the gold rule beneath the header.
-function UI.Tree(parent)
-	local tree = CreateFrame("Frame", nil, parent)
-	-- Clip the artwork at the tree's own level so controls on the tree draw above it.
-	tree.clip = CreateFrame("Frame", nil, tree)
-	tree.clip:SetAllPoints(); tree.clip:SetClipsChildren(true)
-	tree.clip:SetFrameLevel(tree:GetFrameLevel())
-	local base = tree.clip:CreateTexture(nil, "BACKGROUND", nil, -1)
-	base:SetAllPoints(); base:SetColorTexture(0.05, 0.035, 0.02, 1)
-	tree.art = {
-		{ name = "TopLeft", x = 0, y = 0, w = 256, h = 256, coords = { 0, 1, 0, 1 } },
-		{ name = "TopRight", x = 256, y = 0, w = 40, h = 256, coords = { 0, 40 / 64, 0, 1 } },
-		{ name = "BottomLeft", x = 0, y = 256, w = 256, h = 76, coords = { 0, 1, 0, 76 / 128 } },
-		{ name = "BottomRight", x = 256, y = 256, w = 40, h = 76, coords = { 0, 40 / 64, 0, 76 / 128 } },
-	}
-	for _, piece in ipairs(tree.art) do
-		piece.texture = tree.clip:CreateTexture(nil, "BACKGROUND")
-		piece.texture:SetTexCoord(unpack(piece.coords))
-	end
-	-- Darken the header so its text stays readable over bright art.
-	local top = tree.clip:CreateTexture(nil, "BORDER")
-	top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT"); top:SetHeight(70)
-	top:SetColorTexture(0, 0, 0, 0.45)
-	local separator = tree.clip:CreateTexture(nil, "BORDER")
-	separator:SetPoint("TOPRIGHT"); separator:SetPoint("BOTTOMRIGHT"); separator:SetWidth(1)
-	separator:SetColorTexture(0, 0, 0, 0.9)
-
-	local header = CreateFrame("Frame", nil, tree)
-	header:SetPoint("TOPLEFT"); header:SetPoint("TOPRIGHT"); header:SetHeight(70)
-	tree.header = header
-	tree.icon = header:CreateTexture(nil, "ARTWORK")
-	tree.icon:SetSize(34, 34); tree.icon:SetPoint("TOPLEFT", 16, -12)
-	-- Fill the round portrait with artwork, hiding the square icon bevel.
-	tree.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
-	local mask = header:CreateMaskTexture()
-	mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-	mask:SetAllPoints(tree.icon)
-	tree.icon:AddMaskTexture(mask)
-	local ring = header:CreateTexture(nil, "OVERLAY", nil, -1)
-	if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("talents-node-circle-yellow") then
-		ring:SetSize(46, 46); ring:SetPoint("CENTER", tree.icon, "CENTER", 0, 0)
-		ring:SetAtlas("talents-node-circle-yellow")
-	else
-		-- Without the round node art, use the gold minimap tracking ring.
-		ring:SetSize(58, 58); ring:SetPoint("TOPLEFT", tree.icon, "TOPLEFT", -7, 7)
-		ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-	end
-	tree.badgeBorder, tree.badge = badge(header)
-	tree.badgeBorder:SetPoint("CENTER", tree.icon, "BOTTOM", 0, -3)
-	tree.title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-	tree.title:SetPoint("LEFT", tree.icon, "RIGHT", 12, 6); tree.title:SetPoint("RIGHT", header, "RIGHT", -8, 0)
-	tree.title:SetJustifyH("LEFT"); tree.title:SetWordWrap(false)
-	tree.note = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	tree.note:SetPoint("TOPLEFT", tree.title, "BOTTOMLEFT", 0, -3); tree.note:SetPoint("RIGHT", header, "RIGHT", -8, 0)
-	tree.note:SetJustifyH("LEFT"); tree.note:SetWordWrap(false)
-	local rule = goldRule(header)
-	rule:SetPoint("BOTTOMLEFT", 10, 0); rule:SetPoint("BOTTOMRIGHT", -10, 0)
-
-	-- dim greys the art out; tint ({ r, g, b }) etches it in that color instead.
-	function tree:SetArt(prefix, dim, tint)
-		if tint then etch(self, tint) end
-		for _, piece in ipairs(self.art) do
-			piece.texture:SetTexture(prefix and ("Interface\\TalentFrame\\" .. prefix .. "-" .. piece.name) or nil)
-			piece.texture:SetDesaturated((dim or tint) and true or false)
-			if tint then
-				piece.texture:SetVertexColor(tint[1] * 0.6, tint[2] * 0.6, tint[3] * 0.6)
-			else
-				local shade = dim and 0.4 or 0.9
-				piece.texture:SetVertexColor(shade, shade, shade)
-			end
+-- A top tab: a filled body with edges on three sides. The active tab is taller,
+-- gold-edged and runs past its bottom to cover the baseline, opening into the page.
+function UI.Tab(parent, label, width, onClick)
+	local tab = CreateFrame("Button", nil, parent)
+	tab:SetSize(width, 28)
+	tab.fill = tab:CreateTexture(nil, "BACKGROUND")
+	tab.edges = {}
+	for i = 1, 3 do tab.edges[i] = UI.Line(tab, 1, 1, 1, 1, i > 1, "BORDER") end
+	tab.shine = UI.Line(tab, 1, 0.9, 0.7, 0.18, false, "ARTWORK")
+	local glow = tab:CreateTexture(nil, "HIGHLIGHT")
+	glow:SetPoint("TOPLEFT", 2, -6); glow:SetPoint("BOTTOMRIGHT", -2, 0)
+	glow:SetTexture(HIGHLIGHT); glow:SetBlendMode("ADD"); glow:SetAlpha(0.5)
+	tab.caption = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	tab.caption:SetText(label)
+	function tab:SetChecked(value)
+		self.checked = value and true or false
+		local top, bottom = self.checked and 0 or -5, self.checked and -2 or 0
+		local top_, left, right = self.edges[1], self.edges[2], self.edges[3]
+		self.fill:ClearAllPoints(); self.fill:SetPoint("TOPLEFT", 0, top); self.fill:SetPoint("BOTTOMRIGHT", 0, bottom)
+		top_:ClearAllPoints(); top_:SetPoint("TOPLEFT", 0, top); top_:SetPoint("TOPRIGHT", 0, top)
+		left:ClearAllPoints(); left:SetPoint("TOPLEFT", 0, top); left:SetPoint("BOTTOMLEFT", 0, bottom)
+		right:ClearAllPoints(); right:SetPoint("TOPRIGHT", 0, top); right:SetPoint("BOTTOMRIGHT", 0, bottom)
+		self.shine:ClearAllPoints(); self.shine:SetPoint("TOPLEFT", 1, top - 1); self.shine:SetPoint("TOPRIGHT", -1, top - 1)
+		self.caption:ClearAllPoints(); self.caption:SetPoint("CENTER", 0, (top + bottom) / 2 - 1)
+		local edge = self.checked and UI.GOLD_EDGE or UI.IDLE
+		for _, line in ipairs(self.edges) do line:SetColorTexture(edge[1], edge[2], edge[3], 1) end
+		self.shine:SetShown(self.checked)
+		if self.checked then
+			UI.Gradient(self.fill, "VERTICAL", { 0.09, 0.08, 0.07, 1 }, { 0.26, 0.2, 0.11, 1 })
+			self.caption:SetTextColor(1, 1, 1)
+		else
+			UI.Gradient(self.fill, "VERTICAL", { 0.04, 0.035, 0.03, 0.95 }, { 0.12, 0.1, 0.08, 0.95 })
+			self.caption:SetTextColor(unpack(UI.GOLD))
 		end
 	end
-	function tree:SetHeader(icon, title, note, count)
-		self.icon:SetTexture(icon); self.title:SetText(title or ""); self.note:SetText(note or "")
-		self.badge:SetText(count and tostring(count) or "")
-		self.badge:SetShown(count ~= nil); self.badgeBorder:SetShown(count ~= nil)
-		self.icon:SetShown(icon ~= nil); ring:SetShown(icon ~= nil)
+	function tab:GetChecked() return self.checked end
+	tab:SetChecked(false)
+	tab:SetScript("OnClick", function(self)
+		if PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+		onClick(self)
+	end)
+	return tab
+end
+
+-- A horizontal slider with the client's options-slider track and thumb.
+function UI.Slider(parent, name)
+	local bar = CreateFrame("Slider", name, parent, "BackdropTemplate")
+	bar:SetOrientation("HORIZONTAL"); bar:SetHeight(17)
+	bar:SetBackdrop({ bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+		edgeFile = "Interface\\Buttons\\UI-SliderBar-Border", tile = true, tileSize = 8, edgeSize = 8,
+		insets = { left = 3, right = 3, top = 6, bottom = 6 } })
+	bar:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+	bar:GetThumbTexture():SetSize(32, 32)
+	return bar
+end
+
+-- A dropdown menu frame in the client's tooltip style, and its rows: a flat
+-- list item with an optional icon, a check for the current choice, and hover glow.
+function UI.Menu(parent, name)
+	local menu = CreateFrame("Frame", name, parent, "BackdropTemplate")
+	menu:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = TOOLTIP_EDGE,
+		tile = true, tileSize = 16, edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+	menu:SetBackdropColor(0.03, 0.03, 0.03, 0.96); menu:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
+	menu:SetFrameStrata("DIALOG"); menu:EnableMouse(true)
+	return menu
+end
+
+function UI.MenuItem(parent, width, onClick)
+	local item = CreateFrame("Button", nil, parent)
+	item:SetSize(width, 22)
+	item:SetHighlightTexture(HIGHLIGHT, "ADD")
+	item.check = item:CreateTexture(nil, "OVERLAY")
+	item.check:SetSize(16, 16); item.check:SetPoint("LEFT", 2, 0)
+	item.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+	item.icon = item:CreateTexture(nil, "ARTWORK")
+	item.icon:SetSize(18, 18); item.icon:SetPoint("LEFT", 20, 0); item.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	item.caption = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	item.caption:SetPoint("LEFT", item.icon, "RIGHT", 6, 0); item.caption:SetJustifyH("LEFT")
+	function item:SetChecked(value)
+		self.checked = value and true or false
+		self.check:SetShown(self.checked)
+		if self.checked then self.caption:SetTextColor(unpack(UI.GOLD)) else self.caption:SetTextColor(1, 1, 1) end
 	end
-	function tree:Resize(width, height)
-		self:SetSize(width, height)
-		layoutArt(self)
+	function item:GetChecked() return self.checked end
+	item:SetChecked(false)
+	item:SetScript("OnClick", function(self) onClick(self) end)
+	return item
+end
+
+-- A wanted-buff row: checkbox, framed icon, name and the caster serving it.
+-- Unwanted rows dim; the row itself never fills with color.
+function UI.BuffRow(parent, key, onClick)
+	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
+	row:SetSize(180, 48)
+	UI.Backdrop(row, 10, { 0, 0, 0, 0.35 }, { 0.25, 0.23, 0.2, 1 })
+	row:SetHighlightTexture(HIGHLIGHT, "ADD")
+	row.key = key
+	row.checkSlot, row.check = UI.CheckMark(row, 24)
+	row.checkSlot:SetPoint("LEFT", 6, 0)
+	row.icon = UI.Icon(row, 32)
+	row.icon.frame:SetPoint("LEFT", 36, 0)
+	row.label = UI.Text(row, "GameFontHighlight", 78, -9, nil, ns.Buffs.byKey[key].label)
+	row.label:SetPoint("RIGHT", -8, 0); row.label:SetWordWrap(false)
+	row.caster = UI.Text(row, "GameFontHighlightSmall", 78, -27)
+	row.caster:SetPoint("RIGHT", -8, 0); row.caster:SetWordWrap(false)
+	row.caster:SetTextColor(0.7, 0.7, 0.7)
+	function row:SetState(state, texture)
+		self.state = state
+		self.checked = state == "gold"
+		self.check:SetShown(self.checked)
+		self.icon:SetTexture(texture); self.icon:SetDesaturated(not self.checked)
+		self.icon:SetAlpha(self.checked and 1 or 0.6)
+		if self.checked then self.label:SetTextColor(1, 1, 1) else self.label:SetTextColor(0.6, 0.6, 0.6) end
 	end
-	return tree
+	function row:GetChecked() return self.checked end
+	row:SetScript("OnClick", function(self) onClick(self) end)
+	return row
 end
 
 -- Dim `icon` while the button is pressed, unless `button.inert` says the press
@@ -323,32 +400,4 @@ function UI.PressFeedback(button, icon, onDown)
 		icon:SetVertexColor(1, 1, 1)
 		GameTooltip_Hide()
 	end)
-end
-
--- The band under the tabs: a title and help line, plus (withCount) a talent-panel
--- style counter box on the right, like "Unspent Talents [0]".
-function UI.Band(parent, title, help, withCount)
-	local band = CreateFrame("Frame", nil, parent)
-	band:SetPoint("TOPLEFT", 0, 0); band:SetPoint("TOPRIGHT", 0, 0); band:SetHeight(44)
-	local shade = band:CreateTexture(nil, "BACKGROUND")
-	shade:SetAllPoints(); shade:SetColorTexture(0, 0, 0, 0.35)
-	local rule = goldRule(band)
-	rule:SetPoint("BOTTOMLEFT", 8, 0); rule:SetPoint("BOTTOMRIGHT", -8, 0)
-	-- The heading belongs to the parent so a feature view can be found by it.
-	band.title = UI.Text(parent, "GameFontNormal", 16, -7, nil, title)
-	band.help = UI.Text(parent, "GameFontHighlightSmall", 16, -25, nil, help)
-	band.help:SetWordWrap(false)
-	if not withCount then
-		band.help:SetPoint("RIGHT", band, "RIGHT", -16, 0)
-		return band
-	end
-	band.help:SetPoint("RIGHT", band, "RIGHT", -170, 0)
-	band.box = UI.ValueBox(band, 34, 24, "GameFontHighlightLarge")
-	band.box:SetPoint("RIGHT", -14, 0)
-	band.countLabel = band:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	band.countLabel:SetPoint("RIGHT", band.box, "LEFT", -8, 0)
-	function band:SetCount(label, value)
-		self.countLabel:SetText(label); self.box.value:SetText(tostring(value))
-	end
-	return band
 end

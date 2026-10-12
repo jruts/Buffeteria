@@ -56,6 +56,21 @@ end
 -- The saved blessing ranking, including the "|" divider; the ranking view reorders it in place.
 function ns.Preferences.Order() return ns.db.order end
 
+-- Preview either blessing mode without changing saved preferences or broadcasting.
+function ns.Preferences.BlessingOutcome(override)
+	local source, me = ns.Assignments.roster, ns.WoW.Me()
+	if not source.members[me] then return {} end
+	local roster, mine = {}, {}
+	for key, value in pairs(source) do roster[key] = value end
+	roster.members = {}
+	for name, member in pairs(source.members) do roster.members[name] = member end
+	for key, value in pairs(source.members[me]) do mine[key] = value end
+	mine.blessingsOverride = override
+	mine.ranking, mine.excluded = ns.Buffs.SplitOrder(override and ns.db.order or ns.Buffs.DefaultOrder(mine.class))
+	roster.members[me] = mine
+	return ns.Solver.Solve(roster).expected[me] or {}
+end
+
 -- My own preferences in the shape the solver wants.
 function ns.Preferences.Get()
 	local ranking, excluded = Buffs.SplitOrder(ns.db.order)

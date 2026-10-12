@@ -1,219 +1,299 @@
--- Talent-panel paladin plan editor; one talent tree for every paladin in the roster,
--- with their aura in the header and a class blessing per talent button.
+-- Classes down the rows, paladins across columns, with explicit slot pickers.
 local _, ns = ...
-local Buffs = ns.Buffs
+local UI, Buffs = ns.UI, ns.Buffs
 local View = {}
 ns.Paladins.View = View
-local panel, band, viewport, canvas, scrollbar, empty
-local columns, seats = {}, {}
--- Paladins share the board's width; past three trees it scrolls sideways.
-local MAX_VISIBLE, GAP, EDGE, BOARD_H, MIN_COLUMN, CELL = 3, 2, 8, 360, 196, 68
-local SPEC_ICONS = { "Interface\\Icons\\Spell_Holy_HolyBolt", "Interface\\Icons\\Spell_Holy_DevotionAura",
-	"Interface\\Icons\\Spell_Holy_AuraOfLight" }
-local columnWidth, contentWidth, scrollOffset, paladinCount = MIN_COLUMN, 0, 0, 0
-local AURA = ns.Paladins.AURA
-local GREY = ns.UI.COLOR.GREY
-
--- slot is a class, or AURA for the paladin's own aura.
-local function cycle(column, slot, mouseButton)
-	local name = column.paladin
-	local choices = name and ns.Paladins.Choices(name, slot) or {}
-	if #choices == 0 then return end
-	local current, index = ns.Paladins.Get(name, slot), 1
-	for i, key in ipairs(choices) do if key == current then index = i; break end end
-	local delta = mouseButton == "RightButton" and -1 or 1
-	ns.Paladins.Set(name, slot, choices[((index - 1 + delta) % #choices) + 1])
-end
+local panel, viewport, canvas, scrollbar, empty, picker, undo
+local columns, classRows = {}, {}
+local EDGE, STUB, HEADER, ROW, BOARD_H, BOARD_Y = 12, 148, 80, 42, 458, -56
+local columnWidth, contentWidth, scrollOffset, count = 144, 0, 0, 0
+local GREY = UI.COLOR.GREY
+local PASS = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+local RED_EDGE, DARK_EDGE = { 1, 0.25, 0.15, 1 }, { 0.2, 0.19, 0.17, 1 }
+local closePicker
 
 local function tooltip(button)
-	local column, class = button.column, button.class
-	local name = column.paladin
+	local name = button.column.paladin
 	local member = name and ns.Assignments.roster.members[name]
 	if not member then return end
 	GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-	local aura = class == AURA
-	local thing = aura and "aura" or "blessing"
-	GameTooltip:SetText(ns.WoW.Short(name) .. " - " .. (aura and "Aura" or ns.WoW.ClassName(class)))
-	GameTooltip:AddLine(button.detail, unpack(ns.UI.GOLD))
-	if button.duplicate then GameTooltip:AddLine("Another paladin already has this " .. thing .. " assigned.", 1, 0.35, 0.2, true) end
-	if not member.hasAddon then
-		GameTooltip:AddLine("Without Buffeteria: choose " .. thing .. "s this paladin can cast.", 0.8, 0.8, 0.8, true)
-	end
-	GameTooltip:AddLine("Left-click: next " .. thing .. ". Right-click: previous.", 1, 1, 1, true)
-	GameTooltip:AddLine(aura and "Auto picks a different aura for every paladin. None runs no aura."
-		or "Auto follows the class plan. None leaves this class unassigned.", 0.8, 0.8, 0.8, true)
+	GameTooltip:SetText(ns.WoW.Short(name) .. " - " .. (button.class == "AURA" and "Aura" or ns.WoW.ClassName(button.class)))
+	GameTooltip:AddLine(button.detail or "", 1, 0.82, 0, true)
+	if button.duplicate then GameTooltip:AddLine("A newer assignment took this blessing. Choose another or reset to Auto.", 1, 0.35, 0.2, true) end
+	if not member.hasAddon then GameTooltip:AddLine("Spells unverified: choose only spells this paladin can cast.", 0.8, 0.8, 0.8, true) end
+	GameTooltip:AddLine("Click: choose. Right-click: Auto. Shift-click: None.", 1, 1, 1, true)
 	GameTooltip:Show()
 end
 
--- A talent button cycling one slot of the column's paladin.
-local function slotButton(parent, column, slot)
-	local button = ns.UI.TalentButton(parent)
-	button.column, button.class = column, slot
+closePicker = function()
+	if picker then picker:Hide(); picker.target = nil end
+end
+
+local function openPicker(button)
+	local name, slot = button.column.paladin, button.class
+	local member = name and ns.Assignments.roster.members[name]
+	if not member then return end
+	if picker:IsShown() and picker.target == button then closePicker(); return end
+	GameTooltip_Hide()
+	picker.target = button
+	local choices = ns.Paladins.Choices(name, slot)
+	local height = #choices * 22 + 62
+	picker:SetSize(220, height)
+	-- Open just below the clicked slot, kept inside the page.
+	local x = EDGE + STUB + (button.column.index - 1) * columnWidth - scrollOffset + 12
+	local y = -BOARD_Y + (slot == "AURA" and 76 or HEADER + button.rowIndex * ROW - 2)
+	x = math.max(EDGE, math.min(x, (panel.layoutWidth or 900) - 232))
+	y = math.max(8, math.min(y, 560 - height))
+	picker:ClearAllPoints(); picker:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -y)
+	picker.title:SetText(ns.WoW.Short(name) .. " > " .. (slot == "AURA" and "Aura" or ns.WoW.ClassName(slot)))
+	picker.help:SetText(member.hasAddon and "Known spells only" or "Spells unverified; choose a castable spell")
+	local current = ns.Paladins.Get(name, slot)
+	for i, key in ipairs(choices) do
+		local choice = picker.choices[i]
+		if not choice then
+			choice = UI.MenuItem(picker, 204, function(self)
+				local target = picker.target
+				if target and target.column.paladin == self.paladin then
+					ns.Paladins.Set(self.paladin, target.class, self.key)
+				end
+				closePicker()
+			end)
+			choice:SetPoint("TOPLEFT", 8, -32 - (i - 1) * 22)
+			picker.choices[i] = choice
+		end
+		choice.key, choice.paladin = key, name
+		local resolved = slot == "AURA" and ns.Assignments.Aura(name) or ns.Assignments.ClassBlessing(slot, name)
+		local buff = Buffs.byKey[key == "AUTO" and resolved or key]
+		choice.caption:SetText(key == "AUTO" and ("Auto: " .. (buff and buff.label or "None"))
+			or (key == "NONE" and "None" or buff.label))
+		choice.icon:SetTexture(buff and UI.BuffIcon(buff.key) or PASS)
+		choice.icon:SetDesaturated(buff == nil)
+		choice:SetChecked(key == current); choice:Show()
+	end
+	for i = #choices + 1, #picker.choices do picker.choices[i]:Hide() end
+	picker:Show()
+end
+
+-- The small boxed "A" that marks an Auto slot.
+local function autoBadge(parent)
+	local box = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+	box:SetSize(18, 18)
+	UI.Backdrop(box, 8, { 0, 0, 0, 0.5 }, { 0.45, 0.45, 0.45, 1 })
+	box.text = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	box.text:SetPoint("CENTER", 0, 0); box.text:SetText("A"); box.text:SetTextColor(0.75, 0.75, 0.75)
+	return box
+end
+
+local function slotButton(parent, column, slot, rowIndex)
+	local button = UI.Chip(parent, "", 140, function() end)
+	button:SetHeight(34); button.column, button.class, button.rowIndex = column, slot, rowIndex
 	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	button:SetScript("OnClick", function(_, mouseButton) cycle(column, slot, mouseButton) end)
+	button.icon = UI.Icon(button, 24)
+	button.icon.frame:SetPoint("LEFT", 5, 0)
+	button.caption:ClearAllPoints(); button.caption:SetPoint("LEFT", 37, 0)
+	button.caption:SetPoint("RIGHT", -28, 0); button.caption:SetJustifyH("LEFT"); button.caption:SetWordWrap(false)
+	button.autoBox = autoBadge(button)
+	button.autoBox:SetPoint("RIGHT", -6, 0)
+	button.auto = button.autoBox.text
+	button:SetScript("OnClick", function(self, mouseButton)
+		local name = self.column.paladin
+		if not name or not ns.Assignments.roster.members[name] then return end
+		if mouseButton == "RightButton" then closePicker(); ns.Paladins.Set(name, slot, "AUTO")
+		elseif IsShiftKeyDown() then closePicker(); ns.Paladins.Set(name, slot, "NONE")
+		else openPicker(self) end
+	end)
 	button:SetScript("OnEnter", tooltip); button:SetScript("OnLeave", GameTooltip_Hide)
 	return button
 end
 
 local function createColumn()
-	local column = ns.UI.Tree(canvas)
+	local column = CreateFrame("Frame", nil, canvas)
+	-- A hairline between paladin columns.
+	local separator = UI.Line(column, 1, 1, 1, 0.07, true, "BACKGROUND")
+	separator:SetPoint("TOPLEFT", 0, -6); separator:SetPoint("BOTTOMLEFT", 0, 6)
+	column.title = UI.Text(column, "GameFontNormal", 10, -10)
+	column.title:SetWordWrap(false)
+	column.note = UI.Text(column, "GameFontHighlightSmall", 10, -26)
+	column.note:SetWordWrap(false); column.note:SetTextColor(0.65, 0.65, 0.65)
+	column.aura = slotButton(column, column, "AURA")
+	column.aura:SetPoint("TOPLEFT", 5, -42); column.aura:SetHeight(32)
 	column.rows = {}
-	for _, class in ipairs(Buffs.CLASS_KEYS) do
-		local row = slotButton(column, column, class)
-		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		row.name:SetPoint("TOP", row, "BOTTOM", 0, -5)
-		row.name:SetText(ns.WoW.ClassColorName(ns.WoW.ClassName(class), class))
-		row.assignment = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		row.assignment:SetPoint("TOP", row.name, "BOTTOM", 0, -1)
+	for i, class in ipairs(Buffs.CLASS_KEYS) do
+		local row = slotButton(column, column, class, i)
+		row:SetPoint("TOPLEFT", 5, -HEADER - (i - 1) * ROW - 4)
 		column.rows[class] = row
 	end
-	-- The paladin's aura sits in the tree header, right of the name.
-	local aura = slotButton(column.header, column, AURA)
-	aura:SetPoint("TOPRIGHT", -14, -14)
-	column.title:SetPoint("RIGHT", aura, "LEFT", -6, 0)
-	column.note:SetPoint("RIGHT", aura, "LEFT", -6, 0)
-	column.aura = aura
 	return column
 end
 
-local function createSeat()
-	local seat = ns.UI.Tree(canvas)
-	seat:SetHeader(nil, "", "")
-	return seat
-end
-
--- Talent tiers sized to the tree: three classes per tier in a narrow tree, up to
--- five in a wide one, with tiers balanced and centered.
-local function layoutColumn(column)
-	local count = #Buffs.CLASS_KEYS
-	local perTier = math.max(3, math.min(5, math.floor(columnWidth / CELL)))
-	local tiers = math.ceil(count / perTier)
-	perTier = math.ceil(count / tiers)
-	local cell = columnWidth / perTier
-	local top = -92 - (3 - tiers) * 44
-	for i, class in ipairs(Buffs.CLASS_KEYS) do
-		local row = column.rows[class]
-		local tier, x = math.floor((i - 1) / perTier), (i - 1) % perTier
-		local inTier = math.min(perTier, count - tier * perTier)
-		local offset = (columnWidth - inTier * cell) / 2
-		row:ClearAllPoints(); row:SetPoint("TOP", column, "TOPLEFT", offset + cell * (x + 0.5), top - tier * 88)
-		row.name:SetWidth(cell - 4); row.assignment:SetWidth(cell - 4)
+local function showSlot(button, name, slot, resolved)
+	local key = ns.Paladins.Get(name, slot)
+	local buff = Buffs.byKey[key == "AUTO" and resolved or key]
+	local duplicate = ns.Paladins.Overruled(name, slot)
+	local state = duplicate and "red" or not buff and "grey" or key == "AUTO" and "green" or "gold"
+	button.state, button.duplicate = state, duplicate
+	button.detail = key == "AUTO" and ("Auto: " .. (buff and buff.label or "None"))
+		or key == "NONE" and "None" or Buffs.byKey[key].label
+	button.caption:SetText(duplicate and "Conflict" or buff and buff.label or "None")
+	-- Manual picks get the gold edge; Auto stays grey with its badge; None and
+	-- conflicts read at a glance from their dark and red edges.
+	button:SetChecked(key ~= "AUTO" and key ~= "NONE" and buff ~= nil and not duplicate)
+	if duplicate then
+		button:SetBackdropBorderColor(unpack(RED_EDGE)); button.caption:SetTextColor(1, 0.35, 0.25)
+	elseif not buff then
+		button:SetBackdropBorderColor(unpack(DARK_EDGE)); button.caption:SetTextColor(0.5, 0.5, 0.5)
 	end
+	button.icon:SetTexture(buff and UI.BuffIcon(buff.key) or PASS)
+	button.icon:SetDesaturated(not buff)
+	button.auto:SetShown(key == "AUTO"); button.autoBox:SetShown(key == "AUTO")
+	return buff
 end
 
 function View.Layout(width)
 	if not panel then return end
-	local available = math.max(1, width - EDGE * 2)
-	local visible = math.max(1, math.min(MAX_VISIBLE, paladinCount))
-	columnWidth = math.max(MIN_COLUMN, math.floor((available - GAP * (visible - 1)) / visible))
-	local trees = math.max(1, paladinCount)
-	contentWidth = trees * (columnWidth + GAP) - GAP
-	viewport:SetSize(available, BOARD_H)
-	canvas:SetSize(math.max(available, contentWidth), BOARD_H)
+	panel.layoutWidth = width
+	local available = width - EDGE * 2 - STUB
+	columnWidth = math.min(180, math.floor(available / math.max(1, math.min(5, count))))
+	contentWidth = math.max(available, count * columnWidth)
+	viewport:SetSize(available, BOARD_H); canvas:SetSize(contentWidth, BOARD_H)
 	local maximum = math.max(0, contentWidth - available)
 	scrollOffset = math.min(scrollOffset, maximum)
-	scrollbar:SetWidth(math.max(1, available - 12)); scrollbar:SetMinMaxValues(0, maximum)
+	scrollbar:SetWidth(available - 12); scrollbar:SetMinMaxValues(0, maximum)
 	scrollbar:SetValue(scrollOffset); scrollbar:SetShown(maximum > 0)
 	viewport:SetHorizontalScroll(scrollOffset)
-	local index = 0
-	local function place(tree)
-		tree:ClearAllPoints(); tree:SetPoint("TOPLEFT", index * (columnWidth + GAP), 0)
-		tree:Resize(columnWidth, BOARD_H)
-		index = index + 1
+	for i = 1, count do
+		local column = columns[i]
+		column:ClearAllPoints(); column:SetPoint("TOPLEFT", (i - 1) * columnWidth, 0); column:SetSize(columnWidth, BOARD_H)
+		column.title:SetWidth(columnWidth - 16); column.note:SetWidth(columnWidth - 16)
+		column.aura:SetWidth(columnWidth - 10)
+		for _, row in pairs(column.rows) do row:SetWidth(columnWidth - 10) end
 	end
-	for i = 1, paladinCount do place(columns[i]); layoutColumn(columns[i]) end
-	-- An empty group keeps one dimmed tree behind the "No paladins" note.
-	if paladinCount == 0 and seats[1] then place(seats[1]) end
-end
-
--- Paint one slot of a paladin's tree: gold manual, green Auto, grey nothing, red
--- a manual pick another paladin's newer edit took over. Returns state, key, buff.
-local function showSlot(row, paladin, slot, resolved)
-	local key = ns.Paladins.Get(paladin, slot)
-	local buff = Buffs.byKey[key == "AUTO" and resolved or key]
-	local duplicate = ns.Paladins.Overruled(paladin, slot)
-	row.duplicate = duplicate
-	row.detail = key == "AUTO" and ("Auto: " .. (buff and buff.label or "none"))
-		or (key == "NONE" and "None" or Buffs.byKey[key].label)
-	if duplicate then row.detail = row.detail .. " (duplicate)" end
-	local state = duplicate and "red" or not buff and "grey" or key == "AUTO" and "green" or "gold"
-	row:SetState(state, buff and ns.UI.BuffIcon(buff.key) or "Interface\\Icons\\INV_Misc_QuestionMark")
-	return state, key, buff
 end
 
 function View.Refresh()
 	if not panel then return end
 	local pals = ns.Roster.Paladins()
-	paladinCount = #pals
-	band:SetCount("Paladins", paladinCount)
-	empty:SetShown(paladinCount == 0)
+	count = #pals
+	empty:SetShown(count == 0)
+	local stats = {}
+	for _, member in pairs(ns.Assignments.roster.members) do
+		local st = stats[member.class] or { count = 0, overrides = 0 }
+		st.count = st.count + 1; st.overrides = st.overrides + (member.blessingsOverride and 1 or 0)
+		stats[member.class] = st
+	end
+	for class, row in pairs(classRows) do
+		local st = stats[class] or { count = 0, overrides = 0 }
+		row.label:SetText(ns.WoW.ClassColorName(ns.WoW.ClassName(class), class) .. GREY .. "  (" .. st.count .. ")|r")
+		row.note:SetText(st.overrides > 0 and (st.overrides .. " personal ranking" .. (st.overrides > 1 and "s" or "")) or "")
+		row.label:ClearAllPoints(); row.label:SetPoint("TOPLEFT", 40, st.overrides > 0 and -7 or -14)
+		row:SetAlpha(st.count == 0 and 0.4 or 1)
+	end
 	for i, name in ipairs(pals) do
-		if not columns[i] then columns[i] = createColumn() end
+		columns[i] = columns[i] or createColumn()
 		local column, member = columns[i], ns.Assignments.roster.members[name]
-		local spec = (i - 1) % 3 + 1
-		column.paladin = name; column:Show()
-		column:SetArt(ns.UI.TREE_ART.PALADIN[spec])
+		column.paladin, column.index = name, i; column:Show()
+		column.title:SetText(ns.WoW.ClassColorName(name, "PALADIN"))
 		local covered = 0
 		for class, row in pairs(column.rows) do
-			local state, key, buff = showSlot(row, name, class, ns.Assignments.ClassBlessing(class, name))
-			if buff then covered = covered + 1 end
-			row.assignment:SetText(buff and buff.label or (key == "NONE" and "None" or "Auto"))
-			row.assignment:SetTextColor(unpack(ns.UI.SLOT_COLORS[state]))
+			if showSlot(row, name, class, ns.Assignments.ClassBlessing(class, name)) then covered = covered + 1 end
+			row:SetAlpha((stats[class] and stats[class].count > 0) and 1 or 0.45)
 		end
-		local auraState, auraKey, aura = showSlot(column.aura, name, AURA, ns.Assignments.Aura(name))
-		local color = ns.UI.SLOT_COLORS[auraState]
-		local auraText = ("|cff%02x%02x%02x%s|r"):format(color[1] * 255, color[2] * 255, color[3] * 255,
-			aura and aura.label or (auraKey == "NONE" and "No aura" or "Aura: Auto"))
-		column:SetHeader(SPEC_ICONS[spec], ns.WoW.ClassColorName(name, "PALADIN"),
-			auraText .. (member.hasAddon and "" or " " .. GREY .. "(no add-on)|r"), covered)
+		showSlot(column.aura, name, "AURA", ns.Assignments.Aura(name))
+		column.note:SetText(covered .. "/9 classes" .. (member.hasAddon and "" or "  -  Unverified"))
 	end
-	for i = paladinCount + 1, #columns do columns[i].paladin = nil; columns[i]:Hide() end
-	seats[1] = seats[1] or createSeat()
-	seats[1]:SetArt(ns.UI.TREE_ART.PALADIN[1], true)
-	seats[1]:SetShown(paladinCount == 0)
+	for i = count + 1, #columns do columns[i].paladin = nil; columns[i]:Hide() end
+	if picker.target then
+		local target = picker.target
+		if not target.column.paladin or target.column.paladin ~= picker.choices[1].paladin then closePicker() end
+	end
+	undo:SetEnabled(ns.Paladins.CanUndo())
+	View.Layout(panel.layoutWidth or 900)
+end
+
+-- One legend entry: a sample swatch and its meaning.
+local function legend(x, sample, label)
+	sample:SetPoint("TOPLEFT", x, -538)
+	local text = UI.Text(panel, "GameFontHighlightSmall", 0, 0, nil, label)
+	text:ClearAllPoints(); text:SetPoint("LEFT", sample, "RIGHT", 6, 0)
+	return text
+end
+
+local function swatch(border)
+	local box = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+	box:SetSize(18, 18)
+	UI.Backdrop(box, 8, { 0.04, 0.035, 0.03, 0.85 }, border)
+	return box
 end
 
 function View.Create(host)
 	panel = host
-	band = ns.UI.Band(panel, "Blessings and auras",
-		"One tree per paladin: aura top right, a blessing per class. Click cycles; right-click reverses.", true)
-	-- PallyPower-style shortcuts: lock in what Auto picked, or start over.
-	local clear = ns.UI.Button(band, "Clear", 64, function() ns.Paladins.Clear() end,
-		"Set every blessing and aura back to Auto.")
-	clear:SetPoint("RIGHT", band.countLabel, "LEFT", -8, 0)
-	local fill = ns.UI.Button(band, "Auto-fill", 84, function() ns.Paladins.Fill() end,
-		"Fill every Auto blessing and aura with Buffeteria's pick and share it with the group. Your manual choices stay.")
-	fill:SetPoint("RIGHT", clear, "LEFT", -8, 0)
-	band.help:SetPoint("RIGHT", fill, "LEFT", -8, 0)
+	UI.PageHeader(panel, "Class blessings", "Classes are rows, paladins are columns.")
+	undo = UI.Button(panel, "Undo", 64, function() closePicker(); ns.Paladins.Undo() end,
+		"Undo the last bulk action. Newer group edits are preserved.")
+	undo:SetPoint("TOPRIGHT", -12, -14)
+	local clear = UI.Button(panel, "Reset all to Auto", 136, function() closePicker(); ns.Paladins.Clear(); View.Refresh() end,
+		"Reset every blessing and aura to Auto. You can undo this action.")
+	clear:SetPoint("RIGHT", undo, "LEFT", -6, 0)
+	local fill = UI.Button(panel, "Lock in Auto picks", 146, function() closePicker(); ns.Paladins.Fill(); View.Refresh() end,
+		"Keep Auto's current assignments when the group changes. Manual choices stay.")
+	fill:SetPoint("RIGHT", clear, "LEFT", -6, 0)
+	local board = UI.Panel(panel)
+	board:SetPoint("TOPLEFT", EDGE, BOARD_Y); board:SetPoint("TOPRIGHT", -EDGE, BOARD_Y); board:SetHeight(BOARD_H)
+	UI.Text(board, "GameFontNormal", 12, -14, nil, "Class")
+	local auraHint = UI.Text(board, "GameFontHighlightSmall", 12, -50, STUB - 20, "Aura")
+	auraHint:SetTextColor(0.6, 0.6, 0.6)
+	-- The header rule, the stub's edge, and a faint stripe on every other class row.
+	local rule = UI.Line(board, 0.75, 0.6, 0.3, 0.5)
+	rule:SetPoint("TOPLEFT", 4, -HEADER + 1); rule:SetPoint("TOPRIGHT", -4, -HEADER + 1)
+	local edge = UI.Line(board, 1, 1, 1, 0.07, true)
+	edge:SetPoint("TOPLEFT", STUB - 1, -6); edge:SetPoint("BOTTOMLEFT", STUB - 1, 6)
+	for i, class in ipairs(Buffs.CLASS_KEYS) do
+		if i % 2 == 1 then
+			local stripe = board:CreateTexture(nil, "BORDER")
+			stripe:SetPoint("TOPLEFT", 4, -HEADER - (i - 1) * ROW); stripe:SetPoint("TOPRIGHT", -4, -HEADER - (i - 1) * ROW)
+			stripe:SetHeight(ROW); stripe:SetColorTexture(1, 1, 1, 0.03)
+		end
+		local row = CreateFrame("Frame", nil, board)
+		row:SetSize(STUB - 8, ROW); row:SetPoint("TOPLEFT", 0, -HEADER - (i - 1) * ROW)
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetSize(24, 24); row.icon:SetPoint("LEFT", 10, 0)
+		UI.ClassIcon(row.icon, class)
+		row.label = UI.Text(row, "GameFontHighlight", 40, -14, STUB - 48)
+		row.label:SetWordWrap(false)
+		row.note = UI.Text(row, "GameFontHighlightSmall", 40, -23, STUB - 48); row.note:SetWordWrap(false)
+		row.note:SetTextColor(0.6, 0.6, 0.6)
+		classRows[class] = row
+	end
 	viewport = CreateFrame("ScrollFrame", nil, panel)
-	viewport:SetPoint("TOPLEFT", EDGE, -48)
-	canvas = CreateFrame("Frame", nil, viewport)
-	viewport:SetScrollChild(canvas)
-	empty = viewport:CreateFontString(nil, "OVERLAY", "GameFontDisableLarge")
-	empty:SetPoint("CENTER", 0, 0); empty:SetText("No paladins in the group")
-	scrollbar = CreateFrame("Slider", nil, panel, "BackdropTemplate")
-	scrollbar:SetOrientation("HORIZONTAL"); scrollbar:SetSize(280, 10)
-	scrollbar:SetPoint("TOPLEFT", viewport, "BOTTOMLEFT", 6, -4)
-	scrollbar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-	scrollbar:SetBackdropColor(0.22, 0.17, 0.08, 1)
-	scrollbar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
-	scrollbar:GetThumbTexture():SetSize(24, 16)
+	viewport:SetPoint("TOPLEFT", EDGE + STUB, BOARD_Y)
+	canvas = CreateFrame("Frame", nil, viewport); viewport:SetScrollChild(canvas)
+	empty = UI.Text(viewport, "GameFontDisableLarge", 30, -140, nil, "No paladins in the group")
+	scrollbar = UI.Slider(panel)
+	scrollbar:SetPoint("TOPLEFT", viewport, "BOTTOMLEFT", 6, -2)
 	scrollbar:SetValueStep(1)
-	scrollbar:SetScript("OnValueChanged", function(_, value)
-		scrollOffset = value; viewport:SetHorizontalScroll(value)
-	end)
+	scrollbar:SetScript("OnValueChanged", function(_, value) closePicker(); scrollOffset = value; viewport:SetHorizontalScroll(value) end)
 	viewport:EnableMouseWheel(true)
-	viewport:SetScript("OnMouseWheel", function(_, delta)
-		scrollbar:SetValue(math.max(0, math.min(scrollOffset - delta * (columnWidth + GAP),
-			math.max(0, contentWidth - viewport:GetWidth()))))
-	end)
-	local legend = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	legend:SetPoint("BOTTOMLEFT", 16, 15)
-	legend:SetText("|cffffd100Gold|r assigned  |cff19ff19Green|r auto  " .. GREY .. "Grey|r none")
-	local priority = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	priority:SetPoint("BOTTOMRIGHT", -16, 9); priority:SetWidth(200); priority:SetJustifyH("RIGHT")
-	priority:SetText("Personal overrides take priority. Your own tree is saved.")
-	ns.UI.Button(panel, "Announce to group", 160, function() ns.Assignments.Announce() end):SetPoint("BOTTOM", 0, 10)
-	panel.columns, panel.seats, panel.viewport, panel.scrollbar = columns, seats, viewport, scrollbar
-	panel.fill, panel.clear = fill, clear
+	viewport:SetScript("OnMouseWheel", function(_, delta) scrollbar:SetValue(scrollOffset - delta * columnWidth) end)
+	local auto = swatch({ 0.45, 0.45, 0.45, 1 })
+	local letter = auto:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	letter:SetPoint("CENTER", 0, 0); letter:SetText("A"); letter:SetTextColor(0.75, 0.75, 0.75)
+	legend(EDGE + 4, auto, "Auto")
+	legend(EDGE + 84, swatch({ UI.GOLD[1], UI.GOLD[2], UI.GOLD[3], 1 }), "Manual")
+	local none = panel:CreateTexture(nil, "ARTWORK"); none:SetSize(18, 18); none:SetTexture(PASS)
+	legend(EDGE + 174, none, "None")
+	legend(EDGE + 254, swatch(RED_EDGE), "Conflict")
+	local interaction = UI.Text(panel, "GameFontHighlightSmall", 0, 0, nil, "Click: choose     Right-click: Auto     Shift-click: None")
+	interaction:ClearAllPoints(); interaction:SetPoint("TOPRIGHT", -EDGE - 4, -541)
+	interaction:SetTextColor(0.65, 0.65, 0.65)
+	picker = UI.Menu(panel, ns.globalPrefix .. "_PaladinPicker")
+	picker:SetFrameLevel(panel:GetFrameLevel() + 30)
+	picker.title = UI.Text(picker, "GameFontNormal", 12, -11, 196)
+	local divider = UI.Line(picker, 1, 1, 1, 0.15)
+	divider:SetPoint("TOPLEFT", 8, -28); divider:SetPoint("TOPRIGHT", -8, -28)
+	picker.help = picker:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	picker.help:SetPoint("BOTTOMLEFT", 12, 10); picker.help:SetWidth(196); picker.help:SetJustifyH("LEFT")
+	picker.choices = {}; picker:Hide(); tinsert(UISpecialFrames, ns.globalPrefix .. "_PaladinPicker")
+	panel:SetScript("OnHide", closePicker)
+	panel.columns, panel.classRows, panel.viewport, panel.scrollbar = columns, classRows, viewport, scrollbar
+	panel.fill, panel.clear, panel.undo, panel.picker = fill, clear, undo, picker
 end
