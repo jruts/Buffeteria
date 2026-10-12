@@ -508,6 +508,22 @@ class AddonTests(unittest.TestCase):
             end
             for i = 0, 4 do WOW_TIME = WOW_TIME + 0.1; pulse:GetScript('OnUpdate')(pulse) end
             assert(head.halo.width > head:GetWidth())
+            -- Annoyed glows a soft orange; angry glows full red.
+            local compute = ns.Tracker.Compute
+            local function glowFor(bad)
+                ns.Tracker.Compute = function()
+                    return {any=true, overall='bad', problems={}, yours={FORT=true}, needs={},
+                        next=action, perKey={FORT={bad=bad, warn=0, total=2, casters={}}}}
+                end
+                ns.Tracker.Refresh()
+                pulse:GetScript('OnUpdate')(pulse)
+                return head.halo.vertexColor, head.halo:GetAlpha()
+            end
+            local c, annoyed = glowFor(1)
+            assert(c[1] == 1 and c[2] > 0.5 and c[3] < 0.2)
+            local c2, angry = glowFor(2)
+            assert(c2[1] == 1 and c2[2] < 0.2 and annoyed < angry)
+            ns.Tracker.Compute = compute
             -- Nothing to cast: no glow, but the head never fades.
             local s = {any=true, overall='bad', problems={}, yours={KINGS=true},
                 needs={{key='FORT', status='bad', caster='B-Realm'}}, perKey={

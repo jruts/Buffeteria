@@ -182,8 +182,9 @@ Existing tracker visibility and display choices are preserved.
   they are back in range. If nobody's buffs can be read, the head is grey.
   Its invisible click area is rectangular.
 - **Is it my turn?** The mood is the whole group's, so the head also shows what *you* should
-  do. When you have something to cast, a gold glow breathes around it
-  (flaring up whenever the next spell changes) and it demands the buff above the face,
+  do. When you have something to cast, a glow breathes around it
+  (soft orange while the head is annoyed, strong red when it is angry, flaring up
+  whenever the next spell changes) and it demands the buff above the face,
   for example **GIEF Fortitude!** The halo stays behind the head; the face is never
   brightened by an additive shimmer. Hover to see the spell and target. When
   there's nothing for you to cast, there is no glow and clicking does nothing; hover

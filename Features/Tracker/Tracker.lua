@@ -12,6 +12,11 @@ local GAP = Layout.GAP
 local BORDER = 2
 local SCREEN_MARGIN = 4
 local GLOW_SCALE = 0.625  -- silhouette size within each glow; see tools/make_orc_glow.py
+-- Halo tint and strength by mood: a soft orange when annoyed, full red when angry.
+local HALO = {
+	angry = { 1, 0.12, 0.08, 1 },
+	default = { 1, 0.6, 0.12, 0.6 },
+}
 local OTHERS_ALPHA = 0.5  -- small icons for buffs that are someone else's job
 local GCD = 1.5           -- assumed global cooldown when the client hides cooldowns
 local lastCastAt = -math.huge
@@ -148,7 +153,6 @@ local function buildCastButton()
 	castBtn.halo = castBtn:CreateTexture(nil, "BACKGROUND", nil, -8)
 	castBtn.halo:SetPoint("CENTER", castBtn, "CENTER", 0, 0)
 	castBtn.halo:SetTexture(Art.Glow())
-	castBtn.halo:SetVertexColor(1, 0.78, 0.15)
 	castBtn.halo:Hide()
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
 	ns.UI.PressFeedback(castBtn, castBtn.icon, function(self)
@@ -262,7 +266,7 @@ local function build()
 		local wave = 0.5 + 0.5 * math.sin(now * 4)
 		-- Flare up when the spell or target changes, then settle into breathing.
 		local flare = 1 - math.min(1, (now - (pulse.popAt or 0)) / 0.5)
-		castBtn.halo:SetAlpha(math.min(1, 0.45 + 0.3 * wave + 0.35 * flare))
+		castBtn.halo:SetAlpha(math.min(1, 0.45 + 0.3 * wave + 0.35 * flare) * (pulse.strength or 1))
 		local aura = MAIN / GLOW_SCALE * (1 + 0.04 * wave + 0.1 * flare)
 		castBtn.halo:SetSize(aura, aura)
 	end)
@@ -295,11 +299,14 @@ end
 
 -- Show whether clicking does anything for you: a halo and demand on your turn.
 -- The head itself is never brightened or faded.
-local function showRole(s)
+local function showRole(s, mood)
 	local n = s.next
 	local turn = n ~= nil
 	castBtn.icon:SetAlpha(1)
 	castBtn.halo:SetTexture(Art.Glow())
+	local tint = HALO[mood] or HALO.default
+	castBtn.halo:SetVertexColor(tint[1], tint[2], tint[3])
+	pulse.strength = tint[4]
 	castBtn.halo:SetShown(turn)
 	castBtn.halo:SetSize(MAIN / GLOW_SCALE, MAIN / GLOW_SCALE)
 	if turn and (not pulse:IsShown() or n.spell ~= pulse.spell or n.label ~= pulse.target) then pulse.popAt = GetTime() end
@@ -387,7 +394,7 @@ function Tracker.Refresh()
 	local face = Art.Texture(mood)
 	castBtn.icon:SetTexture(face)
 	castBtn.icon:SetDesaturated(mood == "idle")
-	showRole(s)
+	showRole(s, mood)
 	layoutStatusIcons(s)
 	-- In preview the button never casts anything.
 	applySecure(preview and {} or s)
