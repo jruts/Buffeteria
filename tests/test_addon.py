@@ -486,6 +486,74 @@ class AddonTests(unittest.TestCase):
             assert(head:GetWidth() == 100 and frame:GetWidth() == 104)
         """)
 
+    def test_head_shows_whether_it_is_your_turn_or_you_are_waiting(self):
+        lua = full_addon()
+        lua.execute("""
+            local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+            -- Something to cast: glowing head, spell badge, and a click prompt.
+            ns.Tracker.Refresh()
+            local action = ns.Tracker.Summary().next
+            assert(action and head.glow:IsShown() and head.halo:IsShown())
+            assert(head.halo.texture:find('OrcGlow$') and head.icon:GetAlpha() == 1)
+            assert(frame.gief:IsShown() and head.label:GetText() == '')
+            assert(frame.gief:GetText() == 'GIEF ' .. ns.Buffs.byKey[action.key].label .. '!')
+            assert(frame.tag.point[2] == frame.gief) -- DEV sits above the demand
+            assert(frame.gief.font[2] == ns.db.shoutSize)
+            ns.db.shoutSize = 22; ns.Tracker.Refresh()
+            assert(frame.gief.font[2] == 22 and frame.gief.font[3] == 'OUTLINE')
+            -- Run a few animation frames, including the flare.
+            local pulse
+            for _, w in ipairs(widgets) do
+                if w.parent == frame and w.kind == 'Frame' and w:GetScript('OnUpdate') and w:IsShown() then pulse = w end
+            end
+            for i = 0, 4 do WOW_TIME = WOW_TIME + 0.1; pulse:GetScript('OnUpdate')(pulse) end
+            assert(head.halo.width > head:GetWidth())
+            -- Nothing to cast: dimmed head naming the buff I'm waiting for.
+            local s = {any=true, overall='bad', problems={}, yours={KINGS=true},
+                needs={{key='FORT', status='bad', caster='B-Realm'}}, perKey={
+                FORT={bad=1, warn=0, total=2, casters={['B-Realm']=true}},
+                INT={bad=1, warn=0, total=2, casters={['B-Realm']=true}},
+                KINGS={bad=1, warn=0, total=2, casters={['A-Realm']=true}},
+            }}
+            ns.Scan.Update = function() return s end
+            ns.db.buffDisplay = 'ALL'; ns.Tracker.Refresh()
+            assert(not head.glow:IsShown() and not head.halo:IsShown())
+            assert(not frame.gief:IsShown() and frame.tag.point[2] == frame)
+            assert(head.icon:GetAlpha() < 1)
+            assert(head.label:GetText():find('Need ' .. ns.Buffs.byKey.FORT.label, 1, true))
+            local alpha = {}
+            for _, w in ipairs(widgets) do
+                if w.parent == frame and w.key and w.tex and w:IsShown() then alpha[w.key] = w:GetAlpha() end
+            end
+            assert(alpha.FORT == 1 and alpha.KINGS == 1 and alpha.INT < 1)
+            -- The tooltip names who I'm waiting for.
+            local lines = {}
+            local add = GameTooltip.AddDoubleLine
+            GameTooltip.AddDoubleLine = function(_, l, r) lines[#lines + 1] = r end
+            head:GetScript('OnEnter')(head)
+            GameTooltip.AddDoubleLine = add
+            assert(table.concat(lines, ';'):find('from', 1, true))
+            s.needs = {{key='FORT', status='bad'}, {key='INT', status='bad'}}
+            ns.Tracker.Refresh()
+            assert(head.label:GetText():find('Need 2 buffs', 1, true))
+            COMBAT = true; ns.Tracker.Refresh()
+            assert(head.label:GetText() == '' and head.icon:GetAlpha() == 1)
+            COMBAT = false
+        """)
+
+    def test_preview_shows_gief_only_for_classes_with_something_to_cast(self):
+        for player_class, gief in (("PALADIN", True), ("PRIEST", True), ("WARRIOR", False), ("ROGUE", False)):
+            with self.subTest(player_class=player_class):
+                lua = full_addon(player_class)
+                lua.execute("""
+                    ns.Preview.Set(true)
+                    WOW_TIME = 100; ns.Tracker.Refresh()
+                    local s, frame = ns.Tracker.Summary(), Buffeteria_Tracker
+                    assert(frame.gief:IsShown() == %s and Buffeteria_CastButton.halo:IsShown() == %s)
+                    assert((s.next ~= nil) == %s and (#s.needs > 0) ~= %s)
+                    ns.Preview.Set(false)
+                """ % ((("true" if gief else "false"),) * 4))
+
     def test_tracker_icons_keep_color_and_share_status_borders_for_buffs_and_auras(self):
         lua = full_addon()
         lua.execute("""
@@ -519,7 +587,7 @@ class AddonTests(unittest.TestCase):
         """)
 
     def test_orc_textures_have_matching_dimensions_and_real_transparency(self):
-        for mood in ("Happy", "Grumpy", "Angry"):
+        for mood in ("Happy", "Grumpy", "Angry", "Glow"):
             with self.subTest(mood=mood):
                 data = (ROOT / "Media" / f"Orc{mood}.tga").read_bytes()
                 image_type = data[2]

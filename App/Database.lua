@@ -49,6 +49,7 @@ function ns.Database.Init()
 		db.buffDisplay = db.onlyProblems and "PROBLEMS" or "ALL"
 	end
 	db.iconSize = math.max(32, math.min(128, tonumber(db.iconSize) or 64))
+	db.shoutSize = math.max(10, math.min(24, math.floor((tonumber(db.shoutSize) or 16) + 0.5)))
 	db.statusIconSize = math.max(16, math.min(64, math.floor((tonumber(db.statusIconSize) or 21) + 0.5)))
 	db.iconsPerRow = tonumber(db.iconsPerRow)
 	if db.iconsPerRow ~= 2 and db.iconsPerRow ~= 3 and db.iconsPerRow ~= 4 then db.iconsPerRow = 2 end

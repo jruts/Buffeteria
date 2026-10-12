@@ -21,6 +21,9 @@ local FAKE = {
 }
 local KEYS = { "KINGS", "MIGHT", "WISDOM", "SALV", "LIGHT", "FORT", "SPIRIT", "SHADOW", "MOTW", "INT" }
 local PHASES = { "empty", "bad", "warn", "ok" }
+-- What the player's class would be asked to cast; other classes only receive.
+local CLASS_CAST = { PALADIN = "KINGS", PRIEST = "FORT", DRUID = "MOTW", MAGE = "INT" }
+
 
 -- Deterministic pseudo-random so each phase looks the same every cycle.
 local function roll(i, j, phase) return ((i * 7 + j * 13 + phase * 31) % 17) end
@@ -29,7 +32,7 @@ function Preview.Summary()
 	local phaseIndex = math.floor(GetTime() / PHASE_SECONDS) % #PHASES
 	local empty = PHASES[phaseIndex + 1] == "empty"
 	local phase = empty and "bad" or PHASES[phaseIndex + 1]
-	local s = { overall = phase, perKey = {}, problems = {}, any = true }
+	local s = { overall = phase, perKey = {}, problems = {}, any = true, yours = {}, needs = {} }
 	for _, key in ipairs(KEYS) do s.perKey[key] = { bad = 0, warn = 0, total = #FAKE } end
 
 	if phase ~= "ok" then
@@ -51,9 +54,16 @@ function Preview.Summary()
 			table.insert(s.problems, { who = "Shieldwalla", class = "WARRIOR", key = "SALV", status = "unwanted" })
 		end
 		table.sort(s.problems, ns.Status.CompareProblems)
-		local b = Buffs.byKey.KINGS
-		s.next = { spell = ns.WoW.SpellName(b.groupIds[1]) or "Greater Blessing of Kings", icon = ns.WoW.SpellIcon(b.groupIds[1]),
-			label = ns.WoW.ClassName("WARRIOR"), status = phase }
+		local _, class = UnitClass("player")
+		local key = CLASS_CAST[class]
+		if key then
+			local b = Buffs.byKey[key]
+			s.next = { spell = ns.WoW.SpellName(b.groupIds[1]) or b.label, icon = ns.WoW.SpellIcon(b.groupIds[1]),
+				label = ns.WoW.ClassName("WARRIOR"), key = key, status = phase }
+			s.yours[key] = true
+		else
+			s.needs[1] = { key = "KINGS", status = phase, caster = "Kingsley" }
+		end
 	end
 	return s
 end

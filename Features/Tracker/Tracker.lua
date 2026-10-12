@@ -5,7 +5,7 @@ local Buffs = ns.Buffs
 local Tracker = {}
 ns.Tracker = Tracker
 
-local frame, castBtn, cancelBtn, statusIcons, lastSummary
+local frame, castBtn, cancelBtn, statusIcons, lastSummary, pulse
 local layoutStatusIcons
 local editing = false
 local MAIN = 64                                  -- current clickable head size
@@ -13,6 +13,10 @@ local GAP = 2
 local BORDER = 2
 local LABEL_HEIGHT = 12
 local SCREEN_MARGIN = 4
+local GLOW_SCALE = 0.625  -- silhouette size within OrcGlow; see tools/make_orc_glow.py
+local IDLE_ALPHA = 0.55   -- head opacity when there's nothing for you to cast
+local OTHERS_ALPHA = 0.5  -- small icons for buffs that are someone else's job
+local NEED_COLOR = "|cffff9933"
 local MOOD_TEXTURES = {
 	happy = ns.mediaPath .. "OrcHappy",
 	grumpy = ns.mediaPath .. "OrcGrumpy",
@@ -30,6 +34,23 @@ local function showTooltip(owner)
 	GameTooltip:SetOwner(owner, "ANCHOR_BOTTOMRIGHT")
 	GameTooltip:AddLine(ns.title .. (ns.Preview.active and " |cffff9900(preview)|r" or ""))
 	local s = lastSummary
+	-- Say first whether clicking does anything for this player.
+	if s and s.next then
+		GameTooltip:AddLine(("Your turn! Click to cast %s on %s."):format(s.next.spell, s.next.label), 0.4, 0.8, 1, true)
+	else
+		GameTooltip:AddLine("Nothing for you to cast right now.", 0.7, 0.7, 0.7)
+	end
+	if s and s.needs and #s.needs > 0 then
+		GameTooltip:AddLine("You're waiting for:", unpack(ns.Status.COLORS.warn))
+		for _, need in ipairs(s.needs) do
+			local m = need.caster and ns.roster.members[need.caster]
+			local from = need.caster == ns.WoW.FullName("player") and "you"
+				or (m and ns.WoW.ClassColorName(need.caster, m.class))
+				or (need.caster and ns.WoW.Short(need.caster)) or "nobody assigned"
+			GameTooltip:AddDoubleLine("  " .. Buffs.byKey[need.key].label, "from " .. from, 1, 1, 1, 1, 1, 1)
+		end
+	end
+	GameTooltip:AddLine(" ")
 	if not s or not s.any then
 		GameTooltip:AddLine("Nothing on the menu yet.", 0.7, 0.7, 0.7)
 	elseif #s.problems == 0 then
@@ -69,10 +90,7 @@ local function showTooltip(owner)
 			GameTooltip:AddDoubleLine(who, "out of range", 1, 1, 1, 0.6, 0.6, 0.6)
 		end
 	end
-	if s and s.next then
-		GameTooltip:AddLine(" ")
-		GameTooltip:AddLine(("Click: %s on %s"):format(s.next.spell, s.next.label), 0.4, 0.8, 1)
-	end
+	GameTooltip:AddLine(" ")
 	GameTooltip:AddLine("Right-click: options", 0.6, 0.6, 0.6)
 	GameTooltip:AddLine("Move: Edit Mode, or unlock and drag", 0.6, 0.6, 0.6)
 	GameTooltip:Show()
@@ -118,6 +136,18 @@ local function build()
 	-- The alpha silhouette supplies the shape; no square background or highlight.
 	castBtn.icon:SetTexCoord(0, 1, 0, 1)
 	castBtn.icon:SetTexture(MOOD_TEXTURES.grumpy)
+	-- "Your turn" cue: a soft gold glow around the silhouette (Media/OrcGlow,
+	-- built by tools/make_orc_glow.py) and a faint shimmer on the face.
+	castBtn.halo = castBtn:CreateTexture(nil, "BACKGROUND", nil, -8)
+	castBtn.halo:SetPoint("CENTER", castBtn, "CENTER", 0, 0)
+	castBtn.halo:SetTexture(ns.mediaPath .. "OrcGlow")
+	castBtn.halo:SetVertexColor(1, 0.78, 0.15)
+	castBtn.halo:Hide()
+	castBtn.glow = castBtn:CreateTexture(nil, "OVERLAY")
+	castBtn.glow:SetAllPoints(castBtn.icon)
+	castBtn.glow:SetTexture(MOOD_TEXTURES.grumpy)
+	castBtn.glow:SetBlendMode("ADD")
+	castBtn.glow:Hide()
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
 	castBtn:SetScript("OnMouseDown", function(self)
 		self.dragged = false
@@ -165,8 +195,9 @@ local function build()
 
 	-- Keep the next recipient below the face, leaving the expression unobscured.
 	castBtn.label = castBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
-	castBtn.label:SetPoint("TOPLEFT", castBtn, "BOTTOMLEFT", 1, -1)
-	castBtn.label:SetPoint("TOPRIGHT", castBtn, "BOTTOMRIGHT", -1, -1)
+	-- Wider than the head so "Need Fortitude" fits.
+	castBtn.label:SetPoint("TOP", castBtn, "BOTTOM", 0, -1)
+	castBtn.label:SetWidth(MAIN + 48)
 	castBtn.label:SetJustifyH("CENTER")
 	castBtn.label:SetWordWrap(false)
 
@@ -175,6 +206,14 @@ local function build()
 	frame.tag:SetPoint("BOTTOM", frame, "TOP", 0, 2)
 	frame.tag:SetText(ns.isDev and "|cffff9900DEV|r" or "|cffff9900PREVIEW|r")
 	frame.tag:Hide()
+
+	-- The orc's demand on your turn, above the face.
+	frame.gief = frame:CreateFontString(nil, "OVERLAY",
+		_G.GameFontNormalLargeOutline and "GameFontNormalLargeOutline" or "GameFontNormalLarge")
+	frame.gief:SetPoint("BOTTOM", castBtn, "TOP", 0, 3)
+	frame.gief:SetWordWrap(false)
+	frame.giefFont = frame.gief.GetFont and frame.gief:GetFont()
+	frame.gief:Hide()
 
 	-- Secure "remove unwanted buff from me" button (e.g. Salvation on a tank), top-right corner.
 	cancelBtn = CreateFrame("Button", ns.globalPrefix .. "_CancelButton", frame, "SecureActionButtonTemplate")
@@ -192,18 +231,39 @@ local function build()
 	cancelBtn:SetScript("OnLeave", GameTooltip_Hide)
 	cancelBtn:Hide()
 
+	-- Separate from the tracker frame, whose OnUpdate is used while dragging.
+	pulse = CreateFrame("Frame", nil, frame)
+	pulse:SetScript("OnUpdate", function()
+		local now = GetTime()
+		local wave = 0.5 + 0.5 * math.sin(now * 4)
+		-- Flare up when the spell or target changes, then settle into breathing.
+		local flare = 1 - math.min(1, (now - (pulse.popAt or 0)) / 0.5)
+		castBtn.glow:SetAlpha(0.03 + 0.1 * wave + 0.25 * flare)
+		castBtn.halo:SetAlpha(math.min(1, 0.45 + 0.3 * wave + 0.35 * flare))
+		local aura = MAIN / GLOW_SCALE * (1 + 0.04 * wave + 0.1 * flare)
+		castBtn.halo:SetSize(aura, aura)
+	end)
+	pulse:Hide()
+
 	statusIcons = {}
 	frame:Hide()
 end
 
 local PRIORITY = ns.Status.PRIORITY
+-- Room above the face for the GIEF call-out, the DEV/preview tag and Edit Mode's label.
+local function topGap()
+	local gap = (ns.isDev or ns.Preview.active or editing) and 24 or GAP
+	if frame.gief:IsShown() then gap = gap + ns.db.shoutSize + 2 end
+	return gap
+end
+
 local function iconPlacement(count, iconSize)
 	local columns = ns.db.iconsPerRow
 	local height = math.ceil(count / columns) * (iconSize + GAP) - GAP
 	local side = ns.db.iconPosition
 	if side == "AUTO" then
 		local belowGap = BORDER + LABEL_HEIGHT + GAP
-		local aboveGap = (ns.isDev or ns.Preview.active or editing) and 24 or GAP
+		local aboveGap = topGap()
 		local headLeft, headBottom, headTop = castBtn:GetLeft(), castBtn:GetBottom(), castBtn:GetTop()
 		if count == 0 or not headLeft or not headBottom or not headTop then
 			return columns, "BOTTOM", 0, -belowGap
@@ -234,7 +294,7 @@ local function iconPlacement(count, iconSize)
 		return columns, side, BORDER + GAP, height / 2
 	elseif side == "TOP" then
 		-- Keep the preview tag and Edit Mode label clear above the face.
-		local gap = (ns.isDev or ns.Preview.active or editing) and 24 or GAP
+		local gap = topGap()
 		return columns, side, 0, gap + height
 	end
 	return columns, "BOTTOM", 0, -BORDER - LABEL_HEIGHT - GAP
@@ -264,6 +324,10 @@ layoutStatusIcons = function(s)
 		if state[a] ~= state[b] then return PRIORITY[state[a]] < PRIORITY[state[b]] end
 		return a < b
 	end)
+	-- Full strength for buffs you cast or are missing yourself; others are dimmed.
+	local relevant = {}
+	for key in pairs(s.yours or {}) do relevant[key] = true end
+	for _, need in ipairs(s.needs or {}) do relevant[need.key] = true end
 	local iconSize = ns.db.statusIconSize
 	local columns, side, left, top, minX, maxX = iconPlacement(#keys, iconSize)
 	for i, key in ipairs(keys) do
@@ -285,6 +349,15 @@ layoutStatusIcons = function(s)
 					if pk.bad > 0 then GameTooltip:AddLine(pk.bad .. " missing", unpack(ns.Status.COLORS.bad)) end
 					if pk.warn > 0 then GameTooltip:AddLine(pk.warn .. " running low", unpack(ns.Status.COLORS.warn)) end
 					if pk.bad + pk.warn == 0 then GameTooltip:AddLine("everyone has it", unpack(ns.Status.COLORS.ok)) end
+					local yours = lastSummary.yours and lastSummary.yours[self.key]
+					if yours then
+						GameTooltip:AddLine("Your job: click the head to cast it.", 0.4, 0.8, 1)
+					elseif pk.casters and next(pk.casters) then
+						local names = {}
+						for caster in pairs(pk.casters) do names[#names + 1] = ns.WoW.Short(caster) end
+						table.sort(names)
+						GameTooltip:AddLine("Cast by " .. table.concat(names, ", "), 0.7, 0.7, 0.7, true)
+					end
 				end
 				GameTooltip:Show()
 			end)
@@ -315,6 +388,7 @@ layoutStatusIcons = function(s)
 		local pk = s.perKey[key]
 		ic.tex:SetTexture(keyIcon(key))
 		ic.tex:SetDesaturated(false)
+		ic:SetAlpha((relevant[key] or st == "ok") and 1 or OTHERS_ALPHA)
 		ic:SetBackdropBorderColor(unpack(colorOf(st)))
 		local n = (ns.db.buffDisplay == "MISSING" and pk.bad)
 			or (ns.db.buffDisplay == "EXPIRING" and pk.warn) or (pk.bad + pk.warn)
@@ -322,6 +396,46 @@ layoutStatusIcons = function(s)
 		ic:Show()
 	end
 	for i = #keys + 1, #statusIcons do statusIcons[i]:Hide() end
+end
+
+-- Show whether clicking does anything for you: a glowing head demanding the
+-- buff on your turn, a dimmed head otherwise, and the buffs you're waiting for.
+local function showRole(s, combat, face)
+	local n = not combat and s.next
+	castBtn.icon:SetAlpha((n or combat) and 1 or IDLE_ALPHA)
+	castBtn.glow:SetTexture(face)
+	local turn = n and true or false
+	castBtn.glow:SetShown(turn)
+	castBtn.halo:SetShown(turn)
+	castBtn.halo:SetSize(MAIN / GLOW_SCALE, MAIN / GLOW_SCALE)
+	if turn and not pulse:IsShown() then pulse.popAt = GetTime() end
+	pulse:SetShown(turn)
+	castBtn.label:SetWidth(MAIN + 48)
+	if frame.giefFont and frame.giefSize ~= ns.db.shoutSize then
+		frame.gief:SetFont(frame.giefFont, ns.db.shoutSize, "OUTLINE")
+		frame.giefSize = ns.db.shoutSize
+	end
+	frame.gief:SetShown(turn and not editing)
+	frame.tag:ClearAllPoints()
+	if frame.gief:IsShown() then
+		frame.tag:SetPoint("BOTTOM", frame.gief, "TOP", 0, 1)
+	else
+		frame.tag:SetPoint("BOTTOM", frame, "TOP", 0, 2)
+	end
+	if n then
+		if n.spell ~= pulse.spell or n.label ~= pulse.target then pulse.popAt = GetTime() end
+		pulse.spell, pulse.target = n.spell, n.label
+		local buff = n.key and Buffs.byKey[n.key]
+		frame.gief:SetText("GIEF " .. (buff and buff.label or n.spell) .. "!")
+		castBtn.label:SetText("")
+	elseif combat then
+		castBtn.label:SetText("")
+	elseif s.needs and #s.needs > 0 then
+		local what = #s.needs == 1 and Buffs.byKey[s.needs[1].key].label or (#s.needs .. " buffs")
+		castBtn.label:SetText(NEED_COLOR .. "Need " .. what .. "|r")
+	else
+		castBtn.label:SetText("")
+	end
 end
 
 -- Secure attributes can only change out of combat.
@@ -362,22 +476,15 @@ function Tracker.Refresh()
 	local s = preview and ns.Preview.Summary() or ns.Scan.Update()
 	lastSummary = s
 	local mood = ns.Status.Mood(s)
-	castBtn.icon:SetTexture(MOOD_TEXTURES[mood] or MOOD_TEXTURES.grumpy)
+	local face = MOOD_TEXTURES[mood] or MOOD_TEXTURES.grumpy
+	castBtn.icon:SetTexture(face)
 	castBtn.icon:SetDesaturated(mood == "idle")
+	showRole(s, InCombatLockdown(), face)
 	layoutStatusIcons(s)
 
-	if InCombatLockdown() then
-		castBtn.label:SetText("")
-		return
-	end
+	if InCombatLockdown() then return end
 	-- In preview the button never casts anything.
 	applySecure(preview and {} or s)
-	local n = s.next
-	if n then
-		castBtn.label:SetText(n.label)
-	else
-		castBtn.label:SetText("")
-	end
 end
 
 function Tracker.Summary() return lastSummary end

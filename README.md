@@ -106,7 +106,8 @@ Its controls are grouped into four cards: **Tracker**, **Size**, **Show icons**,
 **Layout**, with a border-color legend underneath.
 It holds **Show tracker**, **Lock tracker**, **Minimap button**, and **Preview**, plus
 the clickable head's size (32–128 pixels; changes apply after combat), a separate
-**Small icon size** slider (16–64 pixels, default: 21; applies immediately), and
+**Small icon size** slider (16–64 pixels, default: 21; applies immediately), a
+**Shout-out text** slider for the GIEF call-out (10–24 pixels, default: 16), and
 the expiring-buff threshold (1–15 minutes). Changing the small icon size updates
 the rows' spacing and alignment without resizing the face.
 
@@ -131,8 +132,8 @@ Top and Bottom center each row on the face, including a partially filled last
 row. Left fills each row from right to left, starting beside the face; Right
 fills from left to right. Rows update as icons appear or disappear.
 The head stays fixed as icons appear or disappear; the grid follows it while
-dragging, including in Edit Mode. Bottom leaves room for the next recipient's
-name; Top leaves room for the preview tag and Edit Mode label.
+dragging, including in Edit Mode. Bottom leaves room for the **Need** label;
+Top leaves room for the GIEF call-out, the preview tag and Edit Mode label.
 Existing tracker visibility and display choices are preserved.
 
 - **Orc head:** release a click to cast your next buff on the right target. The
@@ -143,16 +144,27 @@ Existing tracker visibility and display choices are preserved.
   Players whose buffs can't be read (usually because they are out of range) don't
   change his mood; hovering lists them as out of range, and they count again once
   they are back in range. If nobody's buffs can be read, he is grey.
-  His invisible click area is rectangular. The next recipient appears below him;
-  hover to see the next spell and targets.
+  His invisible click area is rectangular.
+- **Is it my turn?** His mood is the whole group's, so he also shows what *you* should
+  do. When you have something to cast, a gold glow breathes around him
+  (flaring up whenever the next spell changes) and he demands it above his head,
+  for example **GIEF Fortitude!** Hover to see the spell and target. When
+  there's nothing for you to cast, he is dimmed and clicking does nothing. If you
+  are missing a buff yourself, **Need** and the buff (or **Need 2 buffs**) appears below
+  him; hover to see who is supposed to cast it. The glow and GIEF only appear when
+  you have a cast to make, including on yourself; just needing a buff never
+  triggers them. Labels are hidden in combat.
 - **Small icons by the head:** which buffs need attention and how many players are
-  affected. Hover for details.
+  affected. Buffs that are someone else's job are dimmed; yours and the ones you're
+  missing stay bright. Hover to see who casts each one.
 - Right-click the big button for options. Move it with Edit Mode, or unlock it in
   options and drag. Dragging only moves it; releasing a drag never casts or opens options.
 - The minimap icon also acts on click release; dragging it only changes its position.
 - Bind a key: Key Bindings > AddOns > Buffeteria > "Cast next buff".
 - Try `/buff preview` to cycle through furious, partly missing, running low, and
-  happy states every five seconds without casting. Run it again to return to the
+  happy states every five seconds without casting. Paladins, priests, druids and
+  mages see the GIEF call-out; other classes see what it looks like to wait for
+  a buff. Run it again to return to the
   real group.
 
 ## Commands

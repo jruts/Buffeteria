@@ -3,7 +3,7 @@ local _, ns = ...
 local View = {}
 ns.Tracker.View = View
 local panel, cards, toggles, displayButtons, rowButtons, positionButtons
-local sizeSlider, sizeValue, iconSizeSlider, iconSizeValue, warnValue
+local sizeSlider, sizeValue, iconSizeSlider, iconSizeValue, shoutSlider, shoutValue, warnValue
 local refreshing = false
 local MODES = {
 	{ key = "ALL", label = "Always show all" },
@@ -17,7 +17,7 @@ local POSITIONS = {
 	{ "LEFT", "Left", -70, 1 }, { "AUTO", "Auto", 0, 1 }, { "RIGHT", "Right", 70, 1 },
 	{ "BOTTOM", "Bottom", 0, 2 },
 }
-local MARGIN, GAP, TOP_ROW, TOP_H, BOTTOM_ROW, BOTTOM_H = 12, 10, -54, 140, -204, 230
+local MARGIN, GAP, TOP_ROW, TOP_H, BOTTOM_ROW, BOTTOM_H = 12, 10, -54, 168, -232, 230
 
 local function changed()
 	ns.Events.Emit("TrackerSettingsChanged")
@@ -35,6 +35,8 @@ function View.Refresh()
 	sizeValue:SetText(ns.db.iconSize .. " px")
 	iconSizeSlider:SetValue(ns.db.statusIconSize)
 	iconSizeValue:SetText(ns.db.statusIconSize .. " px")
+	shoutSlider:SetValue(ns.db.shoutSize)
+	shoutValue:SetText(ns.db.shoutSize .. " px")
 	warnValue:SetText(ns.db.warnMinutes .. " min")
 	refreshing = false
 end
@@ -106,9 +108,11 @@ local function sizeCard()
 	local card = ns.UI.Card(panel, "Size", "Interface\\Icons\\INV_Misc_Spyglass_02")
 	sizeSlider, sizeValue = slider(card, ns.globalPrefix .. "_IconSize", "Clickable head", -38, 32, 128, 4,
 		function(value) ns.db.iconSize = value end)
-	iconSizeSlider, iconSizeValue = slider(card, ns.globalPrefix .. "_StatusIconSize", "Small icons", -86, 16, 64, 1,
+	iconSizeSlider, iconSizeValue = slider(card, ns.globalPrefix .. "_StatusIconSize", "Small icons", -78, 16, 64, 1,
 		function(value) ns.db.statusIconSize = value end)
-	ns.UI.Text(card, "GameFontDisableSmall", 14, -124, nil, "Head size applies after combat.")
+	shoutSlider, shoutValue = slider(card, ns.globalPrefix .. "_ShoutSize", "Shout-out text", -118, 10, 24, 1,
+		function(value) ns.db.shoutSize = value end)
+	ns.UI.Text(card, "GameFontDisableSmall", 14, -154, nil, "Head size applies after combat.")
 	return card
 end
 
@@ -182,7 +186,7 @@ end
 
 -- Swatches matching the icon borders on the tracker.
 local function legend()
-	local anchor = ns.UI.Text(panel, "GameFontDisableSmall", MARGIN + 4, -442, nil, "Icon borders:")
+	local anchor = ns.UI.Text(panel, "GameFontDisableSmall", MARGIN + 4, -470, nil, "Icon borders:")
 	for _, entry in ipairs({ { "bad", "Missing" }, { "warn", "Expiring" }, { "ok", "Buffed" } }) do
 		local edge = panel:CreateTexture(nil, "ARTWORK")
 		edge:SetSize(12, 12); edge:SetPoint("LEFT", anchor, "RIGHT", 12, 0)

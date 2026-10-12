@@ -77,7 +77,10 @@ function Scan.Update()
 		end
 	end
 
-	local summary = { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false }
+	local me = ns.WoW.FullName("player")
+	-- yours: keys I have to cast; needs: what I'm missing and who should cast it.
+	local summary = { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false,
+		yours = {}, needs = {} }
 	for full, exp in pairs(res.expected or {}) do
 		local m = roster.members[full]
 		if m and not m.dead then
@@ -93,7 +96,14 @@ function Scan.Update()
 				end
 				if st == "bad" or st == "warn" then
 					pk[st] = pk[st] + 1
-					table.insert(summary.problems, { who = full, key = key, status = st, rem = rem })
+					local caster = exp[key]
+					table.insert(summary.problems, { who = full, key = key, status = st, rem = rem, caster = caster })
+					pk.casters = pk.casters or {}
+					if caster then pk.casters[caster] = true end
+					if caster == me then summary.yours[key] = true end
+					if full == me then
+						table.insert(summary.needs, { key = key, status = st, caster = caster })
+					end
 				end
 				if PRIORITY[st] < PRIORITY[summary.overall] then summary.overall = st end
 			end
@@ -107,20 +117,24 @@ function Scan.Update()
 		end
 	end
 	-- My own assigned aura.
-	local me = ns.WoW.FullName("player")
 	local aura = (res.auras or {})[me]
 	if aura and roster.members[me] and not roster.members[me].dead then
 		summary.any = true
 		local missing = Scan.MissingAura() and 1 or 0
-		summary.perKey[aura] = { bad = missing, warn = 0, total = 1 }
+		summary.perKey[aura] = { bad = missing, warn = 0, total = 1, casters = { [me] = true } }
 		if missing > 0 then
-			table.insert(summary.problems, { who = me, key = aura, status = "bad" })
+			summary.yours[aura] = true
+			table.insert(summary.problems, { who = me, key = aura, status = "bad", caster = me })
 			summary.overall = "bad"
 		end
 	end
 	if not summary.any then summary.overall = "idle" end
 	table.sort(summary.problems, ns.Status.CompareProblems)
 	table.sort(summary.unreadable)
+	table.sort(summary.needs, function(a, b)
+		if a.status ~= b.status then return PRIORITY[a.status] < PRIORITY[b.status] end
+		return a.key < b.key
+	end)
 	summary.next = ns.Actions.Next(now, warnSec)
 	summary.cancel = Scan.UnwantedOnMe()
 	return summary
