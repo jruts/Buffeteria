@@ -1,6 +1,6 @@
 # Buffeteria
 
-## Unreleased
+## v0.6.9
 
 - Fixed paladins never recognizing each other: this client names addon-message
   senders "Name Realm" instead of "Name-Realm", so no message matched a group
