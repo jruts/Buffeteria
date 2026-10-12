@@ -2,7 +2,7 @@
 local _, ns = ...
 local Options = {}
 ns.Options = Options
-local win, content, panel, personal, paladinPanel, personalTab, paladinTab
+local win, content, panel, personal, paladinPanel, trackerPanel, personalTab, paladinTab, settingsTab
 -- The /buff window matches the native talent panel: three trees side by side.
 local WIDTH, HEIGHT, CONTENT_H = 652, 528, 498
 
@@ -12,8 +12,11 @@ local function layout()
 	content:SetWidth(width)
 	-- Leave room for the window's portrait; Settings has none.
 	personalTab:ClearAllPoints(); personalTab:SetPoint("TOPLEFT", inWindow and 64 or 16, -4)
+	local _, class = UnitClass("player")
+	settingsTab:ClearAllPoints(); settingsTab:SetPoint("LEFT", class == "PALADIN" and paladinTab or personalTab, "RIGHT", 6, 0)
 	ns.Preferences.View.Layout(width)
 	ns.Paladins.View.Layout(width)
+	ns.Tracker.View.Layout(width)
 end
 
 local function styleTab(tab, selected)
@@ -42,13 +45,15 @@ local function createTab(label)
 	return tab
 end
 
-local function selectTab(isPaladin)
+local function selectTab(selected)
 	local _, class = UnitClass("player")
-	isPaladin = isPaladin and class == "PALADIN"
-	personal:SetShown(not isPaladin)
-	paladinPanel:SetShown(isPaladin)
-	styleTab(personalTab, not isPaladin)
-	styleTab(paladinTab, isPaladin)
+	if selected == "PALADIN" and class ~= "PALADIN" then selected = "PERSONAL" end
+	personal:SetShown(selected == "PERSONAL")
+	paladinPanel:SetShown(selected == "PALADIN")
+	trackerPanel:SetShown(selected == "SETTINGS")
+	styleTab(personalTab, selected == "PERSONAL")
+	styleTab(paladinTab, selected == "PALADIN")
+	styleTab(settingsTab, selected == "SETTINGS")
 	Options.Refresh()
 end
 
@@ -56,6 +61,7 @@ function Options.Refresh()
 	if not content then return end
 	ns.Preferences.View.Refresh()
 	ns.Paladins.View.Refresh()
+	ns.Tracker.View.Refresh()
 	layout()
 end
 
@@ -83,16 +89,21 @@ local function build()
 	content:SetPoint("TOPLEFT", 0, -26)
 	personalTab = createTab("My preferences")
 	paladinTab = createTab("Paladins")
+	settingsTab = createTab("Settings")
 	paladinTab:SetPoint("LEFT", personalTab, "RIGHT", 6, 0)
 	local _, playerClass = UnitClass("player")
 	paladinTab:SetShown(playerClass == "PALADIN")
 	personal = ns.Preferences.View.Create(content)
 	paladinPanel = ns.Paladins.View.Create(content)
-	personalTab:SetScript("OnClick", function() selectTab(false) end)
-	paladinTab:SetScript("OnClick", function() selectTab(true) end)
+	trackerPanel = ns.Tracker.View.Create(content)
+	personalTab:SetScript("OnClick", function() selectTab("PERSONAL") end)
+	paladinTab:SetScript("OnClick", function() selectTab("PALADIN") end)
+	settingsTab:SetScript("OnClick", function() selectTab("SETTINGS") end)
 
 	paladinPanel:Hide()
+	trackerPanel:Hide()
 	styleTab(personalTab, true); styleTab(paladinTab, false)
+	styleTab(settingsTab, false)
 	win:SetScript("OnShow", function()
 		content:SetParent(win); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -26); content:Show()
 		Options.Refresh()
@@ -105,6 +116,7 @@ local function build()
 	ns.Events.On("AssignmentsChanged", refreshVisible)
 	ns.Events.On("PaladinPlanChanged", refreshVisible)
 	ns.Events.On("PreviewChanged", refreshVisible)
+	ns.Events.On("TrackerSettingsChanged", refreshVisible)
 	win:RegisterEvent("DISPLAY_SIZE_CHANGED")
 	win:RegisterEvent("UI_SCALE_CHANGED")
 	win:SetScript("OnEvent", refreshVisible)

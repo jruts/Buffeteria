@@ -26,6 +26,7 @@ Features/Tracker/Scan.lua
 Features/Tracker/Actions.lua
 Features/Tracker/Preview.lua
 Features/Tracker/Tracker.lua
+Features/Tracker/View.lua
 Features/Minimap/Minimap.lua
 Features/Preferences/View.lua
 Features/Paladins/View.lua

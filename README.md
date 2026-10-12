@@ -14,7 +14,7 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   (drag to reorder) and lights up the buffs they care about (Fortitude, Spirit, Shadow
   Protection, Mark of the Wild, Arcane Intellect). In `/buff`, these appear as
   talent-style trees: Blessings (each ranked blessing names the paladin serving it),
-  Buffs (each buff names its caster, plus tracker options), and Tanks (buffs wanted
+  Buffs (each buff names its caster), and Tanks (buffs wanted
   while tanking: Righteous Fury for paladins and Thorns from a druid).
 - **Smart assignments.** With one paladin you get your #1 blessing, with two your #1 and
   #2, and so on. Greater Blessings cover a whole class, so each class gets what most of
@@ -86,6 +86,23 @@ format changed for this feature.
 
 ## The tracker
 
+Every class has a **Settings** tab in `/buff` and the game's Buffeteria AddOns page.
+It holds **Show tracker**, **Lock tracker**, **Minimap button**, and **Preview**, plus
+the clickable head's size (32–128 pixels; changes apply after combat) and the
+expiring-buff threshold (1–15 minutes).
+
+Choose which small buff icons appear: **Always show all**, **Missing only**,
+**Missing or expiring** (the default), or **Expiring only**. A buff counts as
+expiring when at least one recipient has less than the configured time left.
+The counts follow the selected filter. These filters affect the small icons;
+the head's expression and next cast still consider all tracked buffs.
+The head stays fixed as icons appear or disappear. Rows normally grow underneath
+it, but automatically grow upward near the bottom of the screen. The grid shifts
+inward at the left and right edges and uses more columns if vertical space is
+tight. Placement follows the head while dragging, including in Edit Mode, and
+adapts to resolution and UI scale changes.
+Existing tracker visibility and display choices are preserved.
+
 - **Orc head:** release a click to cast your next buff on the right target. The
   transparent mascot is green and smiling when everyone has their tracked buffs,
   orange and grumpy when some are missing or running low, and red and furious
@@ -94,7 +111,7 @@ format changed for this feature.
   Unreadable buff observations also keep him grumpy until they can be checked.
   His invisible click area is rectangular. The next recipient appears below him;
   hover to see the next spell and targets.
-- **Small icons underneath:** which buffs need attention and how many players are
+- **Small icons by the head:** which buffs need attention and how many players are
   affected. Hover for details.
 - Right-click the big button for options. Move it with Edit Mode, or unlock it in
   options and drag. Dragging only moves it; releasing a drag never casts or opens options.

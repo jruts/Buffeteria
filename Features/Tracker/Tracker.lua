@@ -6,13 +6,15 @@ local Tracker = {}
 ns.Tracker = Tracker
 
 local frame, castBtn, cancelBtn, statusIcons, lastSummary
+local layoutStatusIcons
 local editing = false
-local MAIN = 64                                  -- room to read the orc's expression
+local MAIN = 64                                  -- current clickable head size
 local GAP = 2
 local COLS = 2                                   -- small icons per row under the big one
 local ICON_SIZE = 21
 local BORDER = 2
 local LABEL_HEIGHT = 12
+local SCREEN_MARGIN = 4
 local MOOD_TEXTURES = {
 	happy = "Interface\\AddOns\\Buffeteria\\Media\\OrcHappy",
 	grumpy = "Interface\\AddOns\\Buffeteria\\Media\\OrcGrumpy",
@@ -66,13 +68,24 @@ end
 
 local function savePos()
 	frame:StopMovingOrSizing()
+	frame:SetScript("OnUpdate", nil)
 	local p, _, rp, x, y = frame:GetPoint()
 	ns.db.pos = { p, rp, x, y }
+	Tracker.Refresh()
+end
+
+local function startMoving()
+	frame:StartMoving()
+	-- Follow the screen edges during either kind of drag, without rescanning
+	-- the raid or changing the head's anchor.
+	frame:SetScript("OnUpdate", function()
+		if lastSummary then layoutStatusIcons(lastSummary) end
+	end)
 end
 
 local function build()
 	frame = CreateFrame("Frame", "Buffeteria_Tracker", UIParent)
-	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2)
+	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2 + LABEL_HEIGHT)
 	frame:SetPoint("CENTER", UIParent, "CENTER", 0, -180)
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
@@ -122,7 +135,7 @@ local function build()
 		self:SetAttribute("*type1", "")
 		self.icon:SetVertexColor(1, 1, 1)
 		GameTooltip_Hide()
-		frame:StartMoving()
+		startMoving()
 	end)
 	castBtn:SetScript("OnDragStop", function(self)
 		if not self.dragging then return end
@@ -172,13 +185,56 @@ local function build()
 end
 
 local PRIORITY = ns.Status.PRIORITY
-local function layoutStatusIcons(s)
+local function iconPlacement(count)
+	local columns, left, upward = COLS, -(COLS * ICON_SIZE + (COLS - 1) * GAP) / 2, false
+	local belowGap = BORDER + LABEL_HEIGHT + GAP
+	-- Leave the preview tag and Edit Mode label clear when growing upward.
+	local aboveGap = (ns.Preview.active or editing) and 24 or GAP
+	local headLeft, headBottom, headTop = castBtn:GetLeft(), castBtn:GetBottom(), castBtn:GetTop()
+	if count == 0 or not headLeft or not headBottom or not headTop then
+		return columns, left, upward, belowGap
+	end
+	-- Frame coordinates are in their own effective scale. Convert the screen
+	-- bounds to the head's units so UI scale changes don't break edge detection.
+	local scale = UIParent:GetEffectiveScale() / castBtn:GetEffectiveScale()
+	local screenLeft = (UIParent:GetLeft() or 0) * scale + SCREEN_MARGIN
+	local screenBottom = (UIParent:GetBottom() or 0) * scale + SCREEN_MARGIN
+	local screenRight = screenLeft + UIParent:GetWidth() * scale - SCREEN_MARGIN * 2
+	local screenTop = screenBottom + UIParent:GetHeight() * scale - SCREEN_MARGIN * 2
+	local below = math.max(0, headBottom - belowGap - screenBottom)
+	local above = math.max(0, screenTop - headTop - aboveGap)
+	local height = math.ceil(count / columns) * (ICON_SIZE + GAP) - GAP
+	upward = height > below and above > below
+	local available = upward and above or below
+	-- When neither side fits two columns, widen the grid enough to fit the
+	-- available height. Keep all columns inside the left and right edges.
+	local maxRows = math.max(1, math.floor((available + GAP) / (ICON_SIZE + GAP)))
+	local maxColumns = math.max(1, math.floor((screenRight - screenLeft + GAP) / (ICON_SIZE + GAP)))
+	columns = math.min(maxColumns, math.max(columns, math.ceil(count / maxRows)))
+	local width = columns * (ICON_SIZE + GAP) - GAP
+	local x = headLeft + castBtn:GetWidth() / 2 - width / 2
+	x = math.max(screenLeft, math.min(x, screenRight - width))
+	left = x - (headLeft + castBtn:GetWidth() / 2)
+	return columns, left, upward, upward and aboveGap or belowGap
+end
+
+layoutStatusIcons = function(s)
+	-- Keep the head's frame independent of the number of rows. A center- or
+	-- bottom-anchored frame otherwise moves its top whenever its height changes.
+	-- Secure descendants also mean size changes must wait until out of combat.
+	if not InCombatLockdown() and MAIN ~= ns.db.iconSize then
+		MAIN = ns.db.iconSize
+		castBtn:SetSize(MAIN, MAIN)
+		frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2 + LABEL_HEIGHT)
+	end
 	local keys, state = {}, {}
 	for key, pk in pairs(s.perKey) do
 		local st = (pk.bad > 0 and "bad") or (pk.warn > 0 and "warn") or "ok"
-		if st ~= "ok" or not ns.db.onlyProblems then
+		local mode = ns.db.buffDisplay
+		if mode == "ALL" or (mode == "MISSING" and pk.bad > 0)
+			or (mode == "EXPIRING" and pk.warn > 0) or (mode == "PROBLEMS" and st ~= "ok") then
 			keys[#keys + 1] = key
-			state[key] = st
+			state[key] = mode == "EXPIRING" and "warn" or st
 		end
 	end
 	-- Worst first, then blessings before the other buffs.
@@ -188,6 +244,7 @@ local function layoutStatusIcons(s)
 		if ka ~= kb then return ka == "blessing" end
 		return a < b
 	end)
+	local columns, left, upward, offset = iconPlacement(#keys)
 	for i, key in ipairs(keys) do
 		local ic = statusIcons[i]
 		if not ic then
@@ -216,24 +273,21 @@ local function layoutStatusIcons(s)
 		end
 		ic.key = key
 		ic:ClearAllPoints()
-		local col, row = (i - 1) % COLS, math.floor((i - 1) / COLS)
-		local left = (MAIN + BORDER * 2 - (COLS * ICON_SIZE + (COLS - 1) * GAP)) / 2
-		ic:SetPoint("TOPLEFT", frame, "TOPLEFT", left + col * (ICON_SIZE + GAP), -(MAIN + BORDER * 2 + LABEL_HEIGHT + GAP + row * (ICON_SIZE + GAP)))
+		local col, row = (i - 1) % columns, math.floor((i - 1) / columns)
+		local y = offset + row * (ICON_SIZE + GAP)
+		ic:SetPoint(upward and "BOTTOMLEFT" or "TOPLEFT", castBtn, upward and "TOP" or "BOTTOM",
+			left + col * (ICON_SIZE + GAP), upward and y or -y)
 		local st = state[key]
 		local pk = s.perKey[key]
 		ic.tex:SetTexture(keyIcon(key))
 		ic.tex:SetDesaturated(st == "ok")
 		ic:SetBackdropBorderColor(unpack(colorOf(st)))
-		local n = pk.bad + pk.warn
+		local n = (ns.db.buffDisplay == "MISSING" and pk.bad)
+			or (ns.db.buffDisplay == "EXPIRING" and pk.warn) or (pk.bad + pk.warn)
 		ic.count:SetText(n > 0 and n or "")
 		ic:Show()
 	end
 	for i = #keys + 1, #statusIcons do statusIcons[i]:Hide() end
-	-- The frame holds secure buttons, so it can only be resized out of combat.
-	if not InCombatLockdown() then
-		local rows = math.ceil(#keys / COLS)
-		frame:SetHeight(MAIN + BORDER * 2 + LABEL_HEIGHT + (rows > 0 and rows * (ICON_SIZE + GAP) or 0))
-	end
 end
 
 -- Secure attributes can only change out of combat.
@@ -333,7 +387,7 @@ local function buildEditOverlay()
 		if InCombatLockdown() then return end
 		self.dragged = true
 		selectArtwork(true)
-		frame:StartMoving()
+		startMoving()
 	end)
 	o:SetScript("OnDragStop", savePos)
 	o:SetScript("OnClick", function(self)
@@ -362,6 +416,7 @@ local function hookEditMode()
 end
 
 function Tracker.Init()
+	MAIN = ns.db.iconSize
 	build()
 	hookEditMode()
 	if ns.db.pos then
@@ -370,5 +425,9 @@ function Tracker.Init()
 	end
 	ns.Events.On("AssignmentsChanged", Tracker.Refresh)
 	ns.Events.On("PreviewChanged", Tracker.Refresh)
+	ns.Events.On("TrackerSettingsChanged", Tracker.Refresh)
+	frame:RegisterEvent("DISPLAY_SIZE_CHANGED")
+	frame:RegisterEvent("UI_SCALE_CHANGED")
+	frame:SetScript("OnEvent", Tracker.Refresh)
 	C_Timer.NewTicker(1, Tracker.Refresh)
 end

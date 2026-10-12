@@ -1,9 +1,9 @@
--- Personal buff preferences and tracker options, laid out as three talent trees.
+-- Personal buff preferences, laid out as three talent trees.
 local _, ns = ...
 local Buffs = ns.Buffs
 local View = {}
 ns.Preferences.View = View
-local personal, band, trees, rows, wants, toggles, warnText, overrideCheck, tip, list, tankButtons, roleButton, roleText, tankTip
+local personal, band, trees, rows, wants, overrideCheck, tip, list, tankButtons, roleButton, roleText, tankTip
 local ROW_H, EDGE, GAP, BOARD_H = 22, 8, 2, 360
 local dragging
 
@@ -94,8 +94,6 @@ end
 function View.Refresh()
 	if not personal then return end
 	local wanted = refreshWants()
-	for _, cb in ipairs(toggles) do cb:SetChecked(cb.get() and true or false) end
-	warnText:SetText(("Orange below |cffffffff%d|r min"):format(ns.db.warnMinutes))
 	overrideCheck:SetChecked(ns.db.blessingsOverride and true or false)
 	local ranked = refreshRows()
 	local _, class = UnitClass("player")
@@ -233,7 +231,7 @@ function View.Create(parent)
 	end)
 	overrideCheck.text:SetJustifyH("LEFT")
 
-	-- 2) Buffs I want as talent buttons naming their caster, then the tracker options
+	-- 2) Buffs I want as talent buttons naming their caster
 	local buffs = trees[2]
 	wants = {}
 	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
@@ -249,30 +247,6 @@ function View.Create(parent)
 		button:SetScript("OnEnter", wantTooltip); button:SetScript("OnLeave", GameTooltip_Hide)
 		wants[buff.key] = button
 	end
-	ns.UI.Section(buffs, "Tracker", 14, -206)
-	warnText = ns.UI.Text(buffs, "GameFontHighlightSmall", 16, -228)
-	local minus = CreateFrame("Button", nil, buffs, "UIPanelButtonTemplate")
-	minus:SetSize(22, 20); minus:SetPoint("TOPRIGHT", -38, -222); minus:SetText("-")
-	local plus = CreateFrame("Button", nil, buffs, "UIPanelButtonTemplate")
-	plus:SetSize(22, 20); plus:SetPoint("LEFT", minus, "RIGHT", 2, 0); plus:SetText("+")
-	minus:SetScript("OnClick", function() ns.db.warnMinutes = math.max(1, ns.db.warnMinutes - 1); View.Refresh(); ns.Tracker.Refresh() end)
-	plus:SetScript("OnClick", function() ns.db.warnMinutes = math.min(15, ns.db.warnMinutes + 1); View.Refresh(); ns.Tracker.Refresh() end)
-	toggles = {}
-	local function toggle(label, get, set)
-		local cb = ns.UI.Checkbox(buffs, label, 10, -244 - #toggles * 21, set)
-		cb.get = get
-		toggles[#toggles + 1] = cb
-	end
-	toggle("Show tracker", function() return ns.db.showTracker end,
-		function(v) ns.db.showTracker = v; ns.Tracker.Refresh() end)
-	toggle("Lock tracker", function() return ns.db.locked end,
-		function(v) ns.db.locked = v end)
-	toggle("Small icons: problems only", function() return ns.db.onlyProblems end,
-		function(v) ns.db.onlyProblems = v; ns.Tracker.Refresh() end)
-	toggle("Minimap button", function() return not ns.db.minimap.hide end,
-		function(v) ns.db.minimap.hide = not v; ns.Minimap.Refresh() end)
-	toggle("Preview (fake raid)", function() return ns.Preview.active end,
-		function(v) ns.Preview.Set(v) end)
 
 	-- 3) Tank buffs, with an automatic role and an override for unassigned groups.
 	local tanks = trees[3]

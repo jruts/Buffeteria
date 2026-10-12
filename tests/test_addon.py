@@ -36,6 +36,183 @@ def full_addon(player_class="PALADIN", login=True):
 
 
 class AddonTests(unittest.TestCase):
+    def test_smart_buff_grid_fits_edges_scale_and_drag_without_moving_head(self):
+        lua = full_addon()
+        lua.execute("""
+            local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+            local s = ns.Preview.Summary()
+            ns.Scan.Update = function() return s end
+            ns.db.buffDisplay = 'ALL'
+            local headScale = 1
+            head.GetEffectiveScale = function() return headScale end
+            local function check(left, bottom, expectedDirection, minColumns)
+                head.left, head.bottom, head.top = left, bottom, bottom + head:GetHeight()
+                local oldPoint, oldHeight, oldWidth = frame.point, frame:GetHeight(), frame:GetWidth()
+                ns.Tracker.Refresh()
+                local count, xs = 0, {}
+                local screenW, screenH = UIParent:GetWidth() / headScale, UIParent:GetHeight() / headScale
+                for _, w in ipairs(widgets) do
+                    if w.parent == frame and w.key and w.tex and w:IsShown() then
+                        count = count + 1
+                        assert(w.point[3] == expectedDirection)
+                        local x = head.left + head:GetWidth() / 2 + w.point[4]
+                        local y = (w.point[3] == 'TOP' and head.top or head.bottom) + w.point[5]
+                        local low = w.point[1] == 'BOTTOMLEFT' and y or y - w:GetHeight()
+                        assert(x >= 4 and x + w:GetWidth() <= screenW - 4)
+                        assert(low >= 4 and low + w:GetHeight() <= screenH - 4)
+                        xs[x] = true
+                    end
+                end
+                local columns = 0; for _ in pairs(xs) do columns = columns + 1 end
+                assert(count == 10 and columns >= (minColumns or 2))
+                assert(frame.point == oldPoint and frame:GetHeight() == oldHeight and frame:GetWidth() == oldWidth)
+            end
+            check(800, 500, 'BOTTOM') -- normal placement
+            check(800, 12, 'TOP') -- bottom edge, all rows above
+            check(800, 1000, 'BOTTOM') -- top edge, all rows below
+            ns.db.iconSize = 32; ns.Tracker.Refresh()
+            check(2, 12, 'TOP') -- narrower head at bottom-left
+            check(1886, 12, 'TOP') -- bottom-right
+            check(2, 900, 'BOTTOM') -- top-left
+            check(1886, 900, 'BOTTOM') -- top-right
+            ns.db.iconSize = 64; ns.Tracker.Refresh()
+            UIParent:SetSize(320, 200)
+            check(120, 100, 'BOTTOM', 4) -- neither side fits two columns
+            UIParent:SetSize(1920, 1080)
+            headScale = 0.5
+            check(3740, 12, 'TOP') -- coordinates after UI scaling
+            headScale = 1
+            -- The grid can change during combat; secure casting stays untouched.
+            local spell, unit = head:GetAttribute('spell'), head:GetAttribute('unit')
+            COMBAT = true
+            check(800, 12, 'TOP')
+            assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+            COMBAT = false
+            -- Ordinary dragging and Edit Mode both update before release.
+            head:GetScript('OnDragStart')(head)
+            head.left, head.bottom, head.top = 800, 500, 564
+            frame:GetScript('OnUpdate')(frame)
+            head.left, head.bottom, head.top = 800, 12, 76
+            frame:GetScript('OnUpdate')(frame)
+            for _, w in ipairs(widgets) do
+                if w.parent == frame and w.key and w.tex and w:IsShown() then assert(w.point[3] == 'TOP') end
+            end
+            head:GetScript('OnDragStop')(head); runTimers()
+            assert(not frame:GetScript('OnUpdate'))
+            EventRegistry:TriggerEvent('EditMode.Enter')
+            local overlay = frame.editOverlay
+            overlay:GetScript('OnDragStart')(overlay)
+            assert(frame:GetScript('OnUpdate'))
+            frame:GetScript('OnUpdate')(frame)
+            overlay:GetScript('OnDragStop')(overlay)
+            assert(not frame:GetScript('OnUpdate'))
+            EventRegistry:TriggerEvent('EditMode.Exit')
+            -- Resolution/scale notifications also recalculate placement.
+            head.left, head.bottom, head.top = 800, 500, 564
+            frame:GetScript('OnEvent')(frame, 'UI_SCALE_CHANGED')
+            for _, w in ipairs(widgets) do
+                if w.parent == frame and w.key and w.tex and w:IsShown() then assert(w.point[3] == 'BOTTOM') end
+            end
+        """)
+
+    def test_tracker_settings_migrate_and_validate_saved_display_options(self):
+        lua = self.core_runtime()
+        lua.execute("""
+            for _, old in ipairs({true, false}) do
+                BuffeteriaCharDB = {onlyProblems=old, iconSize=200}
+                ns.Database.Init()
+                assert(ns.db.buffDisplay == (old and 'PROBLEMS' or 'ALL'))
+                assert(ns.db.iconSize == 128)
+            end
+            BuffeteriaCharDB = {onlyProblems=false, buffDisplay='MISSING', iconSize=16}
+            ns.Database.Init()
+            assert(ns.db.buffDisplay == 'MISSING' and ns.db.iconSize == 32)
+            BuffeteriaCharDB = {buffDisplay='invalid', iconSize='invalid'}
+            ns.Database.Init()
+            assert(ns.db.buffDisplay == 'PROBLEMS' and ns.db.iconSize == 64)
+        """)
+
+    def test_settings_tab_for_every_class_and_shared_game_settings_controls(self):
+        for player_class in ("PALADIN", "ROGUE"):
+            with self.subTest(player_class=player_class):
+                lua = full_addon(player_class)
+                lua.execute("""
+                    ns.Options.Toggle()
+                    local tab = findWidget('Settings')
+                    assert(tab:IsVisible() and not findWidget('Show tracker'):IsVisible())
+                    tab:GetScript('OnClick')(tab)
+                    assert(findWidget('Tracker settings'):IsVisible())
+                    assert(not findWidget('Your buffet'):IsVisible())
+                    assert(not findWidget('Blessings and auras'):IsVisible())
+                    local show = findWidget('Show tracker').parent
+                    show:SetChecked(false); show:GetScript('OnClick')(show)
+                    assert(not ns.db.showTracker and not Buffeteria_Tracker:IsShown())
+                    show:SetChecked(true); show:GetScript('OnClick')(show)
+                    assert(ns.db.showTracker and Buffeteria_Tracker:IsShown())
+                    local mode = findWidget('Missing only').parent
+                    mode:GetScript('OnClick')(mode)
+                    assert(ns.db.buffDisplay == 'MISSING' and mode:GetChecked())
+                    assert(not findWidget('Missing or expiring').parent:GetChecked())
+                    Buffeteria_IconSize:SetValue(96)
+                    assert(ns.db.iconSize == 96 and Buffeteria_CastButton:GetWidth() == 96)
+                    settingsPage:GetScript('OnShow')(settingsPage)
+                    assert(findWidget('Tracker settings'):IsVisible())
+                    assert(tab.parent.parent == settingsPage)
+                    ns.Options.Toggle()
+                    assert(tab.parent.parent == Buffeteria_Prefs)
+                    local personal = findWidget('My preferences')
+                    personal:GetScript('OnClick')(personal)
+                    assert(findWidget('Your buffet'):IsVisible())
+                    assert(not findWidget('Show tracker'):IsVisible())
+                """)
+
+    def test_display_filters_counts_and_fixed_head_do_not_change_cast_selection(self):
+        lua = full_addon()
+        lua.execute("""
+            local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+            local action = ns.Tracker.Summary().next
+            local s = {any=true, overall='bad', problems={}, next=action, perKey={
+                FORT={bad=1, warn=2, total=4}, INT={bad=0, warn=1, total=4},
+                MOTW={bad=0, warn=0, total=4}, RFURY={bad=1, warn=0, total=1},
+            }}
+            ns.Scan.Update = function() return s end
+            -- Cover center, bottom and top saved anchors: changing rows must
+            -- never alter the frame's size or its anchor, keeping the face fixed.
+            for _, anchor in ipairs({'CENTER', 'BOTTOM', 'TOPLEFT'}) do
+                frame:SetPoint(anchor, UIParent, anchor, 37, -81)
+                local height, width = frame:GetHeight(), frame:GetWidth()
+                local expected = {
+                    ALL={FORT=3, INT=1, MOTW='', RFURY=1},
+                    MISSING={FORT=1, RFURY=1},
+                    PROBLEMS={FORT=3, INT=1, RFURY=1},
+                    EXPIRING={FORT=2, INT=1},
+                }
+                for _, mode in ipairs({'ALL', 'MISSING', 'PROBLEMS', 'EXPIRING'}) do
+                    ns.db.buffDisplay = mode; ns.Tracker.Refresh()
+                    local found = {}
+                    for _, w in ipairs(widgets) do
+                        if w.parent == frame and w.key and w.tex and w:IsShown() then
+                            found[w.key] = w.count:GetText()
+                            assert(w.point[2] == head and w.point[3] == 'BOTTOM' and w.point[5] < 0)
+                        end
+                    end
+                    for key, count in pairs(expected[mode]) do assert(found[key] == count); found[key] = nil end
+                    assert(not next(found))
+                    assert(frame:GetHeight() == height and frame:GetWidth() == width)
+                    assert(frame.point[1] == anchor and frame.point[4] == 37 and frame.point[5] == -81)
+                    assert(head:GetAttribute('spell') == action.spell and head:GetAttribute('unit') == action.unit)
+                end
+            end
+            s.perKey = {}; ns.Tracker.Refresh()
+            assert(frame:GetHeight() == 80)
+            ns.db.iconSize = 100
+            COMBAT = true; ns.Tracker.Refresh()
+            assert(head:GetWidth() == 64 and frame:GetWidth() == 68)
+            COMBAT = false
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+            assert(head:GetWidth() == 100 and frame:GetWidth() == 104)
+        """)
+
     def test_orc_textures_have_matching_dimensions_and_real_transparency(self):
         for mood in ("Happy", "Grumpy", "Angry"):
             with self.subTest(mood=mood):
@@ -369,7 +546,7 @@ class AddonTests(unittest.TestCase):
             ns.Paladins.Init(); ns.roster = ns.Roster.Build(); ns.result = ns.Solver.Solve(ns.roster)
             ns.Preview = {active=false}; ns.Tracker = {Refresh=function() end}
         """)
-        for name in ("Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/View.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("""
             ns.Options.Toggle()
@@ -505,9 +682,9 @@ class AddonTests(unittest.TestCase):
         lua = self.core_runtime("ROGUE")
         lua.execute("""
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
-            ns.roster = ns.Roster.Build(); ns.Preview = {active=false}
+            ns.roster = ns.Roster.Build(); ns.Preview = {active=false}; ns.Tracker = {}
         """)
-        for name in ("Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/View.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("ns.Options.Toggle(); assert(not findWidget('Paladins'):IsVisible())")
 

@@ -24,6 +24,9 @@ function W:GetHeight() return self.height or 140 end
 function W:SetPoint(...) self.point = {...} end
 function W:GetPoint() return unpack(self.point or {"CENTER", UIParent, "CENTER", 0, 0}) end
 function W:GetCenter() return 100, 100 end
+function W:GetLeft() return self.left end
+function W:GetBottom() return self.bottom end
+function W:GetTop() return self.top end
 function W:GetEffectiveScale() return 1 end
 function W:GetFrameLevel() return self.level or 0 end
 function W:SetFrameLevel(level) self.level = level end

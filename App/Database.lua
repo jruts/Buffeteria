@@ -24,5 +24,9 @@ function ns.Database.Init()
 	db.locked = db.locked or false
 	db.minimap = db.minimap or { angle = 200, hide = false }
 	if db.onlyProblems == nil then db.onlyProblems = true end
+	if db.buffDisplay ~= "ALL" and db.buffDisplay ~= "MISSING" and db.buffDisplay ~= "EXPIRING" and db.buffDisplay ~= "PROBLEMS" then
+		db.buffDisplay = db.onlyProblems and "PROBLEMS" or "ALL"
+	end
+	db.iconSize = math.max(32, math.min(128, tonumber(db.iconSize) or 64))
 	ns.db = db
 end
