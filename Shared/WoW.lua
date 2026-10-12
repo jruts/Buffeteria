@@ -104,6 +104,14 @@ function ns.WoW.ClassName(class)
 	return (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class]) or class
 end
 
+-- A class color as { r, g, b }, gold when the client has none for the class.
+function ns.WoW.ClassColor(class)
+	local c = (C_ClassColor and C_ClassColor.GetClassColor and C_ClassColor.GetClassColor(class))
+		or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
+	if c then return { c.r, c.g, c.b } end
+	return { 1, 0.82, 0 }
+end
+
 function ns.WoW.ClassColorName(full, class)
 	local c = (C_ClassColor and C_ClassColor.GetClassColor and C_ClassColor.GetClassColor(class))
 	local short = ns.WoW.Short(full)

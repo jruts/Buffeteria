@@ -66,8 +66,10 @@ function View.Refresh()
 	if not personal then return end
 	local wanted = refreshWants()
 	overrideCheck:SetChecked(ns.db.blessingsOverride and true or false)
-	local art = ns.UI.TREE_ART[ns.WoW.PlayerClass()] or ns.UI.TREE_ART.PALADIN
-	for i, tree in ipairs(trees) do tree:SetArt(art[i]) end
+	-- Your class's talent art, etched faintly in its class color so the controls stay readable.
+	local class = ns.WoW.PlayerClass()
+	local art, tint = ns.UI.TREE_ART[class] or ns.UI.TREE_ART.PALADIN, ns.WoW.ClassColor(class)
+	for i, tree in ipairs(trees) do tree:SetArt(art[i], false, tint) end
 	trees[1]:SetHeader(ns.UI.BuffIcon("KINGS"), "Blessings", "Best first, drag to reorder", list.Refresh())
 	trees[2]:SetHeader(ns.UI.BuffIcon("FORT"), "Buffs", "Click the buffs you want", wanted)
 	trees[3]:SetHeader(ns.UI.BuffIcon("THORNS"), "Tanks", "Buffs for your tank role", refreshTanks())

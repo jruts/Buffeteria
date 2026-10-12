@@ -171,6 +171,46 @@ function UI.TalentButton(parent)
 	return button
 end
 
+-- Fill a texture with a gradient from `low` (bottom or left) to `high` (top or
+-- right), each { r, g, b, a }; clients without gradients get the flat `low` color.
+local function gradient(texture, orientation, low, high)
+	texture:SetTexture(UI.WHITE)
+	if CreateColor and texture.SetGradient
+		and pcall(texture.SetGradient, texture, orientation, CreateColor(unpack(low)), CreateColor(unpack(high))) then
+		return
+	end
+	if texture.SetGradientAlpha then
+		texture:SetGradientAlpha(orientation, low[1], low[2], low[3], low[4], high[1], high[2], high[3], high[4])
+		return
+	end
+	texture:SetColorTexture(unpack(low))
+end
+
+-- The etched look: the art as a faint monochrome engraving in `tint`, darkening
+-- toward the bottom, with a glow under the header and a tinted top edge.
+local function etch(tree, tint)
+	local clip, r, g, b = tree.clip, tint[1], tint[2], tint[3]
+	if not tree.etched then
+		local layers = {}
+		layers.scrim = clip:CreateTexture(nil, "BORDER", nil, -3)
+		layers.scrim:SetAllPoints()
+		layers.glow = clip:CreateTexture(nil, "BORDER", nil, -2)
+		layers.glow:SetPoint("TOPLEFT"); layers.glow:SetPoint("TOPRIGHT"); layers.glow:SetHeight(150)
+		layers.left = clip:CreateTexture(nil, "BORDER", nil, -1)
+		layers.left:SetPoint("TOPLEFT"); layers.left:SetPoint("BOTTOMLEFT"); layers.left:SetWidth(28)
+		layers.right = clip:CreateTexture(nil, "BORDER", nil, -1)
+		layers.right:SetPoint("TOPRIGHT"); layers.right:SetPoint("BOTTOMRIGHT"); layers.right:SetWidth(28)
+		layers.edge = clip:CreateTexture(nil, "ARTWORK")
+		layers.edge:SetPoint("TOPLEFT"); layers.edge:SetPoint("TOPRIGHT"); layers.edge:SetHeight(2)
+		gradient(layers.scrim, "VERTICAL", { 0.015, 0.012, 0.01, 0.94 }, { 0, 0, 0, 0.5 })
+		gradient(layers.left, "HORIZONTAL", { 0, 0, 0, 0.55 }, { 0, 0, 0, 0 })
+		gradient(layers.right, "HORIZONTAL", { 0, 0, 0, 0 }, { 0, 0, 0, 0.55 })
+		tree.etched = layers
+	end
+	gradient(tree.etched.glow, "VERTICAL", { r, g, b, 0 }, { r, g, b, 0.3 })
+	tree.etched.edge:SetColorTexture(r, g, b, 0.9)
+end
+
 local function layoutArt(tree)
 	local width, height = tree:GetWidth(), tree:GetHeight()
 	local scale = math.max(width / ART_W, height / ART_H)
@@ -241,12 +281,18 @@ function UI.Tree(parent)
 	local rule = goldRule(header)
 	rule:SetPoint("BOTTOMLEFT", 10, 0); rule:SetPoint("BOTTOMRIGHT", -10, 0)
 
-	function tree:SetArt(prefix, dim)
+	-- dim greys the art out; tint ({ r, g, b }) etches it in that color instead.
+	function tree:SetArt(prefix, dim, tint)
+		if tint then etch(self, tint) end
 		for _, piece in ipairs(self.art) do
 			piece.texture:SetTexture(prefix and ("Interface\\TalentFrame\\" .. prefix .. "-" .. piece.name) or nil)
-			piece.texture:SetDesaturated(dim and true or false)
-			local shade = dim and 0.4 or 0.9
-			piece.texture:SetVertexColor(shade, shade, shade)
+			piece.texture:SetDesaturated((dim or tint) and true or false)
+			if tint then
+				piece.texture:SetVertexColor(tint[1] * 0.6, tint[2] * 0.6, tint[3] * 0.6)
+			else
+				local shade = dim and 0.4 or 0.9
+				piece.texture:SetVertexColor(shade, shade, shade)
+			end
 		end
 	end
 	function tree:SetHeader(icon, title, note, count)
