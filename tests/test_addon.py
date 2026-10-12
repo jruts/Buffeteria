@@ -235,6 +235,12 @@ class AddonTests(unittest.TestCase):
             local override = findWidget('Override the Paladins class plan').parent
             override:SetChecked(true); override:GetScript('OnClick')(override)
             assert(ns.db.blessingsOverride)
+            -- Wanted buffs are talent buttons: gold when on the plate, grey when not.
+            local fort = findWidget('Your buffet').parent.wants.FORT
+            local wanted = ns.db.wants.FORT and true or false
+            fort:GetScript('OnClick')(fort)
+            assert((ns.db.wants.FORT and true or false) == not wanted)
+            assert(fort.state == (wanted and 'grey' or 'gold'))
         """)
 
     def test_paladin_columns_follow_roster_and_scroll_in_both_hosts(self):
@@ -243,7 +249,14 @@ class AddonTests(unittest.TestCase):
             ns.Options.Toggle()
             local tab = findWidget('Paladins'); tab:GetScript('OnClick')(tab)
             local panel = findWidget('Class blessing assignments').parent
-            assert(#panel.columns == 2 and Buffeteria_Prefs:GetWidth() == 534)
+            local function shownSeats()
+                local n = 0
+                for _, seat in ipairs(panel.seats) do if seat:IsShown() then n = n + 1 end end
+                return n
+            end
+            -- Like the talent panel, three trees fill the fixed-size window.
+            assert(#panel.columns == 2 and shownSeats() == 1 and Buffeteria_Prefs:GetWidth() == 652)
+            assert(panel.columns[1].width == 210 and panel.seats[1].width == 210)
             assert(not panel.scrollbar:IsShown())
             -- Add paladins through the real roster -> solver -> refresh event path.
             function UnitFullName(unit)
@@ -252,42 +265,40 @@ class AddonTests(unittest.TestCase):
             end
             GROUP_SIZE = 2
             ns.Assignments.Resolve(); runTimers()
-            assert(#panel.columns == 3 and Buffeteria_Prefs:GetWidth() == 788)
+            assert(#panel.columns == 3 and shownSeats() == 0 and Buffeteria_Prefs:GetWidth() == 652)
             assert(panel.columns[2].paladin == 'Party1-Realm')
             assert(panel.columns[3].paladin == 'Party2-Realm')
-            -- Screen width caps the host without dropping any columns.
-            UIParent:SetWidth(900); GROUP_SIZE = 9
+            assert(not panel.scrollbar:IsShown())
+            -- More paladins than trees scroll horizontally without dropping any columns.
+            GROUP_SIZE = 9
             ns.Assignments.Resolve(); runTimers()
-            assert(#panel.columns == 10 and Buffeteria_Prefs:GetWidth() == 852)
+            assert(#panel.columns == 10 and Buffeteria_Prefs:GetWidth() == 652)
             assert(panel.scrollbar:IsShown())
             for _, column in ipairs(panel.columns) do assert(column:IsVisible()) end
             panel.viewport:GetScript('OnMouseWheel')(panel.viewport, -1)
             assert(panel.viewport.horizontalScroll > 0)
             panel.scrollbar:SetValue(panel.scrollbar.maximum)
             assert(panel.viewport.horizontalScroll == panel.scrollbar.maximum)
-            -- Settings uses the same controls, capped to its own available width.
+            -- Settings uses the same controls, sized to its own available width.
             settingsPage:SetSize(650, 800)
             settingsPage:GetScript('OnShow')(settingsPage)
             assert(panel:GetParent():GetParent() == settingsPage)
             assert(panel:GetParent():GetWidth() == 618 and panel.scrollbar:IsShown())
             settingsPage:SetWidth(800); settingsPage:GetScript('OnSizeChanged')(settingsPage)
             assert(panel:GetParent():GetWidth() == 768)
-            -- Remove everyone else: the host shrinks and stale columns stop accepting edits.
+            -- Remove everyone else: open seats return and stale columns stop accepting edits.
             GROUP_SIZE = 0
             ns.Assignments.Resolve(); runTimers()
-            assert(panel.columns[1].paladin == 'A-Realm')
-            assert(panel:GetParent():GetWidth() == 340 and not panel.scrollbar:IsShown())
+            assert(panel.columns[1].paladin == 'A-Realm' and shownSeats() == 2)
+            assert(not panel.scrollbar:IsShown())
             assert(panel.viewport.horizontalScroll == 0)
             for i = 2, #panel.columns do
                 assert(not panel.columns[i]:IsShown() and panel.columns[i].paladin == nil)
             end
             ns.Options.Toggle()
-            assert(Buffeteria_Prefs:GetWidth() == 340)
-            GROUP_SIZE = 2
-            ns.Assignments.Resolve(); runTimers()
-            assert(Buffeteria_Prefs:GetWidth() == 788)
+            assert(Buffeteria_Prefs:GetWidth() == 652 and panel:GetParent():GetWidth() == 652)
             local mine = findWidget('My preferences'); mine:GetScript('OnClick')(mine)
-            assert(Buffeteria_Prefs:GetWidth() == 340 and not panel:IsVisible())
+            assert(not panel:IsVisible())
         """)
 
     def test_each_paladin_column_edits_its_own_capabilities_and_handles_empty_roster(self):
@@ -315,7 +326,7 @@ class AddonTests(unittest.TestCase):
             -- Pooled controls cannot edit a departed paladin.
             b:GetScript('OnClick')(b, 'LeftButton')
             assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
-            assert(Buffeteria_Prefs:GetWidth() == 340)
+            for _, seat in ipairs(panel.seats) do assert(seat:IsShown()) end
         """)
 
     def test_non_paladins_do_not_see_assignment_tab(self):

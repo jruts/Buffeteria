@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Restyled `/buff` to match the game's Talents panel: a portrait window, top tabs, a header band with a paladin counter, and talent trees with class artwork. Blessings and wanted buffs use talent buttons (gold assigned, green auto, grey off). The Paladins tab always shows three trees and scrolls when more paladins join.
 - Rebuilt the Paladins panel with talent-style backgrounds, gold borders, and one column per group paladin. The window grows with the roster and scrolls horizontally for larger groups.
 - Updated the options window to Forever's translucent Edit Mode panel style and the tracker selection to native blue/gold nine-slice artwork.
 - Added a Paladins-only tab for built-in, shared class blessing assignments, including assignments for players without Buffeteria.

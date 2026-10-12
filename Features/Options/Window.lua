@@ -3,29 +3,52 @@ local _, ns = ...
 local Options = {}
 ns.Options = Options
 local win, content, panel, personal, paladinPanel, personalTab, paladinTab
-local paladinSelected = false
+-- The /buff window matches the native talent panel: three trees side by side.
+local WIDTH, HEIGHT, CONTENT_H = 652, 528, 498
 
 local function layout()
-	local width = 340
-	if paladinSelected then
-		local available = content:GetParent() == win and UIParent:GetWidth() - 48 or panel:GetWidth() - 32
-		width = math.min(ns.Paladins.View.GetPreferredWidth(), math.max(340, available))
-	end
+	local inWindow = content:GetParent() == win
+	local width = inWindow and WIDTH or math.max(WIDTH - 40, panel:GetWidth() - 32)
 	content:SetWidth(width)
-	win:SetWidth(width)
-	win.Border:SetShown(not paladinSelected)
-	win.PaladinBorder:SetShown(paladinSelected)
+	-- Leave room for the window's portrait; Settings has none.
+	personalTab:ClearAllPoints(); personalTab:SetPoint("TOPLEFT", inWindow and 64 or 16, -4)
+	ns.Preferences.View.Layout(width)
 	ns.Paladins.View.Layout(width)
+end
+
+local function styleTab(tab, selected)
+	tab:SetEnabled(not selected)
+	if selected then
+		tab:SetBackdropColor(0.32, 0.22, 0.04, 0.95); tab:SetBackdropBorderColor(1, 0.82, 0, 1)
+		tab.caption:SetTextColor(1, 0.82, 0)
+	else
+		tab:SetBackdropColor(0, 0, 0, 0.75); tab:SetBackdropBorderColor(0.45, 0.45, 0.45, 1)
+		tab.caption:SetTextColor(0.6, 0.6, 0.6)
+	end
+end
+
+-- Talent-panel style top tab ("Primary" / "Secondary").
+local function createTab(label)
+	local tab = CreateFrame("Button", nil, content, "BackdropTemplate")
+	tab:SetSize(150, 24)
+	tab:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
+		insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+	tab.caption = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	tab.caption:SetPoint("CENTER", 0, 0)
+	tab:SetFontString(tab.caption)
+	tab:SetText(label)
+	tab:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+	return tab
 end
 
 local function selectTab(isPaladin)
 	local _, class = UnitClass("player")
 	isPaladin = isPaladin and class == "PALADIN"
-	paladinSelected = isPaladin and true or false
 	personal:SetShown(not isPaladin)
 	paladinPanel:SetShown(isPaladin)
-	personalTab:SetEnabled(isPaladin)
-	paladinTab:SetEnabled(not isPaladin)
+	styleTab(personalTab, not isPaladin)
+	styleTab(paladinTab, isPaladin)
 	Options.Refresh()
 end
 
@@ -37,8 +60,8 @@ function Options.Refresh()
 end
 
 local function build()
-	win = CreateFrame("Frame", "Buffeteria_Prefs", UIParent)
-	win:SetSize(340, 714)
+	win = CreateFrame("Frame", "Buffeteria_Prefs", UIParent, "PortraitFrameTemplate")
+	win:SetSize(WIDTH, HEIGHT)
 	win:SetPoint("CENTER")
 	win:SetMovable(true)
 	win:SetClampedToScreen(true)
@@ -48,34 +71,19 @@ local function build()
 	win:SetScript("OnDragStop", win.StopMovingOrSizing)
 	win:SetFrameStrata("DIALOG")
 	tinsert(UISpecialFrames, "Buffeteria_Prefs")
-	-- Match Forever's Edit Mode dialog: translucent fill and native nine-slice border.
-	win.Border = CreateFrame("Frame", nil, win, "DialogBorderTranslucentTemplate")
-	win.Border:SetAllPoints()
-	win.PaladinBorder = CreateFrame("Frame", nil, win, "BackdropTemplate")
-	win.PaladinBorder:SetFrameLevel(win:GetFrameLevel())
-	win.PaladinBorder:SetAllPoints()
-	win.PaladinBorder:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-		edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 24,
-		insets = { left = 5, right = 5, top = 5, bottom = 5 } })
-	win.PaladinBorder:SetBackdropColor(0.1, 0.075, 0.04, 1)
-	win.PaladinBorder:SetBackdropBorderColor(0.85, 0.68, 0.36, 1)
-	win.PaladinBorder:Hide()
-	win.TitleText = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-	win.TitleText:SetPoint("TOP", 0, -16)
-	win.TitleText:SetText("Buffeteria")
-	win.CloseButton = CreateFrame("Button", nil, win, "UIPanelCloseButton")
-	win.CloseButton:SetPoint("TOPRIGHT", -5, -5)
+	win:SetTitle("Buffeteria")
+	win:SetPortraitToAsset(ns.UI.ICON)
+	win.CloseButton = win.CloseButton or CreateFrame("Button", nil, win, "UIPanelCloseButton")
 	win.CloseButton:SetScript("OnClick", function() win:Hide() end)
 
 	-- All controls live on "content", which moves between this window and the
 	-- Settings > AddOns page (whichever is showing).
 	content = CreateFrame("Frame", nil, win)
-	content:SetSize(340, 658)
-	content:SetPoint("TOPLEFT", 0, -52)
-	personalTab = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-	personalTab:SetSize(148, 24); personalTab:SetPoint("TOPLEFT", 16, -4); personalTab:SetText("My preferences")
-	paladinTab = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-	paladinTab:SetSize(148, 24); paladinTab:SetPoint("LEFT", personalTab, "RIGHT", 8, 0); paladinTab:SetText("Paladins")
+	content:SetSize(WIDTH, CONTENT_H)
+	content:SetPoint("TOPLEFT", 0, -26)
+	personalTab = createTab("My preferences")
+	paladinTab = createTab("Paladins")
+	paladinTab:SetPoint("LEFT", personalTab, "RIGHT", 6, 0)
 	local _, playerClass = UnitClass("player")
 	paladinTab:SetShown(playerClass == "PALADIN")
 	personal = ns.Preferences.View.Create(content)
@@ -83,9 +91,10 @@ local function build()
 	personalTab:SetScript("OnClick", function() selectTab(false) end)
 	paladinTab:SetScript("OnClick", function() selectTab(true) end)
 
-	paladinPanel:Hide(); personalTab:Disable()
+	paladinPanel:Hide()
+	styleTab(personalTab, true); styleTab(paladinTab, false)
 	win:SetScript("OnShow", function()
-		content:SetParent(win); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -52); content:Show()
+		content:SetParent(win); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, -26); content:Show()
 		Options.Refresh()
 	end)
 	win:Hide()

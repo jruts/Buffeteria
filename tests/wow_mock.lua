@@ -14,7 +14,8 @@ for _, method in ipairs({ "ClearAllPoints", "SetMovable", "EnableMouse", "Regist
 	"SetJustifyV", "RegisterForClicks", "RegisterEvent", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen",
 	"SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "SetHighlightTexture", "SetPushedTexture",
 	"SetWordWrap", "SetNormalTexture", "SetVertexColor", "SetOwner", "AddLine", "AddDoubleLine",
-	"SetOrientation", "SetValueStep", "EnableMouseWheel" }) do W[method] = function() end end
+	"SetOrientation", "SetValueStep", "EnableMouseWheel", "SetClipsChildren", "AddMaskTexture", "SetAtlas",
+	"SetTitle", "SetPortraitToAsset", "SetFontString", "SetTextColor", "SetFontObject" }) do W[method] = function() end end
 function W:SetSize(width, height) self.width, self.height = width, height end
 function W:SetWidth(width) self.width = width end
 function W:SetHeight(height) self.height = height end
@@ -67,6 +68,8 @@ function W:Show() self:SetShown(true) end
 function W:Hide() self:SetShown(false) end
 function W:CreateFontString() return widget("FontString", nil, self) end
 function W:CreateTexture() return widget("Texture", nil, self) end
+function W:CreateMaskTexture() return widget("MaskTexture", nil, self) end
+function W:IsOwned(owner) return self.shown and self.owner == owner end
 function CreateFrame(kind, name, parent, template) return widget(kind, name, parent, template) end
 UIParent = widget("Frame")
 UIParent:SetSize(1920, 1080)

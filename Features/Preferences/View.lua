@@ -1,10 +1,10 @@
--- Personal buff preferences and tracker options.
+-- Personal buff preferences and tracker options, laid out as three talent trees.
 local _, ns = ...
 local Buffs = ns.Buffs
 local View = {}
 ns.Preferences.View = View
-local personal, rows, checks, toggles, warnText, assignText, overrideCheck
-local ROW_H = 22
+local personal, band, trees, rows, wants, toggles, warnText, assignText, overrideCheck, tip, list
+local ROW_H, EDGE, GAP, BOARD_H = 22, 8, 2, 360
 local dragging
 
 local blessingIcon = ns.UI.BuffIcon
@@ -17,8 +17,8 @@ local function refreshRows()
 		if key == "|" then
 			below = true
 			r.icon:Hide()
-			r.text:SetText("|cff888888--- don't want anything below this line ---|r")
-			r.bg:SetColorTexture(0.3, 0.1, 0.1, 0.35)
+			r.text:SetText("|cff888888--- nothing below this line ---|r")
+			r.bg:SetColorTexture(0.3, 0.08, 0.05, 0.7)
 		else
 			r.icon:Show()
 			r.icon:SetTexture(blessingIcon(key))
@@ -29,9 +29,11 @@ local function refreshRows()
 				rank = rank + 1
 				r.text:SetText(("%d. %s"):format(rank, Buffs.byKey[key].label))
 			end
-			r.bg:SetColorTexture(1, 1, 1, (i == dragging) and 0.25 or 0.06)
+			if i == dragging then r.bg:SetColorTexture(1, 0.82, 0, 0.3)
+			else r.bg:SetColorTexture(0, 0, 0, 0.55) end
 		end
 	end
+	return rank
 end
 
 local function refreshAssignments()
@@ -41,15 +43,47 @@ end
 
 function View.Refresh()
 	if not personal then return end
-	for key, cb in pairs(checks) do cb:SetChecked(ns.db.wants[key] and true or false) end
+	local wanted = 0
+	for key, button in pairs(wants) do
+		local on = ns.db.wants[key] and true or false
+		if on then wanted = wanted + 1 end
+		button:SetState(on and "gold" or "grey", blessingIcon(key))
+	end
 	for _, cb in ipairs(toggles) do cb:SetChecked(cb.get() and true or false) end
-	warnText:SetText(("Turn orange below: %d min"):format(ns.db.warnMinutes))
+	warnText:SetText(("Orange below: %d min"):format(ns.db.warnMinutes))
 	overrideCheck:SetChecked(ns.db.blessingsOverride and true or false)
-	refreshRows()
+	local ranked = refreshRows()
+	local _, class = UnitClass("player")
+	local art = ns.UI.TREE_ART[class] or ns.UI.TREE_ART.PALADIN
+	for i, tree in ipairs(trees) do tree:SetArt(art[i]) end
+	trees[1]:SetHeader(blessingIcon("KINGS"), "Blessings", "Best first, drag to reorder", ranked)
+	trees[2]:SetHeader(blessingIcon("FORT"), "On my plate", "Buffs you want", wanted)
+	trees[3]:SetHeader(ns.UI.ICON, "Who's cooking what", "Current assignments")
+	band:SetCount("Paladins", #ns.UI.PaladinNames())
 	refreshAssignments()
 end
 
-local function stopDrag(list)
+function View.Layout(width)
+	if not personal then return end
+	local column = math.floor((width - EDGE * 2 - GAP * 2) / 3)
+	for i, tree in ipairs(trees) do
+		tree:ClearAllPoints(); tree:SetPoint("TOPLEFT", EDGE + (i - 1) * (column + GAP), -48)
+		tree:Resize(column, BOARD_H)
+	end
+	list:SetWidth(column - 24)
+	for _, r in ipairs(rows) do r:SetWidth(column - 24) end
+	tip:SetWidth(column - 24)
+	overrideCheck.text:SetWidth(column - 44)
+	local cell = column / 3
+	for i, buff in ipairs(Buffs.GROUP_BUFFS) do
+		-- Talent tiers: three on top, the rest centered below.
+		local tier = math.floor((i - 1) / 3)
+		local x = tier == 0 and cell * ((i - 1) + 0.5) or cell * (i - 3)
+		wants[buff.key]:ClearAllPoints(); wants[buff.key]:SetPoint("TOP", trees[2], "TOPLEFT", x, -86 - tier * 56)
+	end
+end
+
+local function stopDrag()
 	if not dragging then return end
 	dragging = nil
 	ns.db.blessingsOverride = true
@@ -59,39 +93,30 @@ local function stopDrag(list)
 	ns.Preferences.Changed()
 end
 
+local function wantTooltip(button)
+	local buff = Buffs.byKey[button.key]
+	GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+	GameTooltip:SetText(buff.label)
+	GameTooltip:AddLine(ns.db.wants[button.key] and "On your plate" or "Not wanted", 1, 0.82, 0)
+	GameTooltip:AddLine("Click to toggle.", 1, 1, 1)
+	GameTooltip:Show()
+end
+
 function View.Create(parent)
 	personal = CreateFrame("Frame", nil, parent)
-	personal:SetPoint("TOPLEFT", 0, -32); personal:SetPoint("BOTTOMRIGHT")
-	local y = -8
-	local function header(text)
-		local fs = personal:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		fs:SetPoint("TOPLEFT", 16, y)
-		fs:SetText(text)
-		y = y - 20
-		return fs
-	end
+	personal:SetPoint("TOPLEFT", 0, -34); personal:SetPoint("BOTTOMRIGHT")
+	band = ns.UI.Band(personal, "Your buffet", "Rank your blessings, pick your buffs, and see who serves what.")
+	trees = { ns.UI.Tree(personal), ns.UI.Tree(personal), ns.UI.Tree(personal) }
 
-	-- 1) Buffs I want
-	header("On my plate (single-source buffs)")
-	checks = {}
-	for i, buff in ipairs(Buffs.GROUP_BUFFS) do
-		local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-		checks[buff.key] = ns.UI.Checkbox(personal, buff.label, 14 + col * 155, y - row * 24, function(value)
-			ns.db.wants[buff.key] = value
-			ns.Preferences.Changed()
-		end)
-	end
-	y = y - math.ceil(#Buffs.GROUP_BUFFS / 2) * 24 - 10
-
-	-- 2) Blessing ranking
-	header("Blessings, best first (drag to reorder)")
-	local list = CreateFrame("Frame", nil, personal)
-	list:SetPoint("TOPLEFT", 16, y)
-	list:SetSize(300, ROW_H * (#Buffs.BLESSINGS + 1))
+	-- 1) Blessing ranking
+	local blessings = trees[1]
+	list = CreateFrame("Frame", nil, blessings)
+	list:SetPoint("TOPLEFT", 12, -82)
+	list:SetHeight(ROW_H * (#Buffs.BLESSINGS + 1))
 	rows = {}
 	for i = 1, #Buffs.BLESSINGS + 1 do
 		local r = CreateFrame("Button", nil, list)
-		r:SetSize(300, ROW_H - 2)
+		r:SetHeight(ROW_H - 2)
 		r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
 		r.bg = r:CreateTexture(nil, "BACKGROUND")
 		r.bg:SetAllPoints()
@@ -109,7 +134,7 @@ function View.Create(parent)
 			dragging = i
 			refreshRows()
 			list:SetScript("OnUpdate", function(self)
-				if not IsMouseButtonDown("LeftButton") then stopDrag(self); return end
+				if not IsMouseButtonDown("LeftButton") then stopDrag(); return end
 				local _, cy = GetCursorPosition()
 				cy = cy / self:GetEffectiveScale()
 				local idx = math.floor((self:GetTop() - cy) / ROW_H) + 1
@@ -124,58 +149,61 @@ function View.Create(parent)
 		end)
 		rows[i] = r
 	end
-	y = y - ROW_H * (#Buffs.BLESSINGS + 1) - 6
-
-	local tip = personal:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	tip:SetPoint("TOPLEFT", 16, y)
-	tip:SetWidth(300)
-	tip:SetJustifyH("LEFT")
-	tip:SetText("Drag to set a personal override: #1 with one paladin, #1 and #2 with two. Tanks: drag Salvation below the line.")
-	y = y - 38
-	overrideCheck = ns.UI.Checkbox(personal, "Override the Paladins class plan", 14, y, function(value)
+	tip = ns.UI.Text(blessings, "GameFontHighlightSmall", 12, -88 - ROW_H * (#Buffs.BLESSINGS + 1), nil,
+		"#1 with one paladin, #1 and #2 with two. Tanks: drag Salvation below the line.")
+	overrideCheck = ns.UI.Checkbox(blessings, "Override the Paladins class plan", 10, -290, function(value)
 		ns.db.blessingsOverride = value
 		ns.Preferences.Changed(); View.Refresh()
 	end)
-	y = y - 30
+	overrideCheck.text:SetJustifyH("LEFT")
 
-	-- 3) Warning threshold
-	warnText = personal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	warnText:SetPoint("TOPLEFT", 16, y - 4)
-	local minus = CreateFrame("Button", nil, personal, "UIPanelButtonTemplate")
-	minus:SetSize(24, 20); minus:SetPoint("TOPLEFT", 210, y); minus:SetText("-")
-	local plus = CreateFrame("Button", nil, personal, "UIPanelButtonTemplate")
-	plus:SetSize(24, 20); plus:SetPoint("LEFT", minus, "RIGHT", 4, 0); plus:SetText("+")
+	-- 2) Buffs I want, as talent buttons, then the tracker options
+	local plate = trees[2]
+	wants = {}
+	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
+		local button = ns.UI.TalentButton(plate)
+		button.key = buff.key
+		button:SetScript("OnClick", function(self)
+			ns.db.wants[self.key] = not ns.db.wants[self.key]
+			ns.Preferences.Changed(); View.Refresh()
+			if GameTooltip:IsOwned(self) then wantTooltip(self) end
+		end)
+		button:SetScript("OnEnter", wantTooltip); button:SetScript("OnLeave", GameTooltip_Hide)
+		wants[buff.key] = button
+	end
+	ns.UI.Text(plate, "GameFontNormal", 14, -196, nil, "Tracker")
+	warnText = ns.UI.Text(plate, "GameFontHighlightSmall", 14, -222)
+	local minus = CreateFrame("Button", nil, plate, "UIPanelButtonTemplate")
+	minus:SetSize(22, 20); minus:SetPoint("TOPRIGHT", -40, -216); minus:SetText("-")
+	local plus = CreateFrame("Button", nil, plate, "UIPanelButtonTemplate")
+	plus:SetSize(22, 20); plus:SetPoint("LEFT", minus, "RIGHT", 2, 0); plus:SetText("+")
 	minus:SetScript("OnClick", function() ns.db.warnMinutes = math.max(1, ns.db.warnMinutes - 1); View.Refresh(); ns.Tracker.Refresh() end)
 	plus:SetScript("OnClick", function() ns.db.warnMinutes = math.min(15, ns.db.warnMinutes + 1); View.Refresh(); ns.Tracker.Refresh() end)
-	y = y - 28
-
-	-- Toggles: tracker, lock, minimap button
 	toggles = {}
-	local function toggle(label, x, rowY, get, set)
-		local cb = ns.UI.Checkbox(personal, label, x, rowY, set)
+	local function toggle(label, get, set)
+		local cb = ns.UI.Checkbox(plate, label, 10, -240 - #toggles * 22, set)
 		cb.get = get
 		toggles[#toggles + 1] = cb
 	end
-	toggle("Show tracker", 14, y, function() return ns.db.showTracker end,
+	toggle("Show tracker", function() return ns.db.showTracker end,
 		function(v) ns.db.showTracker = v; ns.Tracker.Refresh() end)
-	toggle("Lock tracker", 169, y, function() return ns.db.locked end,
+	toggle("Lock tracker", function() return ns.db.locked end,
 		function(v) ns.db.locked = v end)
-	toggle("Preview (fake raid)", 169, y - 24, function() return ns.Preview.active end,
-		function(v) ns.Preview.Set(v) end)
-	toggle("Minimap button", 14, y - 24, function() return not ns.db.minimap.hide end,
-		function(v) ns.db.minimap.hide = not v; ns.Minimap.Refresh() end)
-	toggle("Small icons: only buffs that need attention", 14, y - 48, function() return ns.db.onlyProblems end,
+	toggle("Small icons: problems only", function() return ns.db.onlyProblems end,
 		function(v) ns.db.onlyProblems = v; ns.Tracker.Refresh() end)
-	y = y - 78
+	toggle("Minimap button", function() return not ns.db.minimap.hide end,
+		function(v) ns.db.minimap.hide = not v; ns.Minimap.Refresh() end)
+	toggle("Preview (fake raid)", function() return ns.Preview.active end,
+		function(v) ns.Preview.Set(v) end)
 
-	-- 4) Current assignments
-	header("Who's cooking what")
-	assignText = personal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	assignText:SetPoint("TOPLEFT", 16, y)
-	assignText:SetPoint("BOTTOMRIGHT", -16, 44)
+	-- 3) Current assignments
+	assignText = trees[3]:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	assignText:SetPoint("TOPLEFT", 14, -82)
+	assignText:SetPoint("BOTTOMRIGHT", -12, 12)
 	assignText:SetJustifyH("LEFT")
 	assignText:SetJustifyV("TOP")
 
 	ns.UI.AnnounceButton(personal)
+	personal.wants = wants
 	return personal
 end

@@ -11,8 +11,10 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
 ## How it works
 
 - **You order, the kitchen cooks.** Each player ranks the paladin blessings they want
-  (drag to reorder) and ticks the buffs they care about (Fortitude, Spirit, Shadow
-  Protection, Mark of the Wild, Arcane Intellect).
+  (drag to reorder) and lights up the buffs they care about (Fortitude, Spirit, Shadow
+  Protection, Mark of the Wild, Arcane Intellect). In `/buff`, these appear as
+  talent-style trees: Blessings, On my plate (buffs and tracker options), and
+  Who's cooking what.
 - **Smart assignments.** With one paladin you get your #1 blessing, with two your #1 and
   #2, and so on. Greater Blessings cover a whole class, so each class gets what most of
   its players ranked highest. Priests, druids and mages split the raid groups.
@@ -24,10 +26,12 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
 ## Paladin assignments
 
 Paladins have a **Paladins** tab in `/buff` and Settings > AddOns > Buffeteria.
-The talent-style panel shows one column per paladin, with class blessing icons under
-each name. It grows as paladins join and shrinks when they leave. Larger groups can
-scroll horizontally with the mouse wheel or the scrollbar. Click each class's
-blessing to cycle through the choices; right-click cycles backward. You can also
+The window is styled like the game's Talents panel. Each paladin gets a talent tree,
+with the nine classes' blessings shown as talent buttons. Gold buttons are
+assignments you set, green ones follow Auto, and grey ones have nothing. Three trees
+are always visible, and open seats fill the board until three paladins join. With
+more than three paladins, scroll horizontally with the mouse wheel or the scrollbar.
+Click a class's blessing to cycle through the choices; right-click cycles backward. You can also
 assign paladins without the addon. For those paladins, choose blessings you know they
 can cast.
 
