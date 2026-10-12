@@ -942,6 +942,29 @@ class AddonTests(unittest.TestCase):
             assert(panel.tankButtons.RFURY:IsShown() and panel.tankButtons.THORNS:IsShown())
             panel.tankRole:GetScript('OnClick')(); runTimers()
             assert(ns.db.tankRole == 'TANK' and ns.Preferences.Get().wants.RFURY)
+            -- Dragging a blessing lifts it, reorders while moving, and saves on release.
+            local list, rankRows, ghost = panel.rankList, panel.rankRows, panel.rankGhost
+            local cursor, held = 0, true
+            GetCursorPosition = function() return 0, cursor end
+            IsMouseButtonDown = function() return held end
+            list.top = 500; ns.db.blessingsOverride = false
+            local first = ns.db.order[1]
+            cursor = 485
+            rankRows[1]:GetScript('OnMouseDown')(rankRows[1], 'LeftButton')
+            assert(ghost:IsShown() and list:GetScript('OnUpdate'))
+            assert(not rankRows[1].text.shown and ghost.text:GetText():find(ns.Buffs.byKey[first].label, 1, true))
+            cursor = 425; list:GetScript('OnUpdate')(list, 0.01)
+            assert(ns.db.order[3] == first and not ns.db.blessingsOverride)
+            assert(rankRows[1].offset ~= 0 and rankRows[2].offset ~= 0)
+            held = false
+            for _ = 1, 50 do
+                local update = list:GetScript('OnUpdate')
+                if not update then break end
+                update(list, 0.1)
+            end
+            assert(not list:GetScript('OnUpdate') and not ghost:IsShown())
+            assert(ns.db.order[3] == first and ns.db.blessingsOverride)
+            assert(rankRows[3].text.shown and rankRows[1].offset == 0)
         """)
 
     def test_paladin_columns_follow_roster_and_scroll_in_both_hosts(self):

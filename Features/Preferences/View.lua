@@ -4,8 +4,9 @@ local Buffs = ns.Buffs
 local View = {}
 ns.Preferences.View = View
 local personal, band, trees, rows, wants, overrideCheck, tip, list, tankButtons, roleButton, roleText, tankTip
-local ROW_H, EDGE, GAP, BOARD_H = 22, 8, 2, 360
-local dragging
+local ROW_H, ICON, EDGE, GAP, BOARD_H = 30, 22, 8, 2, 360
+-- Drag state: the slot being moved, where the cursor grabbed it, and the lifted copy.
+local dragging, grabY, ghost, ghostY, dropping, moved
 
 local blessingIcon = ns.UI.BuffIcon
 local GREY, RED = "|cff808080", "|cffff5040"
@@ -16,41 +17,61 @@ local function served()
 	return (result.expected or {})[ns.WoW.FullName("player")] or {}
 end
 
+-- Paint one ranking row (or the lifted copy) for a key.
+local function paintRow(r, key, rank, below, mine)
+	r.icon:SetShown(key ~= "|"); r.border:SetShown(key ~= "|")
+	r.text:ClearAllPoints()
+	if key == "|" then
+		r.rank:SetText(""); r.served:SetText("")
+		r.text:SetPoint("CENTER", 0, 0)
+		r.text:SetText(RED .. "Not wanted below|r")
+		r.bg:SetColorTexture(0.32, 0.06, 0.03, 0.75)
+		r.accent:SetColorTexture(0.9, 0.2, 0.1, 1)
+		return
+	end
+	r.text:SetPoint("LEFT", r.icon, "RIGHT", 9, 0); r.text:SetPoint("RIGHT", r.served, "LEFT", -6, 0)
+	r.icon:SetTexture(blessingIcon(key))
+	r.icon:SetDesaturated(below)
+	if below then
+		r.border:SetVertexColor(0.5, 0.5, 0.5)
+		r.rank:SetText(""); r.served:SetText("")
+		r.text:SetText(GREY .. Buffs.byKey[key].label .. "|r")
+		r.accent:SetColorTexture(0.35, 0.35, 0.35, 1)
+		r.bg:SetColorTexture(0, 0, 0, 0.35)
+	else
+		r.border:SetVertexColor(1, 0.82, 0)
+		r.rank:SetText(tostring(rank))
+		r.text:SetText(Buffs.byKey[key].label)
+		-- The paladin actually serving this blessing to you.
+		r.served:SetText(mine[key] and ns.UI.MemberName(mine[key]) or (GREY .. "-|r"))
+		r.accent:SetColorTexture(1, 0.82, 0, 1)
+		r.bg:SetColorTexture(0, 0, 0, 0.6)
+	end
+end
+
+local function showContent(r, shown)
+	for _, region in ipairs(r.content) do region:SetShown(shown) end
+	for _, edge in ipairs(r.outline) do edge:SetShown(not shown) end
+end
+
 local function refreshRows()
 	local rank, below, mine = 0, false, served()
 	for i, key in ipairs(ns.db.order) do
 		local r = rows[i]
-		r.icon:SetShown(key ~= "|"); r.border:SetShown(key ~= "|"); r.grip:SetShown(key ~= "|")
-		r.text:ClearAllPoints()
-		if key == "|" then
-			below = true
-			r.rank:SetText(""); r.served:SetText("")
-			r.text:SetPoint("CENTER", 0, 0)
-			r.text:SetText(RED .. "Not wanted below|r")
-			r.bg:SetColorTexture(0.32, 0.06, 0.03, 0.75)
-			r.accent:SetColorTexture(0.9, 0.2, 0.1, 1)
+		if key == "|" then below = true elseif not below then rank = rank + 1 end
+		if i == dragging then
+			-- The empty slot the lifted row will drop into.
+			showContent(r, false)
+			r.icon:Hide(); r.border:Hide()
+			r.bg:SetColorTexture(1, 0.82, 0, 0.08)
+			paintRow(ghost, key, rank, below and key ~= "|", mine)
+			if key ~= "|" then ghost.bg:SetColorTexture(0.22, 0.15, 0.02, 0.97) end
 		else
-			r.text:SetPoint("LEFT", r.icon, "RIGHT", 7, 0); r.text:SetPoint("RIGHT", r.served, "LEFT", -4, 0)
-			r.icon:SetTexture(blessingIcon(key))
-			r.icon:SetDesaturated(below)
-			if below then
-				r.border:SetVertexColor(0.5, 0.5, 0.5)
-				r.rank:SetText(""); r.served:SetText("")
-				r.text:SetText(GREY .. Buffs.byKey[key].label .. "|r")
-				r.accent:SetColorTexture(0.35, 0.35, 0.35, 1)
-			else
-				rank = rank + 1
-				r.border:SetVertexColor(1, 0.82, 0)
-				r.rank:SetText(tostring(rank))
-				r.text:SetText(Buffs.byKey[key].label)
-				-- The paladin actually serving this blessing to you.
-				r.served:SetText(mine[key] and ns.UI.MemberName(mine[key]) or (GREY .. "-|r"))
-				r.accent:SetColorTexture(1, 0.82, 0, 1)
-			end
-			if i == dragging then r.bg:SetColorTexture(1, 0.82, 0, 0.3)
-			elseif below then r.bg:SetColorTexture(0, 0, 0, 0.35)
-			else r.bg:SetColorTexture(0, 0, 0, 0.6) end
+			showContent(r, true)
+			paintRow(r, key, rank, below and key ~= "|", mine)
 		end
+		r.grip:SetShown(key ~= "|" and i ~= dragging)
+		if i == dragging then ghost.grip:SetShown(key ~= "|") end
 	end
 	return rank
 end
@@ -112,8 +133,9 @@ function View.Layout(width)
 		tree:ClearAllPoints(); tree:SetPoint("TOPLEFT", EDGE + (i - 1) * (column + GAP), -48)
 		tree:Resize(column, BOARD_H)
 	end
-	list:SetWidth(column - 24)
-	for _, r in ipairs(rows) do r:SetWidth(column - 24) end
+	list:SetWidth(column - 20)
+	for _, r in ipairs(rows) do r:SetWidth(column - 20) end
+	ghost:SetWidth(column - 20)
 	tip:SetWidth(column - 28)
 	overrideCheck.text:SetWidth(column - 44)
 	roleButton:SetWidth(column - 28)
@@ -138,14 +160,160 @@ function View.Layout(width)
 	end
 end
 
-local function stopDrag()
-	if not dragging then return end
-	dragging = nil
-	ns.db.blessingsOverride = true
-	list:SetScript("OnUpdate", nil)
+local function placeRows()
+	for i, r in ipairs(rows) do
+		r:ClearAllPoints(); r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H + r.offset)
+	end
+	if dragging then
+		-- Lifted: nudged right and drawn over the other rows.
+		ghost:ClearAllPoints(); ghost:SetPoint("TOPLEFT", 6, -ghostY)
+	end
+end
+
+local function finishDrop()
+	dragging, dropping = nil, false
+	ghost:Hide()
+	if ResetCursor then ResetCursor() end
 	refreshRows()
+end
+
+local function releaseDrag()
+	dropping = true
+	if not moved then return end
+	ns.db.blessingsOverride = true
 	View.Refresh()
 	ns.Preferences.Changed()
+end
+
+local function cursorY()
+	local _, y = GetCursorPosition()
+	return list:GetTop() - y / list:GetEffectiveScale()
+end
+
+-- Follows the cursor while dragging, then eases the lifted row and shifted rows into place.
+local function animate(_, elapsed)
+	local settle = math.min(1, (elapsed or 0) * 16)
+	if dragging and not dropping then
+		if not IsMouseButtonDown("LeftButton") then releaseDrag()
+		else
+			ghostY = math.max(0, math.min((#ns.db.order - 1) * ROW_H, cursorY() - grabY))
+			local idx = math.floor((ghostY + ROW_H / 2) / ROW_H) + 1
+			if idx ~= dragging then
+				local item = table.remove(ns.db.order, dragging)
+				table.insert(ns.db.order, idx, item)
+				-- Rows passed over slide from their old slot into the new one.
+				local step = idx > dragging and -ROW_H or ROW_H
+				for i = math.min(idx, dragging), math.max(idx, dragging) do
+					if i ~= idx then rows[i].offset = step end
+				end
+				dragging, moved = idx, true
+				refreshRows()
+			end
+		end
+	end
+	if dropping then
+		local target = (dragging - 1) * ROW_H
+		ghostY = ghostY + (target - ghostY) * settle
+		if math.abs(target - ghostY) < 0.5 then finishDrop() end
+	end
+	local busy = dragging ~= nil
+	for _, r in ipairs(rows) do
+		r.offset = r.offset * (1 - settle)
+		if math.abs(r.offset) < 0.5 then r.offset = 0 else busy = true end
+	end
+	placeRows()
+	if not busy then list:SetScript("OnUpdate", nil) end
+end
+
+local function startDrag(i)
+	dragging, moved, dropping = i, false, false
+	ghostY = (i - 1) * ROW_H
+	grabY = cursorY() - ghostY
+	ghost:Show()
+	if SetCursor then SetCursor("UI_MOVE_CURSOR") end
+	refreshRows()
+	placeRows()
+	list:SetScript("OnUpdate", animate)
+end
+
+local function setGrip(r, lit)
+	for _, dot in ipairs(r.dots) do
+		if lit then dot:SetColorTexture(1, 0.82, 0, 1) else dot:SetColorTexture(0.65, 0.65, 0.65, 0.7) end
+	end
+end
+
+-- Rank number, framed icon, blessing, the paladin serving it, and a grip.
+local function rowVisuals(r)
+	r.offset = 0
+	r:SetHeight(ROW_H - 2)
+	r.bg = r:CreateTexture(nil, "BACKGROUND")
+	r.bg:SetAllPoints()
+	r.accent = r:CreateTexture(nil, "BORDER")
+	r.accent:SetPoint("TOPLEFT"); r.accent:SetPoint("BOTTOMLEFT"); r.accent:SetWidth(3)
+	r.rank = r:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	r.rank:SetPoint("LEFT", 5, 0); r.rank:SetWidth(18); r.rank:SetJustifyH("CENTER")
+	r.icon = r:CreateTexture(nil, "ARTWORK")
+	r.icon:SetSize(ICON, ICON)
+	r.icon:SetPoint("LEFT", 30, 0)
+	r.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
+	-- Action-button style slot ring around the icon.
+	r.border = r:CreateTexture(nil, "OVERLAY")
+	r.border:SetSize(ICON * 2.1, ICON * 2.1); r.border:SetPoint("CENTER", r.icon, "CENTER", 0, 0)
+	r.border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+	-- Six-dot drag handle.
+	r.grip = CreateFrame("Frame", nil, r)
+	r.grip:SetSize(8, 14); r.grip:SetPoint("RIGHT", -8, 0)
+	r.dots = {}
+	for d = 0, 5 do
+		local dot = r.grip:CreateTexture(nil, "OVERLAY")
+		dot:SetSize(2, 2); dot:SetPoint("TOPLEFT", (d % 2) * 5, -math.floor(d / 2) * 5 - 1)
+		r.dots[#r.dots + 1] = dot
+	end
+	setGrip(r, false)
+	r.served = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	r.served:SetPoint("RIGHT", r.grip, "LEFT", -8, 0); r.served:SetJustifyH("RIGHT"); r.served:SetWordWrap(false)
+	r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	r.text:SetJustifyH("LEFT"); r.text:SetWordWrap(false)
+	r.content = { r.accent, r.rank, r.served, r.text }
+	-- Gold outline, shown on the empty drop slot and the lifted row.
+	r.outline = {}
+	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", "H" }, { "BOTTOMLEFT", "BOTTOMRIGHT", "H" },
+		{ "TOPLEFT", "BOTTOMLEFT", "V" }, { "TOPRIGHT", "BOTTOMRIGHT", "V" } }) do
+		local edge = r:CreateTexture(nil, "BORDER")
+		edge:SetPoint(side[1]); edge:SetPoint(side[2])
+		if side[3] == "V" then edge:SetWidth(1) else edge:SetHeight(1) end
+		edge:SetColorTexture(1, 0.82, 0, 0.55)
+		edge:Hide()
+		r.outline[#r.outline + 1] = edge
+	end
+	return r
+end
+
+local function createRow(i)
+	local r = rowVisuals(CreateFrame("Button", nil, list))
+	r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+	r:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+	r:SetScript("OnEnter", function(self) if not dragging then setGrip(self, true) end end)
+	r:SetScript("OnLeave", function(self) setGrip(self, false) end)
+	r:SetScript("OnMouseDown", function(self, button)
+		if button ~= "LeftButton" or dragging then return end
+		setGrip(self, false)
+		startDrag(i)
+	end)
+	return r
+end
+
+-- The lifted copy of the dragged row, with a drop shadow and a solid outline.
+local function createGhost()
+	local g = rowVisuals(CreateFrame("Frame", nil, list))
+	g:SetFrameLevel(list:GetFrameLevel() + 20)
+	local shadow = g:CreateTexture(nil, "BACKGROUND", nil, -2)
+	shadow:SetPoint("TOPLEFT", 3, -4); shadow:SetPoint("BOTTOMRIGHT", 5, -5)
+	shadow:SetColorTexture(0, 0, 0, 0.6)
+	for _, edge in ipairs(g.outline) do edge:SetColorTexture(1, 0.82, 0, 1); edge:Show() end
+	setGrip(g, true)
+	g:Hide()
+	return g
 end
 
 local function wantTooltip(button)
@@ -162,54 +330,6 @@ local function wantTooltip(button)
 	GameTooltip:Show()
 end
 
--- A ranking row: rank number, framed icon, blessing, the paladin serving it, grip.
-local function createRow(i)
-	local r = CreateFrame("Button", nil, list)
-	r:SetHeight(ROW_H - 2)
-	r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
-	r.bg = r:CreateTexture(nil, "BACKGROUND")
-	r.bg:SetAllPoints()
-	r.accent = r:CreateTexture(nil, "BORDER")
-	r.accent:SetPoint("TOPLEFT"); r.accent:SetPoint("BOTTOMLEFT"); r.accent:SetWidth(2)
-	r:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-	r.rank = r:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	r.rank:SetPoint("LEFT", 4, 0); r.rank:SetWidth(14); r.rank:SetJustifyH("CENTER")
-	r.icon = r:CreateTexture(nil, "ARTWORK")
-	r.icon:SetSize(ROW_H - 6, ROW_H - 6)
-	r.icon:SetPoint("LEFT", 22, 0)
-	r.icon:SetTexCoord(0.14, 0.86, 0.14, 0.86)
-	-- Action-button style slot ring around the icon.
-	r.border = r:CreateTexture(nil, "OVERLAY")
-	r.border:SetSize(ROW_H * 1.55, ROW_H * 1.55); r.border:SetPoint("CENTER", r.icon, "CENTER", 0, 0)
-	r.border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-	r.grip = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	r.grip:SetPoint("RIGHT", -6, 0)
-	r.grip:SetText("::")
-	r.served = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	r.served:SetPoint("RIGHT", r.grip, "LEFT", -6, 0); r.served:SetJustifyH("RIGHT"); r.served:SetWordWrap(false)
-	r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	r.text:SetJustifyH("LEFT"); r.text:SetWordWrap(false)
-	r:SetScript("OnMouseDown", function(_, button)
-		if button ~= "LeftButton" then return end
-		dragging = i
-		refreshRows()
-		list:SetScript("OnUpdate", function(self)
-			if not IsMouseButtonDown("LeftButton") then stopDrag(); return end
-			local _, cy = GetCursorPosition()
-			cy = cy / self:GetEffectiveScale()
-			local idx = math.floor((self:GetTop() - cy) / ROW_H) + 1
-			idx = math.max(1, math.min(#ns.db.order, idx))
-			if idx ~= dragging then
-				local item = table.remove(ns.db.order, dragging)
-				table.insert(ns.db.order, idx, item)
-				dragging = idx
-				refreshRows()
-			end
-		end)
-	end)
-	return r
-end
-
 function View.Create(parent)
 	personal = CreateFrame("Frame", nil, parent)
 	personal:SetPoint("TOPLEFT", 0, -34); personal:SetPoint("BOTTOMRIGHT")
@@ -219,13 +339,23 @@ function View.Create(parent)
 	-- 1) Blessing ranking, with the paladin serving each ranked blessing
 	local blessings = trees[1]
 	list = CreateFrame("Frame", nil, blessings)
-	list:SetPoint("TOPLEFT", 12, -82)
+	list:SetPoint("TOPLEFT", 10, -80)
 	list:SetHeight(ROW_H * (#Buffs.BLESSINGS + 1))
 	rows = {}
 	for i = 1, #Buffs.BLESSINGS + 1 do rows[i] = createRow(i) end
-	tip = ns.UI.Text(blessings, "GameFontDisableSmall", 14, -90 - ROW_H * (#Buffs.BLESSINGS + 1), nil,
+	ghost = createGhost()
+	-- Closing the window mid-drag keeps the order reached so far.
+	list:SetScript("OnHide", function()
+		if not dragging then return end
+		if not dropping then releaseDrag() end
+		finishDrop()
+		for _, r in ipairs(rows) do r.offset = 0 end
+		placeRows()
+		list:SetScript("OnUpdate", nil)
+	end)
+	tip = ns.UI.Text(blessings, "GameFontDisableSmall", 14, -84 - ROW_H * (#Buffs.BLESSINGS + 1), nil,
 		"#1 with one paladin, #1 and #2 with two. Tanks: drag Salvation below the line.")
-	overrideCheck = ns.UI.Checkbox(blessings, "Override the Paladins class plan", 10, -300, function(value)
+	overrideCheck = ns.UI.Checkbox(blessings, "Override the Paladins class plan", 10, -322, function(value)
 		ns.db.blessingsOverride = value
 		ns.Preferences.Changed(); View.Refresh()
 	end)
@@ -286,5 +416,6 @@ function View.Create(parent)
 
 	ns.UI.AnnounceButton(personal)
 	personal.wants, personal.tankButtons, personal.tankRole = wants, tankButtons, roleButton
+	personal.rankList, personal.rankRows, personal.rankGhost = list, rows, ghost
 	return personal
 end
