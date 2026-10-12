@@ -79,10 +79,12 @@ local function dispatch(sender, kind, ver, ...)
 		return
 	end
 	if kind == "R" then
-		-- Everyone answers a state request, spread out to avoid a burst.
+		-- Everyone answers a state request, spread out to avoid a burst, and asks
+		-- back (at most every 10 seconds): a client that just logged in may hold
+		-- state it does not share on its own.
 		if replyPending then return end
 		replyPending = true
-		C_Timer.After(0.5 + math.random() * 2, function() replyPending = false; broadcast() end)
+		C_Timer.After(0.5 + math.random() * 2, function() replyPending = false; Comm.Announce(true) end)
 	else
 		ns.Events.Emit("Received:" .. tostring(kind), sender, ...)
 	end

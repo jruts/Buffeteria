@@ -319,8 +319,12 @@ function Plan.Receive(sender, paladin, slotIndex, key, revision, author)
 		or not revision or revision < 0 or revision > 9007199254740000 or revision ~= math.floor(revision) then return end
 	local edit = { sender = sender, paladin = paladin, slot = slot, key = key, revision = revision, author = author, at = GetTime() }
 	local result = apply(ns.Assignments.roster, edit)
+	local mine = (Plan.cells[paladin] or {})[slot]
 	if result then
 		changed()
+	elseif result == false and mine and newer(mine, edit) and paladinMember(ns.Assignments.roster, sender) then
+		-- The sender missed a newer edit: tell them, so their view and clock catch up.
+		send(paladin, slot)
 	elseif result == nil then
 		local id = paladin .. "|" .. slot
 		local old = pending[id]

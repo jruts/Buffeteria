@@ -1878,6 +1878,29 @@ class AddonTests(unittest.TestCase):
         self.assertEqual(plan(clients["B"]), expected)
         self.assertEqual(clients["B"].eval("ns.db.paladinBlessings.WARRIOR"), "WISDOM")
 
+    def test_stale_edits_are_answered_and_state_requests_ask_back(self):
+        lua = self.plan_runtime()
+        lua.execute("""
+            ns.Paladins.Set('A-Realm', 'ROGUE', 'KINGS'); sent = {}
+            ns.Paladins.Receive('B-Realm', 'A-Realm', '2', 'MIGHT', '500', 'B-Realm')
+            assert(#sent == 1 and sent[1]:find('|KINGS|', 1, true) and ns.Paladins.Get('A-Realm', 'ROGUE') == 'KINGS')
+            local cell = ns.Paladins.cells['A-Realm'].ROGUE; sent = {}
+            ns.Paladins.Receive('B-Realm', 'A-Realm', '2', 'KINGS', tostring(cell.revision), cell.author)
+            ns.Paladins.Receive('R-Realm', 'A-Realm', '2', 'MIGHT', '500', 'R-Realm')
+            assert(#sent == 0)
+        """)
+        lua = full_addon()
+        lua.execute("""
+            GROUP_SIZE = 1; WOW_TIME = WOW_TIME + 20; delivered = {}
+            ns.Comm.OnMessage('BUFFETERIA', 'R|2', 'PARTY', 'B-Realm'); runTimers()
+            local asked = false
+            for _, msg in ipairs(delivered) do asked = asked or msg == 'R|2' end
+            assert(asked)
+            delivered = {}
+            ns.Comm.OnMessage('BUFFETERIA', 'R|2', 'PARTY', 'B-Realm'); runTimers()
+            for _, msg in ipairs(delivered) do assert(msg ~= 'R|2') end
+        """)
+
     def test_simultaneous_duplicate_slots_have_one_winner(self):
         lua = self.plan_runtime()
         lua.execute("""
