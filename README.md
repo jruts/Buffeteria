@@ -14,7 +14,8 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   (drag to reorder) and lights up the buffs they care about (Fortitude, Spirit, Shadow
   Protection, Mark of the Wild, Arcane Intellect). In `/buff`, these appear as
   talent-style trees: Blessings (each ranked blessing names the paladin serving it),
-  Buffs (each buff names its caster; warriors also get Battle Shout), and Tanks
+  Buffs (each buff names its caster; warriors also get Battle Shout and priests
+  Inner Fire), and Tanks
   (buffs wanted while tanking: Righteous Fury for paladins and Thorns from a druid).
 - **Smart assignments.** With one paladin you get your #1 blessing, with two your #1 and
   #2, and so on. Greater Blessings cover a whole class, so each class gets what most of
@@ -41,6 +42,20 @@ skip it. The tracker reminds you when your own shout is missing or has less than
 30 seconds left (it lasts only two minutes, so the expiring-buff setting would
 always flag it), and the big button casts it once you have enough rage. Other
 classes never see it, and warriors without Buffeteria aren't tracked for it.
+
+Priests likewise see **Inner Fire** in the Buffs tree, on by default and skippable.
+The tracker reminds you when it is missing (including after its charges run out)
+or has less than 60 seconds of its ten minutes left, and the big button casts it
+once you have the mana. Other classes never see it, and priests without
+Buffeteria aren't tracked for it.
+
+Battle Shout and Inner Fire are also tracked **during combat**. When combat starts,
+the head is set to cast your shout or Inner Fire, so if it runs low or falls off
+mid-fight the orc demands it and a click recasts it. Other buffs wait until combat
+ends (the game doesn't let add-ons change the button's target during combat).
+The client hides buffs during combat, so the tracker dates them from the last
+reading before the pull and from your own recasts. A buff you lose early
+(clicked off, or Inner Fire's charges used up) can't be seen until combat ends.
 
 In **My preferences > Tanks**, **Role: Auto** follows your assigned Tank role or
 raid main-tank assignment. Click Role to cycle through **Tank**, **Not tank**, and
@@ -155,11 +170,11 @@ Existing tracker visibility and display choices are preserved.
   do. When you have something to cast, a gold glow breathes around him
   (flaring up whenever the next spell changes) and he demands it above his head,
   for example **GIEF Fortitude!** Hover to see the spell and target. When
-  there's nothing for you to cast, he is dimmed and clicking does nothing. If you
-  are missing a buff yourself, **Need** and the buff (or **Need 2 buffs**) appears below
-  him; hover to see who is supposed to cast it. The glow and GIEF only appear when
-  you have a cast to make, including on yourself; just needing a buff never
-  triggers them. Labels are hidden in combat.
+  there's nothing for you to cast, he has no glow and clicking does nothing; hover
+  to see which buffs you're missing and who is supposed to cast them. The glow and
+  GIEF only appear when you can make the cast yourself, including on yourself;
+  just needing a buff never triggers them. In combat, only Battle Shout and Inner
+  Fire are demanded.
 - **Small icons by the head:** which buffs need attention and how many players are
   affected. Buffs that are someone else's job are dimmed; yours and the ones you're
   missing stay bright. Hover to see who casts each one.

@@ -9,6 +9,11 @@ local EMPTY = ns.Util.EMPTY
 local isSecret = issecretvalue or function() return false end
 local nameToKey = {}
 local cache = {}          -- [fullName] = { [key] = { exp = number, name = string } }
+local durations = {}      -- [key] = seconds, from the last readable aura (talents can lengthen it)
+local selfKeys = {}       -- [spellID] = key, for my combat self buffs
+for _, b in ipairs(Buffs.SELF_BUFFS) do
+	if b.combat then for _, id in ipairs(b.ids) do selfKeys[id] = b.key end end
+end
 
 -- Spell names are only known once the client has loaded them.
 local function keyOf(name)
@@ -53,9 +58,29 @@ local function readAuras(unit)
 			if not prev or (prev.exp ~= 0 and (exp == 0 or exp > prev.exp)) then
 				out[key] = { exp = exp, name = a.name }
 			end
+			local d = a.duration
+			if not isSecret(d) and type(d) == "number" and d > 0 then durations[key] = d end
 		end
 	end)
 	return readable and out or nil
+end
+
+-- Combat hides every aura detail, removals included, so the cache keeps the last
+-- read: its expiry still dates the buff running out, and my recasts redate it.
+
+-- The combat self buff a spell ID casts, or nil (also for hidden IDs).
+function Scan.SelfBuffKey(spellID)
+	if isSecret(spellID) then return nil end
+	return selfKeys[spellID]
+end
+
+-- I just cast one of my combat self buffs.
+function Scan.SelfCast(key, now)
+	local buff, me = Buffs.byKey[key], ns.WoW.Me()
+	local d = durations[key] or buff.duration
+	if not d then return end
+	cache[me] = cache[me] or {}
+	cache[me][key] = { exp = now + d, name = buff.label }
 end
 
 -- status: "ok" | "warn" | "bad" | "unknown"

@@ -37,10 +37,22 @@ local function refreshTanks()
 	return wanted
 end
 
-local function refreshWants()
-	local wanted, mine = 0, served()
-	for _, button in pairs(wants) do button:Hide() end
+-- Buffs tree entries: self buffs appear once the spell is learned (Inner Fire comes at level 12).
+local laidOut, layoutWidth
+local function entries()
+	local out = {}
 	for _, buff in ipairs(Buffs.Wantable(ns.WoW.PlayerClass())) do
+		if not buff.selfOnly or ns.WoW.KnowsAny(buff.ids) then out[#out + 1] = buff end
+	end
+	return out
+end
+
+local function refreshWants()
+	local wanted, mine, list = 0, served(), entries()
+	-- Learning a self buff adds a tree button.
+	if laidOut and #list ~= laidOut then View.Layout(layoutWidth) end
+	for _, button in pairs(wants) do button:Hide() end
+	for _, buff in ipairs(list) do
 		local button, on = wants[buff.key], ns.db.wants[buff.key] and true or false
 		if on then wanted = wanted + 1 end
 		button:Show()
@@ -80,11 +92,12 @@ function View.Layout(width)
 		if Buffs.OfferedTo(buff, class) then row = row + 1 end
 	end
 	local cell = column / 3
-	local entries = Buffs.Wantable(class)
-	for i, buff in ipairs(entries) do
+	local list = entries()
+	laidOut, layoutWidth = #list, width
+	for i, buff in ipairs(list) do
 		-- Talent tiers of three, a partial last tier centered.
 		local tier = math.floor((i - 1) / 3)
-		local inTier = math.min(3, #entries - tier * 3)
+		local inTier = math.min(3, #list - tier * 3)
 		local x = cell * ((i - 1) % 3 + 0.5 + (3 - inTier) / 2)
 		local button = wants[buff.key]
 		button:ClearAllPoints(); button:SetPoint("TOP", trees[2], "TOPLEFT", x, -84 - tier * 60)

@@ -21,10 +21,13 @@ Buffs.TANK_BUFFS = {
 	{ key = "THORNS", class = "DRUID", label = "Thorns", ids = {467,782,1075,8914,9756,9910}, groupIds = {} },
 }
 
--- Personal self buffs, offered only to their class. Battle Shout lasts two
--- minutes, so it warns shortly before expiring instead of at the global threshold.
+-- Personal self buffs, offered only to their class. Battle Shout (two minutes) and
+-- Inner Fire (ten minutes) warn shortly before expiring instead of at the global
+-- threshold. combat = the tracker keeps offering them during combat, when the client
+-- hides auras; duration (seconds) dates a recast until the aura is readable again.
 Buffs.SELF_BUFFS = {
-	{ key = "BSHOUT", class = "WARRIOR", label = "Battle Shout", ids = {6673,5242,6192,11549,11550,11551,25289}, groupIds = {}, selfOnly = true, warnSeconds = 30 },
+	{ key = "BSHOUT", class = "WARRIOR", label = "Battle Shout", ids = {6673,5242,6192,11549,11550,11551,25289}, groupIds = {}, selfOnly = true, warnSeconds = 30, combat = true, duration = 120 },
+	{ key = "IFIRE", class = "PRIEST", label = "Inner Fire", ids = {588,7128,602,1006,10951,10952}, groupIds = {}, selfOnly = true, warnSeconds = 60, combat = true, duration = 600 },
 }
 
 -- Paladin blessings. Greater versions hit every member of the target's class.

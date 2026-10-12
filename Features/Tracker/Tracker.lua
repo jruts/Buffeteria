@@ -9,12 +9,9 @@ local statusIcons = {}
 local MAIN = 64                                  -- current clickable head size
 local GAP = Layout.GAP
 local BORDER = 2
-local LABEL_HEIGHT = 12
 local SCREEN_MARGIN = 4
 local GLOW_SCALE = 0.625  -- silhouette size within OrcGlow; see tools/make_orc_glow.py
-local IDLE_ALPHA = 0.55   -- head opacity when there's nothing for you to cast
 local OTHERS_ALPHA = 0.5  -- small icons for buffs that are someone else's job
-local NEED_COLOR = "|cffff9933"
 local MOOD_TEXTURES = {
 	happy = ns.mediaPath .. "OrcHappy",
 	grumpy = ns.mediaPath .. "OrcGrumpy",
@@ -40,7 +37,7 @@ end
 -- Inputs for Layout.Grid, with bounds converted to the head's coordinate scale.
 local function placement()
 	local o = { columns = ns.db.iconsPerRow, side = ns.db.iconPosition, iconSize = ns.db.statusIconSize,
-		sideGap = BORDER + GAP, belowGap = BORDER + LABEL_HEIGHT + GAP, aboveGap = topGap() }
+		sideGap = BORDER + GAP, belowGap = BORDER + GAP, aboveGap = topGap() }
 	local left, bottom, top = castBtn:GetLeft(), castBtn:GetBottom(), castBtn:GetTop()
 	if left and bottom and top then
 		local scale = UIParent:GetEffectiveScale() / castBtn:GetEffectiveScale()
@@ -77,7 +74,7 @@ local function resizeHead()
 	if InCombatLockdown() or MAIN == ns.db.iconSize then return end
 	MAIN = ns.db.iconSize
 	castBtn:SetSize(MAIN, MAIN)
-	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2 + LABEL_HEIGHT)
+	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2)
 end
 
 local function layoutStatusIcons(s)
@@ -173,6 +170,7 @@ local function buildCastButton()
 			return
 		end
 		if self.pendingWho and self.pendingKey then Tracker.Actions.MarkCast(self.pendingWho, self.pendingKey) end
+		self.clickedAt = GetTime()
 		C_Timer.After(0.2, Tracker.Refresh)
 	end)
 	castBtn:RegisterForDrag("LeftButton")
@@ -198,12 +196,6 @@ local function buildCastButton()
 			if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
 		end)
 	end)
-	-- Keep the next recipient below the face, leaving the expression unobscured.
-	-- Wider than the head so "Need Fortitude" fits.
-	castBtn.label = castBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
-	castBtn.label:SetPoint("TOP", castBtn, "BOTTOM", 0, -1)
-	castBtn.label:SetJustifyH("CENTER")
-	castBtn.label:SetWordWrap(false)
 end
 
 -- Secure "remove unwanted buff from me" button (e.g. Salvation on a tank), top-right corner.
@@ -226,7 +218,7 @@ end
 
 local function build()
 	frame = CreateFrame("Frame", ns.globalPrefix .. "_Tracker", UIParent)
-	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2 + LABEL_HEIGHT)
+	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2)
 	-- Keep a fresh Dev tracker distinct from the release's starting position.
 	frame:SetPoint("CENTER", UIParent, "CENTER", ns.isDev and 140 or 0, -180)
 	frame:SetMovable(true)
@@ -286,11 +278,11 @@ local function showShout(turn, n)
 end
 
 -- Show whether clicking does anything for you: a glowing head demanding the
--- buff on your turn, a dimmed head otherwise, and the buffs you're waiting for.
-local function showRole(s, combat, face)
-	local n = not combat and s.next or nil
+-- buff on your turn. The head itself is never faded.
+local function showRole(s, face)
+	local n = s.next
 	local turn = n ~= nil
-	castBtn.icon:SetAlpha((turn or combat) and 1 or IDLE_ALPHA)
+	castBtn.icon:SetAlpha(1)
 	castBtn.glow:SetTexture(face)
 	castBtn.glow:SetShown(turn)
 	castBtn.halo:SetShown(turn)
@@ -299,14 +291,6 @@ local function showRole(s, combat, face)
 	if n then pulse.spell, pulse.target = n.spell, n.label end
 	pulse:SetShown(turn)
 	showShout(turn, n)
-	castBtn.label:SetWidth(MAIN + 48)
-	local needs = not turn and not combat and s.needs or {}
-	if #needs > 0 then
-		local what = #needs == 1 and Buffs.byKey[needs[1].key].label or (#needs .. " buffs")
-		castBtn.label:SetText(NEED_COLOR .. "Need " .. what .. "|r")
-	else
-		castBtn.label:SetText("")
-	end
 end
 
 -- Secure attributes can only change out of combat.
@@ -321,12 +305,40 @@ local function applySecure(s)
 	cancelBtn:SetShown(s.cancel ~= nil)
 end
 
+-- PLAYER_REGEN_DISABLED arrives just before combat lockdown: hold my combat self
+-- buff on the button so it can be recast if it falls off mid-fight.
+local function armForCombat()
+	if InCombatLockdown() or Tracker.Preview.active or castBtn.dragged then return end
+	local n = Tracker.Actions.CombatBuff()
+	if not n then return end
+	castBtn:SetAttribute("*type1", nil)
+	castBtn:SetAttribute("spell", n.spell)
+	castBtn:SetAttribute("unit", n.unit)
+	castBtn.pendingWho, castBtn.pendingKey = n.who, n.key
+end
+
+-- My own casts keep combat self buffs current while the client hides auras.
+-- A hidden spell ID counts as the button's buff right after a click.
+local function selfCast(spellID)
+	local now = GetTime()
+	local key = Tracker.Scan.SelfBuffKey(spellID)
+	if not key and issecretvalue and issecretvalue(spellID) and now - (castBtn.clickedAt or 0) < 1 then
+		key = castBtn.pendingKey and Buffs.byKey[castBtn.pendingKey].combat and castBtn.pendingKey
+	end
+	if not key then return end
+	Tracker.Scan.SelfCast(key, now)
+	Tracker.Refresh()
+end
+
 -- The full summary: the observed group, my next cast, and what to cancel on me.
 function Tracker.Compute()
 	if Tracker.Preview.active then return Tracker.Preview.Summary() end
 	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
 	local s = Tracker.Scan.Update(now, warnSec)
-	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura())
+	local combat = InCombatLockdown()
+	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura(), combat)
+	-- In combat the button casts only what it was armed with as combat began.
+	if combat and s.next and s.next.spell ~= castBtn:GetAttribute("spell") then s.next = nil end
 	s.cancel = Tracker.Scan.UnwantedOnMe()
 	return s
 end
@@ -345,7 +357,7 @@ function Tracker.Refresh()
 	local face = MOOD_TEXTURES[mood] or MOOD_TEXTURES.grumpy
 	castBtn.icon:SetTexture(face)
 	castBtn.icon:SetDesaturated(mood == "idle")
-	showRole(s, InCombatLockdown(), face)
+	showRole(s, face)
 	layoutStatusIcons(s)
 	-- In preview the button never casts anything.
 	applySecure(preview and {} or s)
@@ -367,6 +379,16 @@ function Tracker.Init()
 	end
 	frame:RegisterEvent("DISPLAY_SIZE_CHANGED")
 	frame:RegisterEvent("UI_SCALE_CHANGED")
-	frame:SetScript("OnEvent", Tracker.Refresh)
+	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+	frame:SetScript("OnEvent", function(_, event, unit, _, spellID)
+		if event == "UNIT_SPELLCAST_SUCCEEDED" then
+			if unit == "player" then selfCast(spellID) end
+			return
+		end
+		Tracker.Refresh()
+		-- After the refresh, which would otherwise reset the button's attributes.
+		if event == "PLAYER_REGEN_DISABLED" then armForCombat() end
+	end)
 	C_Timer.NewTicker(1, Tracker.Refresh)
 end

@@ -177,7 +177,7 @@ class AddonTests(unittest.TestCase):
                     if side == 'LEFT' then assert(right < -head:GetWidth() / 2 and bottom == -top) end
                     if side == 'RIGHT' then assert(left > head:GetWidth() / 2 and bottom == -top) end
                     if side == 'TOP' then assert(bottom >= head:GetHeight() / 2 + 2 and left == -right) end
-                    if side == 'BOTTOM' then assert(top == -head:GetHeight() / 2 - 16 and left == -right) end
+                    if side == 'BOTTOM' then assert(top == -head:GetHeight() / 2 - 4 and left == -right) end
                 end
                 assert(frame.point == oldPoint and frame:GetHeight() == oldHeight and frame:GetWidth() == oldWidth)
             end
@@ -279,7 +279,7 @@ class AddonTests(unittest.TestCase):
             UIParent:SetSize(320, 200)
             for _, size in ipairs({16, 21}) do
                 ns.db.statusIconSize = size
-                check(120, 100, 'BOTTOM', 3) -- widen when neither side fits the chosen width
+                check(120, 88, 'BOTTOM', 3) -- widen when neither side fits the chosen width
             end
             UIParent:SetSize(1920, 1080)
             headScale = 0.5
@@ -477,7 +477,7 @@ class AddonTests(unittest.TestCase):
                 end
             end
             s.perKey = {}; ns.Tracker.Refresh()
-            assert(frame:GetHeight() == 80)
+            assert(frame:GetHeight() == 68)
             ns.db.iconSize = 100
             COMBAT = true; ns.Tracker.Refresh()
             assert(head:GetWidth() == 64 and frame:GetWidth() == 68)
@@ -495,7 +495,7 @@ class AddonTests(unittest.TestCase):
             local action = ns.Tracker.Summary().next
             assert(action and head.glow:IsShown() and head.halo:IsShown())
             assert(head.halo.texture:find('OrcGlow$') and head.icon:GetAlpha() == 1)
-            assert(frame.gief:IsShown() and head.label:GetText() == '')
+            assert(frame.gief:IsShown())
             assert(frame.gief:GetText() == 'GIEF ' .. ns.Buffs.byKey[action.key].label .. '!')
             assert(frame.tag.point[2] == frame.gief) -- DEV sits above the demand
             assert(frame.gief.font[2] == ns.db.shoutSize)
@@ -508,7 +508,7 @@ class AddonTests(unittest.TestCase):
             end
             for i = 0, 4 do WOW_TIME = WOW_TIME + 0.1; pulse:GetScript('OnUpdate')(pulse) end
             assert(head.halo.width > head:GetWidth())
-            -- Nothing to cast: dimmed head naming the buff I'm waiting for.
+            -- Nothing to cast: no glow, but the head never fades.
             local s = {any=true, overall='bad', problems={}, yours={KINGS=true},
                 needs={{key='FORT', status='bad', caster='B-Realm'}}, perKey={
                 FORT={bad=1, warn=0, total=2, casters={['B-Realm']=true}},
@@ -519,8 +519,7 @@ class AddonTests(unittest.TestCase):
             ns.db.buffDisplay = 'ALL'; ns.Tracker.Refresh()
             assert(not head.glow:IsShown() and not head.halo:IsShown())
             assert(not frame.gief:IsShown() and frame.tag.point[2] == frame)
-            assert(head.icon:GetAlpha() < 1)
-            assert(head.label:GetText():find('Need ' .. ns.Buffs.byKey.FORT.label, 1, true))
+            assert(head.icon:GetAlpha() == 1)
             local alpha = {}
             for _, w in ipairs(widgets) do
                 if w.parent == frame and w.key and w.tex and w:IsShown() then alpha[w.key] = w:GetAlpha() end
@@ -533,11 +532,8 @@ class AddonTests(unittest.TestCase):
             head:GetScript('OnEnter')(head)
             GameTooltip.AddDoubleLine = add
             assert(table.concat(lines, ';'):find('from', 1, true))
-            s.needs = {{key='FORT', status='bad'}, {key='INT', status='bad'}}
-            ns.Tracker.Refresh()
-            assert(head.label:GetText():find('Need 2 buffs', 1, true))
             COMBAT = true; ns.Tracker.Refresh()
-            assert(head.label:GetText() == '' and head.icon:GetAlpha() == 1)
+            assert(head.icon:GetAlpha() == 1 and not frame.gief:IsShown())
             COMBAT = false
         """)
 
@@ -1839,6 +1835,103 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.wants.BSHOUT)
         """)
 
+    def test_combat_self_buffs_stay_castable_during_combat(self):
+        for player_class, key, spell in (("WARRIOR", "BSHOUT", "25289"), ("PRIEST", "IFIRE", "10952")):
+            with self.subTest(player_class):
+                lua = full_addon(player_class)
+                lua.execute("""
+                    local key, spell = '%s', '%s'
+                    local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+                    ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {}
+                    ns.Assignments.result.expected['B-Realm'] = {}
+                    -- The buff is up when the fight starts: nothing to do yet.
+                    local up = true
+                    C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                        if up and unit == 'player' and i == 1 then
+                            return {name=spell, expirationTime=WOW_TIME + 100, sourceUnit='player'}
+                        end
+                    end
+                    ns.Tracker.Refresh()
+                    frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
+                    COMBAT = true; ns.Tracker.Refresh()
+                    assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == 'player')
+                    assert(not ns.Tracker.Summary().next and not frame.gief:IsShown())
+                    -- It falls off mid-fight: the head demands it and the click casts it.
+                    up = false; ns.Tracker.Refresh()
+                    assert(ns.Tracker.Summary().next.key == key and frame.gief:IsShown())
+                    assert(frame.gief:GetText() == 'GIEF ' .. ns.Buffs.byKey[key].label .. '!')
+                    head:GetScript('PostClick')(head, 'LeftButton', false)
+                    ns.Tracker.Refresh()
+                    assert(not frame.gief:IsShown()) -- waiting for the cast's aura
+                    COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+                """ % (key, spell))
+
+    def test_combat_self_buffs_tracked_while_auras_are_hidden(self):
+        lua = full_addon('WARRIOR')
+        lua.execute("""
+            local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+            ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {}
+            ns.Assignments.result.expected['B-Realm'] = {}
+            local function call() return ns.Tracker.Summary().next and ns.Tracker.Summary().next.key end
+            -- Out of combat: a readable shout with 100 seconds left (a talented 150-second one).
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if COMBAT then error('blocked in combat') end
+                if unit == 'player' and i == 1 then
+                    return {name='25289', expirationTime=WOW_TIME + 100, duration=150, sourceUnit='player'}
+                end
+            end
+            ns.Tracker.Refresh()
+            frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
+            COMBAT = true; ns.Tracker.Refresh()
+            assert(call() == nil)
+            -- It runs out mid-fight: dated from the last read.
+            WOW_TIME = WOW_TIME + 75; ns.Tracker.Refresh()
+            assert(call() == 'BSHOUT' and ns.Tracker.Summary().perKey.BSHOUT.warn == 1)
+            WOW_TIME = WOW_TIME + 30; ns.Tracker.Refresh()
+            assert(call() == 'BSHOUT' and ns.Tracker.Summary().perKey.BSHOUT.bad == 1)
+            -- Recast in combat: good for the learned duration, not the base two minutes.
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 25289)
+            assert(call() == nil)
+            WOW_TIME = WOW_TIME + 110; ns.Tracker.Refresh()
+            assert(call() == nil)
+            -- Other units and other spells change nothing.
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'party1', 'guid', 25289)
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 12345)
+            WOW_TIME = WOW_TIME + 20; ns.Tracker.Refresh()
+            assert(call() == 'BSHOUT')
+            COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+            assert(call() == nil) -- readable again: the real aura wins
+            -- Lost early mid-fight: hidden until combat ends, then read.
+            frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
+            COMBAT = true; ns.Tracker.Refresh()
+            local gone = true
+            local read = C_UnitAuras.GetAuraDataByIndex
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if gone and not COMBAT then return nil end
+                return read(unit, i)
+            end
+            ns.Tracker.Refresh()
+            assert(call() == nil)
+            COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+            assert(ns.Tracker.Summary().perKey.BSHOUT.bad == 1)
+        """)
+
+    def test_long_buffs_wait_until_after_combat(self):
+        lua = full_addon('PRIEST')
+        lua.execute("""
+            local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
+            ns.db.wants.IFIRE = false; ns.Preferences.Changed(); runTimers()
+            ns.Tracker.Refresh()
+            local before = head:GetAttribute('spell')
+            assert(ns.Tracker.Summary().next and ns.Tracker.Summary().next.key ~= 'IFIRE')
+            frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
+            COMBAT = true; ns.Tracker.Refresh()
+            assert(head:GetAttribute('spell') == before) -- nothing to arm
+            assert(not ns.Tracker.Summary().next and not frame.gief:IsShown())
+            COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
+            assert(ns.Tracker.Summary().next and frame.gief:IsShown())
+        """)
+
     def test_battle_shout_is_warrior_only(self):
         lua = full_addon('PRIEST')
         lua.execute("""
@@ -1855,6 +1948,88 @@ class AddonTests(unittest.TestCase):
             local x = member('WARRIOR'); x.wants = {BSHOUT=true} -- not learned
             local result = ns.Solver.Solve({members={W=w, P=p, X=x}})
             assert(result.expected.W.BSHOUT == 'W' and not result.expected.P.BSHOUT and not result.expected.X.BSHOUT)
+        """)
+
+    def test_priest_inner_fire_is_optional_self_buff_with_short_warning(self):
+        lua = full_addon('PRIEST')
+        lua.execute("""
+            assert(ns.db.wants.IFIRE and ns.Preferences.Get().wants.IFIRE)
+            ns.db.wants.IFIRE = nil; ns.Database.Init(); ns.Preferences.Init() -- older saved wants enable it
+            assert(ns.db.wants.IFIRE == true)
+            ns.db.wants.FORT = false; ns.db.wants.SPIRIT = false
+            ns.Preferences.Changed(); runTimers()
+            assert(ns.Assignments.result.expected['A-Realm'].IFIRE == 'A-Realm')
+            assert(ns.Roster.Capabilities().IFIRE)
+            -- Leave only Inner Fire to cast.
+            ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {}
+            ns.Assignments.result.expected['B-Realm'] = {}
+            ns.Tracker.Refresh()
+            local button = Buffeteria_CastButton
+            assert(button:GetAttribute('spell') == '10952' and button:GetAttribute('unit') == 'player')
+            -- 90 seconds left is fine; 45 seconds left warns despite the 5-minute setting.
+            local left = 90
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if i == 1 then return {name='10952', expirationTime=WOW_TIME + left, sourceUnit='player'} end
+            end
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.IFIRE.warn == 0 and not button:GetAttribute('spell'))
+            left = 45; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.IFIRE.warn == 1)
+            -- Not enough mana: still tracked, but nothing to cast.
+            C_Spell.IsSpellUsable = function() return false, true end
+            ns.Tracker.Refresh()
+            assert(not button:GetAttribute('spell'))
+            C_Spell.IsSpellUsable = nil
+            ns.Options.Toggle()
+            local panel = findWidget('Your buffet').parent
+            local fire = panel.wants.IFIRE
+            assert(fire:IsShown() and not panel.wants.BSHOUT:IsShown())
+            fire:GetScript('OnClick')(fire); runTimers()
+            assert(not ns.db.wants.IFIRE and not ns.Assignments.result.expected['A-Realm'].IFIRE)
+            ns.Database.Init(); ns.Preferences.Init()
+            assert(ns.db.wants.IFIRE == false) -- skip survives reload
+            ns.Preferences.Reset(); runTimers()
+            assert(ns.db.wants.IFIRE)
+        """)
+
+    def test_inner_fire_waits_until_learned(self):
+        lua = full_addon('PRIEST')
+        lua.execute("""
+            local learned = false
+            local inner = {}
+            for _, id in ipairs(ns.Buffs.byKey.IFIRE.ids) do inner[id] = true end
+            IsPlayerSpell = function(id) return learned or not inner[id] end
+            ns.Assignments.Resolve(); runTimers()
+            assert(ns.db.wants.IFIRE and not ns.Assignments.result.expected['A-Realm'].IFIRE)
+            ns.Tracker.Refresh()
+            local s = ns.Tracker.Summary()
+            assert(not s.perKey.IFIRE and not (s.next and s.next.key == 'IFIRE'))
+            ns.Options.Toggle()
+            local panel = findWidget('Your buffet').parent
+            assert(not panel.wants.IFIRE:IsShown())
+            -- Level 12: the spell arrives and so does the tracking.
+            learned = true
+            ns.App:GetScript('OnEvent')(ns.App, 'SPELLS_CHANGED'); runTimers()
+            assert(ns.Assignments.result.expected['A-Realm'].IFIRE == 'A-Realm')
+            assert(panel.wants.IFIRE:IsShown())
+        """)
+
+    def test_inner_fire_is_priest_only(self):
+        lua = full_addon('WARRIOR')
+        lua.execute("""
+            assert(ns.db.wants.IFIRE == false and not ns.Preferences.Get().wants.IFIRE)
+            assert(not ns.Roster.Capabilities().IFIRE)
+            ns.Options.Toggle()
+            assert(not findWidget('Your buffet').parent.wants.IFIRE:IsShown())
+            ns.db.wants.IFIRE = true
+            assert(not ns.Preferences.Get().wants.IFIRE)
+        """)
+        self.solver("""
+            local p = member('PRIEST'); p.wants = {IFIRE=true}; p.caps = {IFIRE=true}
+            local w = member('WARRIOR'); w.wants = {IFIRE=true}; w.caps = {IFIRE=true}
+            local x = member('PRIEST'); x.wants = {IFIRE=true}; x.caps = {} -- not learned
+            local result = ns.Solver.Solve({members={P=p, W=w, X=x}})
+            assert(result.expected.P.IFIRE == 'P' and not result.expected.W.IFIRE and not result.expected.X.IFIRE)
         """)
 
     def test_druid_serves_thorns_to_tanks_without_addon_and_peer_opt_out(self):

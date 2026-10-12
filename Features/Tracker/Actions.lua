@@ -122,15 +122,15 @@ local function blessings(ctx)
 end
 
 -- Tank and self buffs: always singles, once I have the power to cast them.
--- Self-only ones (Righteous Fury, Battle Shout) belong to the caster alone.
+-- Self-only ones (Righteous Fury, Battle Shout, Inner Fire) belong to the caster alone.
 local function usable(buff)
 	local spell = spellFor(buff.ids)
 	return spell and ns.WoW.SpellUsable(spell)
 end
 
-local function singleBuffs(ctx)
+local function singleBuffs(ctx, combatOnly)
 	for _, buff in ipairs(Buffs.SINGLE_BUFFS) do
-		for full, m in pairs(ctx.roster.members) do
+		for full, m in pairs(combatOnly and not buff.combat and EMPTY or ctx.roster.members) do
 			if not m.dead and ctx.mine(full, buff.key) and (not buff.selfOnly or full == ctx.me) then
 				local st = ctx.needs(full, buff.key)
 				if st and usable(buff) then ctx.addSingle(buff, full, st, buff.selfOnly) end
@@ -147,14 +147,31 @@ local function aura(ctx, missingAura)
 	if spell then ctx.add(buff, spell, icon, "player", ctx.me, "bad", true, "Aura") end
 end
 
+-- The combat self buff the cast button holds through combat, whatever its status:
+-- secure attributes are locked once combat starts. Nil when I have none.
+function Actions.CombatBuff()
+	local me = ns.WoW.Me()
+	for _, buff in ipairs(Buffs.SELF_BUFFS) do
+		if buff.combat and (ns.Assignments.result.expected[me] or EMPTY)[buff.key] == me then
+			local spell, icon = spellFor(buff.ids)
+			if spell then return { spell = spell, icon = icon, unit = "player", who = me, key = buff.key } end
+		end
+	end
+end
+
 -- My next cast: { spell, unit, icon, label, who, key, status, big }.
--- missingAura is my assigned aura when it isn't running.
-function Actions.Next(now, warnSec, missingAura)
+-- missingAura is my assigned aura when it isn't running. In combat only
+-- combat self buffs (Battle Shout, Inner Fire) are worth interrupting for.
+function Actions.Next(now, warnSec, missingAura, combat)
 	local ctx = newSearch(now, warnSec)
-	groupBuffs(ctx)
-	blessings(ctx)
-	singleBuffs(ctx)
-	aura(ctx, missingAura)
+	if combat then
+		singleBuffs(ctx, true)
+	else
+		groupBuffs(ctx)
+		blessings(ctx)
+		singleBuffs(ctx)
+		aura(ctx, missingAura)
+	end
 	table.sort(ctx.cands, function(a, b)
 		if a.status ~= b.status then return a.status == "bad" end
 		if a.big ~= b.big then return a.big end
