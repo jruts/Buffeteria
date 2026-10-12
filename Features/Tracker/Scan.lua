@@ -10,6 +10,7 @@ local isSecret = issecretvalue or function() return false end
 local nameToKey = {}
 local cache = {}          -- [fullName] = { [key] = { exp = number, name = string } }
 local durations = {}      -- [key] = seconds, from the last readable aura (talents can lengthen it)
+local missingSince = {}   -- ["name:key"] = when an expected buff was first seen missing
 local selfKeys = {}       -- [spellID] = key, for my combat self buffs
 for _, b in ipairs(Buffs.SELF_BUFFS) do
 	if b.combat then for _, id in ipairs(b.ids) do selfKeys[id] = b.key end end
@@ -115,7 +116,7 @@ end
 function Scan.Update(now, warnSec)
 	local roster, res, me = ns.Assignments.roster, ns.Assignments.result, ns.WoW.Me()
 	readGroup(roster)
-	local summary = Status.NewSummary()
+	local summary, since = Status.NewSummary(), {}
 	local function problem(full, key, status, rem, caster)
 		table.insert(summary.problems, { who = full, key = key, status = status, rem = rem, caster = caster })
 		summary.overall = Status.Worst(summary.overall, status == "unwanted" and "warn" or status)
@@ -134,6 +135,10 @@ function Scan.Update(now, warnSec)
 					pk.unknown = pk.unknown + 1
 					if summary.unreadable[#summary.unreadable] ~= full then table.insert(summary.unreadable, full) end
 				elseif st == "bad" or st == "warn" then
+					if st == "bad" then
+						local id = full .. ":" .. key
+						since[id] = missingSince[id] or now
+					end
 					pk[st] = pk[st] + 1
 					pk.casters[caster] = true
 					problem(full, key, st, rem, caster)
@@ -159,11 +164,18 @@ function Scan.Update(now, warnSec)
 			problem(me, aura, "bad", nil, me)
 		end
 	end
+	missingSince = since
 	if not summary.any then summary.overall = "idle" end
 	table.sort(summary.problems, Status.CompareProblems)
 	table.sort(summary.unreadable)
 	table.sort(summary.needs, Status.CompareProblems)
 	return summary
+end
+
+-- Seconds an expected buff has been missing in a row, as of the last Update.
+function Scan.MissingFor(full, key, now)
+	local since = missingSince[full .. ":" .. key]
+	return since and now - since or 0
 end
 
 -- My assigned aura when I am not running it, or nil (none assigned, or auras hidden).

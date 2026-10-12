@@ -582,10 +582,11 @@ class AddonTests(unittest.TestCase):
             end
         """)
 
-    def test_orc_textures_have_matching_dimensions_and_real_transparency(self):
-        for mood in ("Happy", "Grumpy", "Angry", "Glow"):
-            with self.subTest(mood=mood):
-                data = (ROOT / "Media" / f"Orc{mood}.tga").read_bytes()
+    def test_mascot_textures_have_matching_dimensions_and_real_transparency(self):
+        for name in (prefix + mood for prefix in ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead")
+                     for mood in ("Happy", "Grumpy", "Angry", "Glow")):
+            with self.subTest(name=name):
+                data = (ROOT / "Media" / f"{name}.tga").read_bytes()
                 image_type = data[2]
                 width, height, depth, descriptor = struct.unpack_from("<HHBB", data, 12)
                 self.assertEqual((image_type, width, height, depth), (2, 256, 256, 32))
@@ -594,9 +595,95 @@ class AddonTests(unittest.TestCase):
                 alpha = data[start + 3:start + width * height * 4:4]
                 self.assertEqual(len(alpha), width * height)
                 self.assertIn(0, alpha)
-                self.assertIn(255, alpha)
+                self.assertGreaterEqual(max(alpha), 250)
                 for corner in (0, width - 1, (height - 1) * width, height * width - 1):
                     self.assertEqual(alpha[corner], 0)
+
+    def test_saved_head_choice_defaults_validates_and_survives_login(self):
+        for style in (None, "ORC", "GNOME", "NIGHTELF", "TAUREN", "HUMAN", "TROLL", "UNDEAD", "invalid", False):
+            with self.subTest(style=style):
+                lua = full_addon(login=False)
+                lua.globals().SAVED_HEAD = style
+                lua.execute("""
+                    BuffeteriaCharDB.headStyle = SAVED_HEAD
+                    ns.Database.Init()
+                    local expected = ({ORC='Orc', GNOME='Gnome', NIGHTELF='NightElf', TAUREN='Tauren', HUMAN='Human', TROLL='Troll', UNDEAD='Undead'})[SAVED_HEAD] or 'Orc'
+                    assert(ns.db.headStyle == (expected == 'Orc' and 'ORC' or SAVED_HEAD))
+                    ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+                    assert(Buffeteria_CastButton.icon.texture:find(expected .. '%a+$'))
+                    ns.Database.Init()
+                    assert(ns.Tracker.Art.Glow() == ns.mediaPath .. expected .. 'Glow')
+                    ns.Database.Set('headStyle', 'removed')
+                    assert(ns.db.headStyle == 'ORC')
+                """)
+
+    def test_head_picker_updates_both_hosts_moods_glow_and_preserves_cast_in_combat(self):
+        for addon_name, player_class in (("Buffeteria", "PALADIN"), (DEV_NAME, "ROGUE")):
+            with self.subTest(addon_name=addon_name, player_class=player_class):
+                lua = full_addon(player_class, addon_name=addon_name)
+                lua.execute("""
+                    local head, frame = _G[ns.globalPrefix .. '_CastButton'], _G[ns.globalPrefix .. '_Tracker']
+                    ns.Options.Toggle()
+                    findWidget('Settings').parent:GetScript('OnClick')(findWidget('Settings').parent)
+                    local picker = _G[ns.globalPrefix .. '_HeadPicker']
+                    local function choiceButton(style)
+                        for _, w in ipairs(widgets) do if w.style == style then return w end end
+                        error('missing head choice ' .. style)
+                    end
+                    assert(#ns.Tracker.Art.CHOICES == 7 and picker:IsVisible() and not picker.menu:IsShown())
+                    assert(picker.caption:GetText() == 'Orc')
+                    local spell, unit, point = head:GetAttribute('spell'), head:GetAttribute('unit'), frame.point
+                    COMBAT = true
+                    for _, choice in ipairs(ns.Tracker.Art.CHOICES) do
+                        picker:GetScript('OnClick')(picker)
+                        assert(picker.menu:IsShown())
+                        local chip = choiceButton(choice.key)
+                        assert(chip:IsVisible() and chip.portrait.texture == ns.mediaPath .. choice.prefix .. 'Happy')
+                        chip:GetScript('OnClick')(chip)
+                        assert(not picker.menu:IsShown() and picker.caption:GetText() == choice.label)
+                        assert(picker.portrait.texture == ns.mediaPath .. choice.prefix .. 'Happy')
+                        assert(ns.db.headStyle == choice.key and chip:GetChecked())
+                        for _, other in ipairs(ns.Tracker.Art.CHOICES) do
+                            assert(choiceButton(other.key):GetChecked() == (other.key == choice.key))
+                        end
+                        assert(head.icon.texture == ns.Tracker.Art.Texture(ns.Tracker.Status.Mood(ns.Tracker.Summary())))
+                        assert(head.glow.texture == head.icon.texture and head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
+                        assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+                        assert(frame.point == point and head:GetWidth() == 64)
+                    end
+                    COMBAT = false
+                    settingsPage:GetScript('OnShow')(settingsPage)
+                    assert(choiceButton('UNDEAD'):GetChecked() and picker.caption:GetText() == 'Undead')
+                    picker:GetScript('OnClick')(picker)
+                    choiceButton('GNOME'):GetScript('OnClick')(choiceButton('GNOME'))
+                    assert(ns.db.headStyle == 'GNOME')
+                    ns.Options.Toggle()
+                    assert(choiceButton('GNOME'):GetChecked() and picker.caption:GetText() == 'Gnome')
+                    picker:GetScript('OnClick')(picker)
+                    picker:GetScript('OnClick')(picker)
+                    assert(not picker.menu:IsShown())
+                    ns.Tracker.Preview.Set(true)
+                    COMBAT = true
+                    for _, choice in ipairs(ns.Tracker.Art.CHOICES) do
+                        ns.Database.Set('headStyle', choice.key)
+                        for phase, suffix in ipairs({'Angry', 'Grumpy', 'Grumpy', 'Happy'}) do
+                            WOW_TIME = 100 + (phase - 1) * 5
+                            ns.Tracker.Refresh()
+                            assert(head.icon.texture == ns.mediaPath .. choice.prefix .. suffix)
+                            assert(head.glow.texture == head.icon.texture)
+                            assert(head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
+                            assert(not head.icon.desaturated and not head:GetAttribute('spell') and not head:GetAttribute('unit'))
+                        end
+                    end
+                    COMBAT = false
+                    ns.Tracker.Preview.Set(false)
+                    local compute = ns.Tracker.Compute
+                    ns.Tracker.Compute = function() return {any=false, overall='idle', perKey={}} end
+                    ns.Tracker.Refresh()
+                    assert(head.icon.texture:find('UndeadGrumpy$') and head.icon.desaturated)
+                    assert(not head.halo:IsShown() and not head.glow:IsShown())
+                    ns.Tracker.Compute = compute
+                """)
 
     def test_manifest_contains_each_runtime_module_once(self):
         files = addon_files()
@@ -771,7 +858,17 @@ class AddonTests(unittest.TestCase):
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
             local pending = ns.Tracker.Summary().next
             Buffeteria_CastButton:GetScript('PostClick')(Buffeteria_CastButton, 'LeftButton', false)
-            runTimers()
+            runTimers(); ns.Tracker.Refresh()
+            local same = ns.Tracker.Summary().next
+            assert(same.who == pending.who and same.key == pending.key)
+            -- Another spell, or the right one long after the click, isn't the button's.
+            local frame = Buffeteria_Tracker
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 1)
+            WOW_TIME = WOW_TIME + 2
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', pending.spellID)
+            assert(ns.Tracker.Summary().next.who == pending.who)
+            Buffeteria_CastButton:GetScript('PostClick')(Buffeteria_CastButton, 'LeftButton', false)
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', pending.spellID)
             local nextAction = ns.Tracker.Summary().next
             assert(not nextAction or nextAction.who ~= pending.who or nextAction.key ~= pending.key)
             WOW_TIME = WOW_TIME + 4
@@ -826,6 +923,10 @@ class AddonTests(unittest.TestCase):
             assert(not button.pushedTexture)
             local casts, toggles = 0, 0
             ns.Tracker.Actions.MarkCast = function() casts = casts + 1 end
+            local function landed()
+                local frame = Buffeteria_Tracker
+                frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', button.pending.spellID)
+            end
             ns.Options.Toggle = function() toggles = toggles + 1 end
             button:GetScript('OnMouseDown')(button)
             assert(button.icon.vertexColor[1] == 0.75)
@@ -833,6 +934,8 @@ class AddonTests(unittest.TestCase):
             assert(casts == 0)
             button:GetScript('OnMouseUp')(button)
             button:GetScript('PostClick')(button, 'LeftButton', false)
+            assert(casts == 0) -- not yet: the cast may still fail (global cooldown)
+            landed()
             assert(casts == 1 and button.icon.vertexColor[1] == 1)
             runTimers()
             for _, stopFirst in ipairs({true, false}) do
@@ -867,6 +970,7 @@ class AddonTests(unittest.TestCase):
             assert(toggles == 1)
             button:GetScript('OnMouseDown')(button)
             button:GetScript('PostClick')(button, 'LeftButton', false)
+            landed()
             assert(casts == 2)
             button:GetScript('OnLeave')(button)
             assert(button.icon.vertexColor[1] == 1)
@@ -962,7 +1066,7 @@ class AddonTests(unittest.TestCase):
         lua.globals().PLAYER_CLASS = player_class
         for name in (
             "App/State.lua", "Shared/Util.lua", "Shared/Events.lua", "Shared/WoW.lua", "Features/Buffs/Catalog.lua",
-            "Shared/UI.lua", "Features/Sync/Protocol.lua", "Features/Tracker/Status.lua",
+            "Shared/UI.lua", "Features/Sync/Protocol.lua", "Features/Tracker/Status.lua", "Features/Tracker/Art.lua",
             "App/Database.lua", "Features/Preferences/Model.lua", "Features/Roster/Roster.lua",
             "Features/Assignments/Solver.lua", "Features/Assignments/Assignments.lua",
             "Features/Paladins/Plan.lua", "App/Bootstrap.lua",
@@ -1623,6 +1727,135 @@ class AddonTests(unittest.TestCase):
         """)
 
 
+    def test_group_buffs_split_by_work_and_home_group(self):
+        self.solver("""
+            local function at(m, g) m.group = g; return m end
+            local members = {P1=at(member('PRIEST', {FORT=true, gFORT=true}), 1), P2=at(member('PRIEST', {FORT=true}), 2)}
+            for i = 1, 4 do members['A' .. i] = at(member('ROGUE'), 1); members['B' .. i] = at(member('ROGUE'), 2) end
+            members.C1 = at(member('ROGUE'), 3)
+            -- Prayer makes a group one cast for P1; P2 casts singles, so gets the small group.
+            local r = ns.Solver.Solve({members=members})
+            assert(r.groups.FORT[1] == 'P1' and r.groups.FORT[2] == 'P1' and r.groups.FORT[3] == 'P2')
+            assert(r.expected.C1.FORT == 'P2' and r.expected.B1.FORT == 'P1')
+            -- Equal work: each priest keeps their own group (in range), whatever the names.
+            members.P2.caps.gFORT = true; members.P1.group = 2; members.P2.group = 1; members.C1 = nil
+            r = ns.Solver.Solve({members=members})
+            assert(r.groups.FORT[1] == 'P2' and r.groups.FORT[2] == 'P1')
+        """)
+
+    def tracker_actions(self, setup):
+        lua = runtime()
+        load(lua, "Features/Buffs/Catalog.lua")
+        load(lua, "Shared/Util.lua")
+        lua.execute("ns.WoW = {}; ns.Preferences = {}; ns.Roster = {}")
+        load(lua, "Shared/Events.lua")
+        load(lua, "Features/Sync/Protocol.lua")
+        load(lua, "Features/Tracker/Status.lua")
+        load(lua, "Features/Assignments/Assignments.lua")
+        lua.execute("""
+            NOW = 100
+            function GetTime() return NOW end
+            VISIBLE = {}; DEAD = {}
+            function UnitIsVisible(unit) return VISIBLE[unit] ~= false end
+            function UnitIsDeadOrGhost(unit) return DEAD[unit] == true end
+            HAVE = {}
+            C_UnitAuras = {GetAuraDataByIndex=function(unit, i)
+                if i == 1 and HAVE[unit] then return {name=HAVE[unit], expirationTime=0} end
+            end}
+            ns.WoW.Me = function() return 'Me' end; ns.WoW.Short = function(n) return n end
+            ns.WoW.ClassName = function(c) return c end
+            ns.WoW.SpellName = function(id) return tostring(id) end
+            ns.WoW.SpellIcon = function(id) return id end
+            ns.WoW.KnowsAny = function(ids) if #ids == 0 then return false end return true, ids[#ids] end
+            ns.WoW.ItemCount = function() return 10 end
+            ns.WoW.SpellUsable = function() return true end
+        """)
+        lua.execute(setup)
+        load(lua, "Features/Tracker/Scan.lua")
+        load(lua, "Features/Tracker/Actions.lua")
+        lua.execute("""
+            function nextCast(help)
+                ns.Tracker.Scan.Update(NOW, 300)
+                return ns.Tracker.Actions.Next(NOW, 300, nil, false, help)
+            end
+        """)
+        return lua
+
+    def test_group_cast_marks_everyone_it_covers(self):
+        lua = self.tracker_actions("""
+            local members, units, expected = {Me={class='PRIEST', group=1, unit='player'}}, {Me='player'}, {}
+            for i = 1, 4 do
+                local n = 'R' .. i
+                members[n] = {class='ROGUE', group=1, unit='party' .. i}; units[n] = 'party' .. i
+                expected[n] = {FORT='Me'}
+            end
+            ns.Assignments.roster = {members=members, units=units}
+            ns.Assignments.result = {groups={FORT={[1]='Me'}}, auras={}, pally={}, expected=expected, overrides={}}
+        """)
+        lua.execute("""
+            local cast = nextCast()
+            assert(cast.big and cast.spell == '21564' and #cast.covers == 4)
+            ns.Tracker.Actions.MarkCast(cast)
+            -- Until the auras arrive, nobody in the group is offered a redundant single.
+            assert(nextCast() == nil)
+            NOW = NOW + 4
+            assert(nextCast().big)
+        """)
+
+    def test_cover_for_another_caster_after_grace_or_when_away(self):
+        lua = self.tracker_actions("""
+            ns.Assignments.roster = {members={Me={class='PRIEST', group=2, unit='raid1', caps={FORT=true}},
+                Other={class='PRIEST', group=1, unit='raid2', caps={FORT=true}},
+                R={class='ROGUE', group=1, unit='raid3'}, P={class='PALADIN', group=1, unit='raid4'}},
+                units={Me='raid1', Other='raid2', R='raid3', P='raid4'}}
+            ns.Assignments.result = {groups={FORT={[1]='Other'}}, auras={}, pally={ROGUE={P='MIGHT'}},
+                expected={R={FORT='Other', MIGHT='P'}}, overrides={}}
+        """)
+        lua.execute("""
+            HAVE.raid1 = '1243'
+            assert(nextCast(true) == nil) -- just went missing: Other gets the first go
+            NOW = NOW + 29
+            assert(nextCast(true) == nil)
+            NOW = NOW + 1
+            assert(nextCast(false) == nil) -- the setting is off
+            local cast = nextCast(true)
+            assert(cast.key == 'FORT' and cast.who == 'R' and cast.helping == 'Other')
+            -- Blessings stay with their paladin: I am not offered Might.
+            HAVE.raid3 = '10938'
+            assert(nextCast(true) == nil)
+            -- A helper earlier in line goes first.
+            HAVE.raid3 = nil; NOW = 1000
+            ns.Assignments.roster.members.Aaa = {class='PRIEST', group=3, unit='raid5', caps={gFORT=true}}
+            assert(nextCast(true) == nil)
+            NOW = NOW + 39; assert(nextCast(true) == nil)
+            NOW = NOW + 1; assert(nextCast(true).helping == 'Other')
+            -- A dead or distant caster: no grace, just the turn behind Aaa.
+            local function fresh() HAVE.raid3 = '10938'; nextCast(true); HAVE.raid3 = nil end
+            NOW = 2000; DEAD.raid2 = true; fresh()
+            assert(nextCast(true) == nil)
+            NOW = NOW + 10; assert(nextCast(true).helping == 'Other')
+            DEAD.raid2 = false; VISIBLE.raid2 = false; NOW = 3000; fresh()
+            assert(nextCast(true) == nil)
+            NOW = NOW + 10; assert(nextCast(true).helping == 'Other')
+        """)
+
+    def test_aura_changes_refresh_the_tracker_once_out_of_combat(self):
+        lua = full_addon()
+        lua.execute("""
+            local frame, refreshes = Buffeteria_Tracker, 0
+            local refresh = ns.Tracker.Refresh
+            ns.Tracker.Refresh = function() refreshes = refreshes + 1; return refresh() end
+            for _, unit in ipairs({'player', 'party1', 'raid12', 'party1', 'nameplate3', 'raidpet1', 'target'}) do
+                frame:GetScript('OnEvent')(frame, 'UNIT_AURA', unit)
+            end
+            runTimers()
+            assert(refreshes == 1)
+            COMBAT = true
+            frame:GetScript('OnEvent')(frame, 'UNIT_AURA', 'party1'); runTimers()
+            assert(refreshes == 1)
+            COMBAT = false
+        """)
+
     def test_auras_are_unique_prioritized_and_respect_manual_picks(self):
         self.solver("""
             local base = {DEVO=true, RETRI=true, FIRERES=true, FROSTRES=true, SHADOWRES=true}
@@ -1861,6 +2094,7 @@ class AddonTests(unittest.TestCase):
                     assert(ns.Tracker.Summary().next.key == key and frame.gief:IsShown())
                     assert(frame.gief:GetText() == 'GIEF ' .. ns.Buffs.byKey[key].label .. '!')
                     head:GetScript('PostClick')(head, 'LeftButton', false)
+                    frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', tonumber(spell))
                     ns.Tracker.Refresh()
                     assert(not frame.gief:IsShown()) -- waiting for the cast's aura
                     COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')

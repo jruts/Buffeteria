@@ -23,6 +23,7 @@ Features/Assignments/Assignments.lua
 Features/Paladins/Plan.lua
 Features/Sync/Comm.lua
 Features/Tracker/Status.lua
+Features/Tracker/Art.lua
 Features/Tracker/Scan.lua
 Features/Tracker/Actions.lua
 Features/Tracker/Preview.lua

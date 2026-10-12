@@ -11,6 +11,7 @@ ns.Database.RANGES = {
 }
 -- Allowed values, the first being the default.
 local CHOICES = {
+	headStyle = { "ORC", "GNOME", "NIGHTELF", "TAUREN", "HUMAN", "TROLL", "UNDEAD" },
 	buffDisplay = { "PROBLEMS", "ALL", "MISSING", "EXPIRING" },
 	iconsPerRow = { 2, 3, 4 },
 	iconPosition = { "BOTTOM", "LEFT", "TOP", "RIGHT", "AUTO" },
@@ -39,6 +40,7 @@ function ns.Database.Init()
 	local db = _G[ns.savedVariable]
 	if db.showTracker == nil then db.showTracker = true end
 	db.locked = db.locked or false
+	if db.helpOthers == nil then db.helpOthers = true end
 	db.minimap = db.minimap or { angle = 200, hide = false }
 	-- onlyProblems is the setting's pre-buffDisplay form.
 	if db.onlyProblems == false and db.buffDisplay == nil then db.buffDisplay = "ALL" end

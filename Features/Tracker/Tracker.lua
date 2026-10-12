@@ -1,8 +1,9 @@
--- Buffeteria: the on-screen orc mascot + one-click cast button.
+-- Buffeteria: the on-screen mascot + one-click cast button.
 local _, ns = ...
 local Buffs = ns.Buffs
 local Tracker = ns.Tracker
 local Status, Layout, Tooltip = Tracker.Status, Tracker.Layout, Tracker.Tooltip
+local Art = Tracker.Art
 
 local frame, castBtn, cancelBtn, lastSummary, pulse
 local statusIcons = {}
@@ -10,13 +11,8 @@ local MAIN = 64                                  -- current clickable head size
 local GAP = Layout.GAP
 local BORDER = 2
 local SCREEN_MARGIN = 4
-local GLOW_SCALE = 0.625  -- silhouette size within OrcGlow; see tools/make_orc_glow.py
+local GLOW_SCALE = 0.625  -- silhouette size within each glow; see tools/make_orc_glow.py
 local OTHERS_ALPHA = 0.5  -- small icons for buffs that are someone else's job
-local MOOD_TEXTURES = {
-	happy = ns.mediaPath .. "OrcHappy",
-	grumpy = ns.mediaPath .. "OrcGrumpy",
-	angry = ns.mediaPath .. "OrcAngry",
-}
 -- Per display mode: whether a buff's icon shows, and the count on it.
 local DISPLAY = {
 	ALL = function(pk) return true, pk.bad + pk.warn end,
@@ -145,17 +141,17 @@ local function buildCastButton()
 	-- The alpha silhouette supplies the shape; no square background or highlight.
 	castBtn.icon = castBtn:CreateTexture(nil, "ARTWORK")
 	castBtn.icon:SetAllPoints()
-	castBtn.icon:SetTexture(MOOD_TEXTURES.grumpy)
-	-- "Your turn" cue: a soft gold glow around the silhouette (Media/OrcGlow,
-	-- built by tools/make_orc_glow.py) and a faint shimmer on the face.
+	castBtn.icon:SetTexture(Art.Texture("grumpy"))
+	-- "Your turn" cue: a soft gold glow matching the chosen head's silhouette
+	-- and a faint shimmer on the face.
 	castBtn.halo = castBtn:CreateTexture(nil, "BACKGROUND", nil, -8)
 	castBtn.halo:SetPoint("CENTER", castBtn, "CENTER", 0, 0)
-	castBtn.halo:SetTexture(ns.mediaPath .. "OrcGlow")
+	castBtn.halo:SetTexture(Art.Glow())
 	castBtn.halo:SetVertexColor(1, 0.78, 0.15)
 	castBtn.halo:Hide()
 	castBtn.glow = castBtn:CreateTexture(nil, "OVERLAY")
 	castBtn.glow:SetAllPoints(castBtn.icon)
-	castBtn.glow:SetTexture(MOOD_TEXTURES.grumpy)
+	castBtn.glow:SetTexture(Art.Texture("grumpy"))
 	castBtn.glow:SetBlendMode("ADD")
 	castBtn.glow:Hide()
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
@@ -169,9 +165,9 @@ local function buildCastButton()
 			if not InCombatLockdown() then ns.Options.Toggle() end
 			return
 		end
-		if self.pendingWho and self.pendingKey then Tracker.Actions.MarkCast(self.pendingWho, self.pendingKey) end
+		-- The cast is marked when it succeeds, so presses lost to the global
+		-- cooldown don't skip ahead to the next target.
 		self.clickedAt = GetTime()
-		C_Timer.After(0.2, Tracker.Refresh)
 	end)
 	castBtn:RegisterForDrag("LeftButton")
 	castBtn:SetScript("OnDragStart", function(self)
@@ -230,7 +226,7 @@ local function build()
 	frame.tag = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmallOutline")
 	frame.tag:Hide()
 
-	-- The orc's demand on your turn, above the face.
+	-- The mascot's demand on your turn, above the face.
 	frame.gief = frame:CreateFontString(nil, "OVERLAY",
 		_G.GameFontNormalLargeOutline and "GameFontNormalLargeOutline" or "GameFontNormalLarge")
 	frame.gief:SetPoint("BOTTOM", castBtn, "TOP", 0, 3)
@@ -284,6 +280,7 @@ local function showRole(s, face)
 	local turn = n ~= nil
 	castBtn.icon:SetAlpha(1)
 	castBtn.glow:SetTexture(face)
+	castBtn.halo:SetTexture(Art.Glow())
 	castBtn.glow:SetShown(turn)
 	castBtn.halo:SetShown(turn)
 	castBtn.halo:SetSize(MAIN / GLOW_SCALE, MAIN / GLOW_SCALE)
@@ -300,7 +297,7 @@ local function applySecure(s)
 	local n = s.next or {}
 	castBtn:SetAttribute("spell", n.spell)
 	castBtn:SetAttribute("unit", n.unit)
-	castBtn.pendingWho, castBtn.pendingKey = n.who, n.key
+	castBtn.pending = s.next
 	cancelBtn:SetAttribute("spell", s.cancel)
 	cancelBtn:SetShown(s.cancel ~= nil)
 end
@@ -314,20 +311,34 @@ local function armForCombat()
 	castBtn:SetAttribute("*type1", nil)
 	castBtn:SetAttribute("spell", n.spell)
 	castBtn:SetAttribute("unit", n.unit)
-	castBtn.pendingWho, castBtn.pendingKey = n.who, n.key
+	castBtn.pending = n
 end
 
--- My own casts keep combat self buffs current while the client hides auras.
--- A hidden spell ID counts as the button's buff right after a click.
-local function selfCast(spellID)
-	local now = GetTime()
+-- One of my casts succeeded. The button's cast (its spell right after a click;
+-- a hidden spell ID counts) covers its recipients at once, and combat self buffs
+-- stay current while the client hides auras. Then move on to the next cast.
+local function onCast(spellID)
+	local now, n = GetTime(), castBtn.pending
+	local hidden = issecretvalue and issecretvalue(spellID)
+	local fromButton = n and now - (castBtn.clickedAt or 0) < 1 and (hidden or spellID == n.spellID)
+	if fromButton then Tracker.Actions.MarkCast(n) end
 	local key = Tracker.Scan.SelfBuffKey(spellID)
-	if not key and issecretvalue and issecretvalue(spellID) and now - (castBtn.clickedAt or 0) < 1 then
-		key = castBtn.pendingKey and Buffs.byKey[castBtn.pendingKey].combat and castBtn.pendingKey
-	end
-	if not key then return end
-	Tracker.Scan.SelfCast(key, now)
-	Tracker.Refresh()
+	if not key and fromButton and hidden and Buffs.byKey[n.key].combat then key = n.key end
+	if key then Tracker.Scan.SelfCast(key, now) end
+	if fromButton or key then Tracker.Refresh() end
+end
+
+-- Coalesce bursts of aura changes into one refresh shortly after.
+local refreshQueued = false
+function Tracker.RequestRefresh()
+	if refreshQueued then return end
+	refreshQueued = true
+	C_Timer.After(0.2, function() refreshQueued = false; Tracker.Refresh() end)
+end
+
+local function groupUnit(unit)
+	if type(unit) ~= "string" then return false end
+	return unit == "player" or unit:match("^party%d+$") ~= nil or unit:match("^raid%d+$") ~= nil
 end
 
 -- The full summary: the observed group, my next cast, and what to cancel on me.
@@ -336,7 +347,7 @@ function Tracker.Compute()
 	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
 	local s = Tracker.Scan.Update(now, warnSec)
 	local combat = InCombatLockdown()
-	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura(), combat)
+	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura(), combat, ns.db.helpOthers)
 	-- In combat the button casts only what it was armed with as combat began.
 	if combat and s.next and s.next.spell ~= castBtn:GetAttribute("spell") then s.next = nil end
 	s.cancel = Tracker.Scan.UnwantedOnMe()
@@ -354,7 +365,7 @@ function Tracker.Refresh()
 	local s = Tracker.Compute()
 	lastSummary = s
 	local mood = Status.Mood(s)
-	local face = MOOD_TEXTURES[mood] or MOOD_TEXTURES.grumpy
+	local face = Art.Texture(mood)
 	castBtn.icon:SetTexture(face)
 	castBtn.icon:SetDesaturated(mood == "idle")
 	showRole(s, face)
@@ -381,9 +392,16 @@ function Tracker.Init()
 	frame:RegisterEvent("UI_SCALE_CHANGED")
 	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+	frame:RegisterEvent("UNIT_AURA")
 	frame:SetScript("OnEvent", function(_, event, unit, _, spellID)
 		if event == "UNIT_SPELLCAST_SUCCEEDED" then
-			if unit == "player" then selfCast(spellID) end
+			if unit == "player" then onCast(spellID) end
+			return
+		end
+		-- React when someone gains or loses a buff, e.g. another caster served
+		-- my group. Combat hides the auras, so the ticker covers it then.
+		if event == "UNIT_AURA" then
+			if not InCombatLockdown() and groupUnit(unit) then Tracker.RequestRefresh() end
 			return
 		end
 		Tracker.Refresh()

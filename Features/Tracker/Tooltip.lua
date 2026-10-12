@@ -17,6 +17,9 @@ local function label(key) return Buffs.byKey[key].label end
 local function addTurn(s)
 	if s and s.next then
 		GameTooltip:AddLine(("Your turn! Click to cast %s on %s."):format(s.next.spell, s.next.label), BLUE[1], BLUE[2], BLUE[3], true)
+		if s.next.helping then
+			GameTooltip:AddLine("Covering for " .. ns.Roster.Name(s.next.helping) .. ".", BLUE[1], BLUE[2], BLUE[3], true)
+		end
 	else
 		GameTooltip:AddLine("Nothing for you to cast right now.", unpack(GREY))
 	end

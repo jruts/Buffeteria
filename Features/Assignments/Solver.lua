@@ -247,18 +247,45 @@ local function solveAuras(roster, paladins, out)
 	out.auras = p2a
 end
 
--- Each class splits the groups that want its buff between its casters.
+-- Each class splits the groups that want its buff between its casters, by work:
+-- one cast per group with the group version, one per member without it. Biggest
+-- groups go first, each to the caster who would finish with the least work; ties
+-- go to a caster in that group (in range), then by name.
+local function splitGroups(roster, buff, casters, wanting)
+	local groups, load, assign = sortedKeys(wanting), {}, {}
+	table.sort(groups, function(a, b)
+		if wanting[a] ~= wanting[b] then return wanting[a] > wanting[b] end
+		return a < b
+	end)
+	for _, c in ipairs(casters) do load[c] = 0 end
+	for _, g in ipairs(groups) do
+		local best, bestLoad, bestHome
+		for _, c in ipairs(casters) do
+			local m = roster.members[c]
+			local total = load[c] + (can(m, "g" .. buff.key) and 1 or wanting[g])
+			local home = (m.group or 1) == g
+			if not best or total < bestLoad or (total == bestLoad and home and not bestHome) then
+				best, bestLoad, bestHome = c, total, home
+			end
+		end
+		assign[g], load[best] = best, bestLoad
+	end
+	return assign
+end
+
 local function solveGroupBuffs(roster, names, out)
 	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
-		local casters, groupsWanting = {}, {}
+		local casters, wanting = {}, {}
 		for _, n in ipairs(names) do
 			local m = roster.members[n]
 			if m.class == buff.class and canAny(m, buff.key) then casters[#casters + 1] = n end
-			if (m.wants or EMPTY)[buff.key] then groupsWanting[m.group or 1] = true end
+			if (m.wants or EMPTY)[buff.key] then
+				local g = m.group or 1
+				wanting[g] = (wanting[g] or 0) + 1
+			end
 		end
 		if #casters > 0 then
-			local assign = {}
-			for i, g in ipairs(sortedKeys(groupsWanting)) do assign[g] = casters[((i - 1) % #casters) + 1] end
+			local assign = splitGroups(roster, buff, casters, wanting)
 			out.groups[buff.key] = assign
 			for _, n in ipairs(names) do
 				local m = roster.members[n]

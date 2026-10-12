@@ -5,6 +5,7 @@ manual-changelog:
   markup-type: markdown
 
 ignore:
+  - Artwork
   - tools
   - AGENTS.md
   - CLAUDE.md

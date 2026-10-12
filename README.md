@@ -19,7 +19,11 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   (buffs wanted while tanking: Righteous Fury for paladins and Thorns from a druid).
 - **Smart assignments.** With one paladin you get your #1 blessing, with two your #1 and
   #2, and so on. Greater Blessings cover a whole class, so each class gets what most of
-  its players ranked highest. Priests, druids and mages split the raid groups.
+  its players ranked highest. Priests, druids and mages split the raid groups by
+  work: a group is one cast for someone with the group spell (Prayer, Gift, Arcane
+  Brilliance) but one cast per player without it, so the work evens out. On a tie, a
+  caster keeps their own group, where they are in range. Everyone should update
+  together: copies that split groups differently disagree on who buffs which group.
 - **No Salvation on the tank.** Drag a blessing below the line and you'll get a
   different personal blessing from that paladin instead.
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
@@ -51,7 +55,7 @@ Buffeteria aren't tracked for it.
 
 Battle Shout and Inner Fire are also tracked **during combat**. When combat starts,
 the head is set to cast your shout or Inner Fire, so if it runs low or falls off
-mid-fight the orc demands it and a click recasts it. Other buffs wait until combat
+mid-fight the head demands it and a click recasts it. Other buffs wait until combat
 ends (the game doesn't let add-ons change the button's target during combat).
 The client hides buffs during combat, so the tracker dates them from the last
 reading before the pull and from your own recasts. A buff you lose early
@@ -125,12 +129,23 @@ format changed for this feature.
 Every class has a **Settings** tab in `/buff` and the game's Buffeteria AddOns page.
 Its controls are grouped into four cards: **Tracker**, **Size**, **Show icons**, and
 **Layout**, with a border-color legend underneath.
-It holds **Show tracker**, **Lock tracker**, **Minimap button**, and **Preview**, plus
+It holds **Show tracker**, **Lock tracker**, **Minimap button**, **Preview**, and
+**Cover for others** (see below), plus
 the clickable head's size (32–128 pixels; changes apply after combat), a separate
 **Small icon size** slider (16–64 pixels, default: 21; applies immediately), a
 **Shout-out text** slider for the GIEF call-out (10–24 pixels, default: 16), and
 the expiring-buff threshold (1–15 minutes). Changing the small icon size updates
 the rows' spacing and alignment without resizing the face.
+
+Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, or Undead** using the portrait menu in the
+**Tracker** card. Orc remains the default. Each head has happy, grumpy, and
+furious artwork with green, orange, and red status colors, plus its own matching
+cast glow. All portraits are floating heads without necks or shoulders. Their
+natural skin, fur, and bone colors stay consistent across moods, with subtle
+green, amber, or red lighting. The gnome has rounded ears and fair skin; the
+Undead is a gaunt, skeletal Forsaken. The choice
+is saved per character and changes immediately, including during combat;
+the next spell and target are unchanged. Use **Preview** to see the expressions.
 
 Choose which small buff icons appear: **Always show all**, **Missing only**,
 **Missing or expiring** (the default), or **Expiring only**. A buff counts as
@@ -157,24 +172,35 @@ dragging, including in Edit Mode. Top leaves room for the GIEF call-out, the
 preview tag and Edit Mode label.
 Existing tracker visibility and display choices are preserved.
 
-- **Orc head:** release a click to cast your next buff on the right target. The
-  transparent mascot is green and smiling when everyone has their tracked buffs,
-  orange and grumpy when some are missing or running low, and red and furious
-  when all tracked buffs are missing across the group. With nothing to track,
-  he is grey and grumpy.
+- **Character head:** release a click to cast your next buff on the right target.
+  The transparent mascot smiles with green highlights when everyone has their
+  tracked buffs, turns grumpy with orange highlights when some are missing or
+  running low, and furious with red highlights when all tracked buffs are missing
+  across the group. With nothing to track, the head is grey and grumpy.
   Players whose buffs can't be read (usually because they are out of range) don't
-  change his mood; hovering lists them as out of range, and they count again once
-  they are back in range. If nobody's buffs can be read, he is grey.
-  His invisible click area is rectangular.
-- **Is it my turn?** His mood is the whole group's, so he also shows what *you* should
-  do. When you have something to cast, a gold glow breathes around him
-  (flaring up whenever the next spell changes) and he demands it above his head,
+  change the mood; hovering lists them as out of range, and they count again once
+  they are back in range. If nobody's buffs can be read, the head is grey.
+  Its invisible click area is rectangular.
+- **Is it my turn?** The mood is the whole group's, so the head also shows what *you* should
+  do. When you have something to cast, a gold glow breathes around it
+  (flaring up whenever the next spell changes) and it demands the buff above the face,
   for example **GIEF Fortitude!** Hover to see the spell and target. When
-  there's nothing for you to cast, he has no glow and clicking does nothing; hover
+  there's nothing for you to cast, there is no glow and clicking does nothing; hover
   to see which buffs you're missing and who is supposed to cast them. The glow and
   GIEF only appear when you can make the cast yourself, including on yourself;
   just needing a buff never triggers them. In combat, only Battle Shout and Inner
   Fire are demanded.
+- **Mash away.** A cast counts once it actually goes off, so pressing the button or
+  key binding during the global cooldown never skips a target. A Prayer, Gift, Arcane
+  Brilliance or Greater Blessing counts for everyone it covers, so you aren't sent to
+  recast it on them one by one. The tracker also updates as soon as anyone gains or
+  loses a buff, so when another caster gets there first the button moves on.
+- **Cover for others** (on by default, in Settings): with nothing of your own to
+  cast, you are offered your class's group buffs and Thorns on players whose
+  assigned caster hasn't served them after 30 seconds, or right away when that
+  caster is dead or out of sight. Several helpers take turns 10 seconds apart, so
+  only one steps in. Hover to see who you're covering for. Blessings are never
+  covered: a paladin's new blessing on a player replaces their previous one.
 - **Small icons by the head:** which buffs need attention and how many players are
   affected. Buffs that are someone else's job are dimmed; yours and the ones you're
   missing stay bright. Hover to see who casts each one.
@@ -238,6 +264,12 @@ SHA-256 hashes. It leaves the published `Buffeteria` folder and saved variables
 untouched. The source TOC remains `Buffeteria.toc` for release packaging; deployment
 generates `Buffeteria-Dev.toc` and separate Dev bindings. Lua and artwork are copied
 unchanged. This does not publish a release or update CurseForge.
+
+The new mascot source sheets and their ImageGen prompts are kept under
+`Artwork/Tracker/`. Run `python tools/build_tracker_art.py` with Pillow to rebuild
+all seven heads' runtime portraits and silhouette glows in `Media/`.
+These are uncompressed 256×256 RGBA TGA textures for the game; source artwork
+and build tools are not deployed.
 
 Use `/reload` to load subsequent changes with Dev enabled. If the new Dev folder
 does not appear in the AddOns menu after the first install, restart the client.

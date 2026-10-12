@@ -14,19 +14,19 @@ SIZE = 256
 SCALE = 0.625  # keep in sync with GLOW_SCALE in Features/Tracker/Tracker.lua
 
 
-def silhouette():
+def silhouette(prefix="Orc"):
     alpha = None
     for mood in ("Happy", "Grumpy", "Angry"):
-        a = Image.open(MEDIA / f"Orc{mood}.tga").convert("RGBA").getchannel("A")
+        a = Image.open(MEDIA / f"{prefix}{mood}.tga").convert("RGBA").getchannel("A")
         alpha = a if alpha is None else ImageChops.lighter(alpha, a)
     return alpha
 
 
-def glow():
+def glow(prefix="Orc"):
     inner = int(SIZE * SCALE)
     canvas = Image.new("L", (SIZE, SIZE), 0)
     off = (SIZE - inner) // 2
-    canvas.paste(silhouette().resize((inner, inner), Image.LANCZOS), (off, off))
+    canvas.paste(silhouette(prefix).resize((inner, inner), Image.LANCZOS), (off, off))
     spread = canvas.filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(14))
     # Brighten the falloff so the rim reads clearly against dark scenery.
     spread = spread.point(lambda v: min(255, int(v * 1.6)))

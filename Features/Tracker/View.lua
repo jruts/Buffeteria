@@ -3,7 +3,7 @@ local _, ns = ...
 local View = {}
 ns.Tracker.View = View
 local set = ns.Database.Set
-local panel, cards, toggles, displayButtons, rowButtons, positionButtons, sliders, warnValue
+local panel, cards, toggles, headPicker, headButtons, displayButtons, rowButtons, positionButtons, sliders, warnValue
 local refreshing = false
 local MODES = {
 	{ key = "ALL", label = "Always show all" },
@@ -23,6 +23,9 @@ function View.Refresh()
 	if not panel then return end
 	refreshing = true
 	for _, cb in ipairs(toggles) do cb:SetChecked(cb.get() and true or false) end
+	for _, chip in ipairs(headButtons) do chip:SetChecked(ns.db.headStyle == chip.style) end
+	headPicker.caption:SetText(ns.Tracker.Art.Label())
+	headPicker.portrait:SetTexture(ns.Tracker.Art.Texture("happy"))
 	for _, chip in ipairs(displayButtons) do chip:SetChecked(ns.db.buffDisplay == chip.mode) end
 	for _, chip in ipairs(rowButtons) do chip:SetChecked(ns.db.iconsPerRow == chip.columns) end
 	for _, chip in ipairs(positionButtons) do chip:SetChecked(ns.db.iconPosition == chip.side) end
@@ -91,9 +94,48 @@ local function trackerCard()
 	toggle("Lock tracker", function() return ns.db.locked end, function(v) set("locked", v) end, 10, -62)
 	toggle("Minimap button", function() return not ns.db.minimap.hide end, function(v) ns.Minimap.SetShown(v) end, 150, -36)
 	toggle("Preview (fake raid)", function() return ns.Tracker.Preview.active end, function(v) ns.Tracker.Preview.Set(v) end, 150, -62)
-	local hint = ns.UI.Text(card, "GameFontDisableSmall", 14, -96, nil,
-		"Unlock the tracker to drag it, or move it with Edit Mode.")
-	hint:SetPoint("RIGHT", card, "RIGHT", -14, 0)
+	toggle("Cover for others", function() return ns.db.helpOthers end, function(v) set("helpOthers", v) end, 10, -88)
+	ns.UI.Text(card, "GameFontHighlight", 14, -130, nil, "Head")
+	local menu
+	headPicker = ns.UI.Chip(card, "", 218, function() menu:SetShown(not menu:IsShown()) end, "GameFontNormal")
+	_G[ns.globalPrefix .. "_HeadPicker"] = headPicker
+	headPicker:SetHeight(40); headPicker:SetPoint("TOP", 22, -116)
+	headPicker.portrait = headPicker:CreateTexture(nil, "ARTWORK")
+	headPicker.portrait:SetSize(32, 32); headPicker.portrait:SetPoint("LEFT", 8, 0)
+	headPicker.caption:ClearAllPoints(); headPicker.caption:SetPoint("LEFT", headPicker.portrait, "RIGHT", 8, 0)
+	local arrow = headPicker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	arrow:SetPoint("RIGHT", -12, 0); arrow:SetText("v")
+	menu = CreateFrame("Frame", ns.globalPrefix .. "_HeadMenu", headPicker, "BackdropTemplate")
+	menu:SetSize(218, #ns.Tracker.Art.CHOICES * 24 + 8)
+	menu:SetPoint("TOPLEFT", headPicker, "BOTTOMLEFT", 0, -2)
+	menu:SetFrameStrata("DIALOG"); menu:SetFrameLevel(headPicker:GetFrameLevel() + 10)
+	ns.UI.Backdrop(menu, 12, { 0.04, 0.03, 0.02, 1 }, { 0.55, 0.45, 0.25, 1 })
+	menu:Hide(); headPicker.menu = menu
+	headPicker:SetScript("OnHide", function() menu:Hide() end)
+	tinsert(UISpecialFrames, ns.globalPrefix .. "_HeadMenu")
+	headButtons = {}
+	for i, choice in ipairs(ns.Tracker.Art.CHOICES) do
+		local chip = choiceChip(menu, choice.label, 206, "headStyle", choice.key, "style")
+		chip:SetHeight(22)
+		chip:SetPoint("TOPLEFT", 6, -4 - (i - 1) * 24)
+		chip.portrait = chip:CreateTexture(nil, "ARTWORK")
+		chip.portrait:SetSize(18, 18); chip.portrait:SetPoint("LEFT", 4, 0)
+		chip.caption:ClearAllPoints(); chip.caption:SetPoint("LEFT", chip.portrait, "RIGHT", 3, 0)
+		chip.portrait:SetTexture(ns.Tracker.Art.Texture("happy", choice.key))
+		chip:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:AddLine(choice.label)
+			GameTooltip:AddLine("Choose your tracker head. Preview shows all three expressions.", 1, 1, 1, true)
+			GameTooltip:AddLine("Unlock the tracker to drag it, or move it with Edit Mode.", 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		chip:SetScript("OnLeave", GameTooltip_Hide)
+		chip:SetScript("OnClick", function()
+			set("headStyle", choice.key)
+			menu:Hide(); GameTooltip_Hide()
+		end)
+		headButtons[#headButtons + 1] = chip
+	end
 	return card
 end
 
