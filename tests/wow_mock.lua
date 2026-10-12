@@ -10,7 +10,7 @@ local function widget(kind, name, parent, template)
 	return w
 end
 for _, method in ipairs({ "ClearAllPoints", "SetMovable", "EnableMouse", "RegisterForDrag",
-	"SetFrameStrata", "SetAllPoints", "SetTexCoord", "SetTexture", "SetDesaturated", "SetColorTexture", "SetJustifyH",
+	"SetFrameStrata", "SetAllPoints", "SetTexture", "SetDesaturated", "SetColorTexture", "SetJustifyH",
 	"SetJustifyV", "RegisterForClicks", "RegisterEvent", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen",
 	"SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "SetHighlightTexture", "SetPushedTexture",
 	"SetWordWrap", "SetNormalTexture", "SetVertexColor", "SetOwner", "AddLine", "AddDoubleLine",
@@ -19,6 +19,7 @@ for _, method in ipairs({ "ClearAllPoints", "SetMovable", "EnableMouse", "Regist
 function W:SetSize(width, height) self.width, self.height = width, height end
 function W:SetWidth(width) self.width = width end
 function W:SetHeight(height) self.height = height end
+function W:SetTexCoord(...) self.texCoord = {...} end
 function W:GetWidth() return self.width or 140 end
 function W:GetHeight() return self.height or 140 end
 function W:SetPoint(...) self.point = {...} end

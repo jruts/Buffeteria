@@ -198,7 +198,11 @@ Existing tracker visibility and display choices are preserved.
 - **Mash away.** A cast counts once it actually goes off, so pressing the button or
   key binding during the global cooldown never skips a target. Presses during the
   cooldown are simply held, so they don't flood you with "Spell is not ready yet"
-  (in combat the press still goes through, with that error muted). A Prayer, Gift, Arcane
+  (in combat the press still goes through, with that error muted). While the
+  cooldown runs, a shadow drains off the face from the top down, like an action
+  button's cooldown sweep, even after your last buff. Pressing the head only dims
+  it, and hovering it only shows the spell-cast cursor, when the press will
+  actually cast something. A Prayer, Gift, Arcane
   Brilliance or Greater Blessing counts for everyone it covers, so you aren't sent to
   recast it on them one by one. The tracker also updates as soon as anyone gains or
   loses a buff, so when another caster gets there first the button moves on.

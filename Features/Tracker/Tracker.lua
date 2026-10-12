@@ -5,7 +5,7 @@ local Tracker = ns.Tracker
 local Status, Layout, Tooltip = Tracker.Status, Tracker.Layout, Tracker.Tooltip
 local Art = Tracker.Art
 
-local frame, castBtn, cancelBtn, lastSummary, pulse
+local frame, castBtn, cancelBtn, lastSummary, pulse, shadeTicker, cursorTicker
 local statusIcons = {}
 local MAIN = 64                                  -- current clickable head size
 local GAP = Layout.GAP
@@ -29,6 +29,50 @@ local DISPLAY = {
 }
 
 local function editing() return Tracker.EditMode.active end
+
+-- The cooldown holding up the head's cast, as start time and duration (0, 0 when
+-- ready). With nothing left to cast, the last cast's cooldown still runs out on
+-- the face. Hidden cooldowns in combat fall back to the time since my last cast.
+local function cooldown()
+	local n = castBtn.pending or castBtn.lastCast
+	if not n then return 0, 0 end
+	local start, duration = ns.WoW.SpellCooldown(n.spellID or n.spell)
+	if start then return start, duration end
+	if InCombatLockdown() then return lastCastAt, GCD end
+	return 0, 0
+end
+
+-- Over the head, show the spell-cast cursor while a press would cast something.
+-- Reapplied every frame while hovered, like Blizzard's item buttons do. Only
+-- reset the cursor this set, never one another frame asked for.
+local function updateCursor()
+	local want = castBtn.hovered and not castBtn.inert and not castBtn.dragging
+	cursorTicker:SetShown(castBtn.hovered or false)
+	if want and SetCursor then
+		SetCursor("CAST_CURSOR")
+		castBtn.cursorSet = true
+	elseif not want and castBtn.cursorSet then
+		castBtn.cursorSet = nil
+		if ResetCursor then ResetCursor() end
+	end
+end
+
+-- While the cooldown runs, a shadow drains off the face from the top down, the
+-- way action buttons sweep theirs. Pressing the head gives no feedback then, nor
+-- when there's nothing to cast.
+local function updateShade()
+	local start, duration = cooldown()
+	local left = duration > 0 and start + duration - GetTime() or 0
+	castBtn.inert = (left > 0 or not castBtn.pending) or nil
+	updateCursor()
+	shadeTicker:SetShown(left > 0)
+	castBtn.shade:SetShown(left > 0)
+	if left <= 0 then return end
+	local covered = math.min(1, left / duration)
+	castBtn.shade:SetHeight(castBtn:GetHeight() * covered)
+	castBtn.shade:SetTexCoord(0, 1, 1 - covered, 1)
+	castBtn.icon:SetVertexColor(1, 1, 1)
+end
 
 -- Room above the face for the GIEF call-out, the DEV/preview tag and Edit Mode's label.
 local function topGap()
@@ -154,21 +198,37 @@ local function buildCastButton()
 	castBtn.halo:SetPoint("CENTER", castBtn, "CENTER", 0, 0)
 	castBtn.halo:SetTexture(Art.Glow())
 	castBtn.halo:Hide()
+	-- Same silhouette as the face, cropped to the part still on cooldown.
+	castBtn.shade = castBtn:CreateTexture(nil, "ARTWORK", nil, 1)
+	castBtn.shade:SetPoint("BOTTOMLEFT")
+	castBtn.shade:SetPoint("BOTTOMRIGHT")
+	castBtn.shade:SetVertexColor(0, 0, 0)
+	castBtn.shade:SetAlpha(0.65)
+	castBtn.shade:Hide()
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
 	ns.UI.PressFeedback(castBtn, castBtn.icon, function(self)
 		if not InCombatLockdown() then self:SetAttribute("*type1", nil) end
 	end)
-	castBtn:SetScript("OnEnter", function(self) Tooltip.Head(self, lastSummary) end)
+	castBtn:SetScript("OnEnter", function(self)
+		-- After the tooltip: showing it resets the cursor.
+		Tooltip.Head(self, lastSummary)
+		self.hovered = true
+		updateCursor()
+	end)
+	local leave = castBtn:GetScript("OnLeave")
+	castBtn:SetScript("OnLeave", function(self)
+		self.hovered = nil
+		updateCursor()
+		leave(self)
+	end)
 	-- Hold presses during the global cooldown instead of letting the client
 	-- answer each one with "Spell is not ready yet". Combat locks the attributes,
 	-- so there the press goes through with its error muted.
 	castBtn:SetScript("PreClick", function(self, button, down)
 		self.held = nil
-		local n = self.pending
-		if button ~= "LeftButton" or down or self.dragged or not n then return end
-		local left = ns.WoW.SpellCooldownLeft(n.spellID or n.spell)
-		if left == nil then left = InCombatLockdown() and lastCastAt + GCD - GetTime() or 0 end
-		if left <= 0 then return end
+		if button ~= "LeftButton" or down or self.dragged or not self.pending then return end
+		local start, duration = cooldown()
+		if duration == 0 or start + duration <= GetTime() then return end
 		if not InCombatLockdown() then
 			self:SetAttribute("*type1", "")
 			self.held = "masked"
@@ -198,6 +258,7 @@ local function buildCastButton()
 	castBtn:SetScript("OnDragStart", function(self)
 		if ns.db.locked or InCombatLockdown() then return end
 		self.dragged, self.dragging = true, true
+		updateCursor()
 		-- Mask the secure action too: PostClick alone cannot prevent a cast.
 		self:SetAttribute("*type1", "")
 		self.icon:SetVertexColor(1, 1, 1)
@@ -207,6 +268,7 @@ local function buildCastButton()
 	castBtn:SetScript("OnDragStop", function(self)
 		if not self.dragging then return end
 		self.dragging = false
+		updateCursor()
 		Tracker.StopMoving()
 		self.icon:SetVertexColor(1, 1, 1)
 		-- Keep the release suppressed through this input event. Restore on the
@@ -271,6 +333,12 @@ local function build()
 		castBtn.halo:SetSize(aura, aura)
 	end)
 	pulse:Hide()
+	shadeTicker = CreateFrame("Frame", nil, frame)
+	shadeTicker:SetScript("OnUpdate", updateShade)
+	shadeTicker:Hide()
+	cursorTicker = CreateFrame("Frame", nil, frame)
+	cursorTicker:SetScript("OnUpdate", updateCursor)
+	cursorTicker:Hide()
 	frame:Hide()
 end
 
@@ -315,13 +383,15 @@ local function showRole(s, mood)
 	showShout(turn, n)
 end
 
--- Secure attributes can only change out of combat.
+-- Secure attributes can only change out of combat. The target goes in the
+-- left-click "*unit1", never plain "unit": that would make the client treat the
+-- head as a unit frame, setting mouseover and fighting the cast cursor.
 local function applySecure(s)
 	if InCombatLockdown() then return end
 	castBtn:SetAttribute("*type1", castBtn.dragged and "" or nil)
 	local n = s.next or {}
 	castBtn:SetAttribute("spell", n.spell)
-	castBtn:SetAttribute("unit", n.unit)
+	castBtn:SetAttribute("*unit1", n.unit)
 	castBtn.pending = s.next
 	cancelBtn:SetAttribute("spell", s.cancel)
 	cancelBtn:SetShown(s.cancel ~= nil)
@@ -335,8 +405,9 @@ local function armForCombat()
 	if not n then return end
 	castBtn:SetAttribute("*type1", nil)
 	castBtn:SetAttribute("spell", n.spell)
-	castBtn:SetAttribute("unit", n.unit)
+	castBtn:SetAttribute("*unit1", n.unit)
 	castBtn.pending = n
+	updateShade()
 end
 
 -- One of my casts succeeded. The button's cast (its spell right after a click;
@@ -347,11 +418,15 @@ local function onCast(spellID)
 	lastCastAt = now
 	local hidden = issecretvalue and issecretvalue(spellID)
 	local fromButton = n and now - (castBtn.clickedAt or 0) < 1 and (hidden or spellID == n.spellID)
-	if fromButton then Tracker.Actions.MarkCast(n) end
+	if fromButton then
+		Tracker.Actions.MarkCast(n)
+		castBtn.lastCast = n
+	end
 	local key = Tracker.Scan.SelfBuffKey(spellID)
 	if not key and fromButton and hidden and Buffs.byKey[n.key].combat then key = n.key end
 	if key then Tracker.Scan.SelfCast(key, now) end
 	if fromButton or key then Tracker.Refresh() end
+	updateShade()
 end
 
 -- Coalesce bursts of aura changes into one refresh shortly after.
@@ -393,11 +468,13 @@ function Tracker.Refresh()
 	local mood = Status.Mood(s)
 	local face = Art.Texture(mood)
 	castBtn.icon:SetTexture(face)
+	castBtn.shade:SetTexture(face)
 	castBtn.icon:SetDesaturated(mood == "idle")
 	showRole(s, mood)
 	layoutStatusIcons(s)
 	-- In preview the button never casts anything.
 	applySecure(preview and {} or s)
+	updateShade()
 	ns.Events.Emit("SummaryChanged")
 end
 
@@ -419,11 +496,13 @@ function Tracker.Init()
 	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 	frame:RegisterEvent("UNIT_AURA")
+	frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 	frame:SetScript("OnEvent", function(_, event, unit, _, spellID)
 		if event == "UNIT_SPELLCAST_SUCCEEDED" then
 			if unit == "player" then onCast(spellID) end
 			return
 		end
+		if event == "SPELL_UPDATE_COOLDOWN" then updateShade(); return end
 		-- React when someone gains or loses a buff, e.g. another caster served
 		-- my group. Combat hides the auras, so the ticker covers it then.
 		if event == "UNIT_AURA" then

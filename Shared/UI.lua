@@ -308,12 +308,13 @@ function UI.Tree(parent)
 	return tree
 end
 
--- Dim `icon` while the button is pressed. `button.dragged` resets on every
--- press so release handlers can ignore the click that ends a drag.
+-- Dim `icon` while the button is pressed, unless `button.inert` says the press
+-- does nothing. `button.dragged` resets on every press so release handlers can
+-- ignore the click that ends a drag.
 function UI.PressFeedback(button, icon, onDown)
 	button:SetScript("OnMouseDown", function(self)
 		self.dragged = false
-		if icon then icon:SetVertexColor(0.75, 0.75, 0.75) end
+		if icon and not self.inert then icon:SetVertexColor(0.75, 0.75, 0.75) end
 		if onDown then onDown(self) end
 	end)
 	if not icon then return end

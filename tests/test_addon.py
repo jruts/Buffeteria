@@ -200,10 +200,10 @@ class AddonTests(unittest.TestCase):
                 ns.db.iconSize = size; ns.Tracker.Refresh()
                 for _, side in ipairs({'LEFT', 'TOP', 'RIGHT', 'BOTTOM'}) do check(side, 3, 10) end
             end
-            local spell, unit = head:GetAttribute('spell'), head:GetAttribute('unit')
+            local spell, unit = head:GetAttribute('spell'), head:GetAttribute('*unit1')
             COMBAT = true
             check('RIGHT', 4, 10)
-            assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+            assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
             COMBAT = false
             head:GetScript('OnDragStart')(head)
             assert(frame.moving)
@@ -285,11 +285,11 @@ class AddonTests(unittest.TestCase):
             headScale = 0.5
             check(3740, 12, 'TOP', 2)
             headScale = 1
-            local spell, unit = head:GetAttribute('spell'), head:GetAttribute('unit')
+            local spell, unit = head:GetAttribute('spell'), head:GetAttribute('*unit1')
             COMBAT = true
             ns.db.statusIconSize = 64
             check(1850, 12, 'TOP', 2)
-            assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+            assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
             COMBAT = false
             head:GetScript('OnDragStart')(head)
             check(800, 500, 'BOTTOM', 2, true)
@@ -410,7 +410,7 @@ class AddonTests(unittest.TestCase):
                     assert(ns.db.iconSize == 96 and Buffeteria_CastButton:GetWidth() == 96)
                     local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
                     local point, width, height = frame.point, frame:GetWidth(), frame:GetHeight()
-                    local spell, unit = head:GetAttribute('spell'), head:GetAttribute('unit')
+                    local spell, unit = head:GetAttribute('spell'), head:GetAttribute('*unit1')
                     -- Both settings hosts use the same control, including immediate resizing in combat.
                     COMBAT = true
                     for _, size in ipairs({16, 32, 64, 21}) do
@@ -425,7 +425,7 @@ class AddonTests(unittest.TestCase):
                         end
                         assert(visible > 0)
                         assert(frame.point == point and frame:GetWidth() == width and frame:GetHeight() == height)
-                        assert(head:GetWidth() == 96 and head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+                        assert(head:GetWidth() == 96 and head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
                     end
                     COMBAT = false
                     settingsPage:GetScript('OnShow')(settingsPage)
@@ -473,7 +473,7 @@ class AddonTests(unittest.TestCase):
                     assert(not next(found))
                     assert(frame:GetHeight() == height and frame:GetWidth() == width)
                     assert(frame.point[1] == anchor and frame.point[4] == 37 and frame.point[5] == -81)
-                    assert(head:GetAttribute('spell') == action.spell and head:GetAttribute('unit') == action.unit)
+                    assert(head:GetAttribute('spell') == action.spell and head:GetAttribute('*unit1') == action.unit)
                 end
             end
             s.perKey = {}; ns.Tracker.Refresh()
@@ -648,7 +648,7 @@ class AddonTests(unittest.TestCase):
                     end
                     assert(#ns.Tracker.Art.CHOICES == 8 and picker:IsVisible() and not picker.menu:IsShown())
                     assert(picker.caption:GetText() == 'Orc')
-                    local spell, unit, point = head:GetAttribute('spell'), head:GetAttribute('unit'), frame.point
+                    local spell, unit, point = head:GetAttribute('spell'), head:GetAttribute('*unit1'), frame.point
                     COMBAT = true
                     for _, choice in ipairs(ns.Tracker.Art.CHOICES) do
                         picker:GetScript('OnClick')(picker)
@@ -664,7 +664,7 @@ class AddonTests(unittest.TestCase):
                         end
                         assert(head.icon.texture == ns.Tracker.Art.Texture(ns.Tracker.Status.Mood(ns.Tracker.Summary())))
                         assert(not head.glow and head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
-                        assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == unit)
+                        assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
                         assert(frame.point == point and head:GetWidth() == 64)
                     end
                     COMBAT = false
@@ -688,7 +688,7 @@ class AddonTests(unittest.TestCase):
                             assert(head.icon.texture == ns.mediaPath .. choice.prefix .. suffix)
                             assert(not head.glow)
                             assert(head.halo.texture == ns.mediaPath .. choice.prefix .. 'Glow')
-                            assert(not head.icon.desaturated and not head:GetAttribute('spell') and not head:GetAttribute('unit'))
+                            assert(not head.icon.desaturated and not head:GetAttribute('spell') and not head:GetAttribute('*unit1'))
                         end
                     end
                     COMBAT = false
@@ -787,7 +787,7 @@ class AddonTests(unittest.TestCase):
                     'Interface\\\\AddOns\\\\Buffeteria\\\\Media\\\\Orc' .. suffix)
                 assert(not Buffeteria_CastButton.icon.desaturated)
                 assert(not Buffeteria_CastButton:GetAttribute('spell'))
-                assert(not Buffeteria_CastButton:GetAttribute('unit'))
+                assert(not Buffeteria_CastButton:GetAttribute('*unit1'))
             end
             COMBAT = true
             WOW_TIME = 120
@@ -861,15 +861,15 @@ class AddonTests(unittest.TestCase):
             assert(Buffeteria_CastButton:GetAttribute('macrotext2') == '')
             ns.Tracker.Preview.Set(true)
             assert(not Buffeteria_CastButton:GetAttribute('spell'))
-            assert(not Buffeteria_CastButton:GetAttribute('unit'))
+            assert(not Buffeteria_CastButton:GetAttribute('*unit1'))
             assert(not Buffeteria_CancelButton:GetAttribute('spell'))
             assert(not Buffeteria_CancelButton:IsShown())
             ns.Tracker.Preview.Set(false)
-            local spell, unit = Buffeteria_CastButton:GetAttribute('spell'), Buffeteria_CastButton:GetAttribute('unit')
+            local spell, unit = Buffeteria_CastButton:GetAttribute('spell'), Buffeteria_CastButton:GetAttribute('*unit1')
             COMBAT = true
             ns.Tracker.Refresh()
             assert(Buffeteria_CastButton:GetAttribute('spell') == spell)
-            assert(Buffeteria_CastButton:GetAttribute('unit') == unit)
+            assert(Buffeteria_CastButton:GetAttribute('*unit1') == unit)
             COMBAT = false
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
             local pending = ns.Tracker.Summary().next
@@ -1021,6 +1021,17 @@ class AddonTests(unittest.TestCase):
             t, e = press()
             assert(t == '' and e and not button.clickedAt)
             assert(not button:GetAttribute('*type1'))
+            -- The shadow covers the part still to wait, draining from the top.
+            frame:GetScript('OnEvent')(frame, 'SPELL_UPDATE_COOLDOWN')
+            local shade = button.shade
+            assert(shade:IsShown() and shade.texture == button.icon.texture)
+            assert(math.abs(shade.height - button:GetHeight() * 2 / 3) < 1e-6)
+            assert(math.abs(shade.texCoord[3] - 1 / 3) < 1e-6 and shade.texCoord[4] == 1)
+            -- Pressing the head doesn't look like a press.
+            button.icon.vertexColor = { 1, 1, 1 }
+            button:GetScript('OnMouseDown')(button)
+            assert(button.icon.vertexColor[1] == 1)
+            button:GetScript('OnMouseUp')(button)
             -- Right-click still opens options while the cooldown runs.
             local toggles = 0
             ns.Options.Toggle = function() toggles = toggles + 1 end
@@ -1028,6 +1039,11 @@ class AddonTests(unittest.TestCase):
             assert(t == nil and toggles == 1)
             -- Once it ends, presses cast again.
             WOW_TIME = WOW_TIME + 1
+            frame:GetScript('OnEvent')(frame, 'SPELL_UPDATE_COOLDOWN')
+            assert(not shade:IsShown() and not button.inert)
+            button:GetScript('OnMouseDown')(button)
+            assert(button.icon.vertexColor[1] < 1)
+            button:GetScript('OnMouseUp')(button)
             t = press()
             assert(t == nil and button.clickedAt == WOW_TIME)
             -- In combat attributes are locked: the press goes through quietly.
@@ -1038,12 +1054,79 @@ class AddonTests(unittest.TestCase):
             -- Hidden cooldowns fall back to the time since my last cast.
             C_Spell.GetSpellCooldown = nil
             frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 1)
+            assert(shade:IsShown() and button.inert)
             t, e = press()
             assert(not e and errorsOn)
             WOW_TIME = WOW_TIME + 2
             t, e = press()
             assert(e)
             COMBAT = false
+            -- After the last buff the cooldown still runs out on the face, and
+            -- with nothing to cast the head never looks pressed.
+            C_Spell.GetSpellCooldown = function() return cd end
+            cd = { startTime = WOW_TIME, duration = 1.5 }
+            button.lastCast, button.pending = button.pending, nil
+            frame:GetScript('OnEvent')(frame, 'SPELL_UPDATE_COOLDOWN')
+            assert(shade:IsShown())
+            WOW_TIME = WOW_TIME + 2
+            frame:GetScript('OnEvent')(frame, 'SPELL_UPDATE_COOLDOWN')
+            assert(not shade:IsShown() and button.inert)
+            button:GetScript('OnMouseDown')(button)
+            assert(button.icon.vertexColor[1] == 1)
+            t = press()
+            assert(t == nil and not button.held)
+        """)
+
+    def test_tracker_shows_cast_cursor_only_when_clickable(self):
+        lua = full_addon()
+        lua.execute("""
+            local button, frame = Buffeteria_CastButton, Buffeteria_Tracker
+            local cursor
+            local CAST = 'CAST_CURSOR'
+            SetCursor = function(c) cursor = c end
+            ResetCursor = function() cursor = nil end
+            local cd = { startTime = 0, duration = 0 }
+            C_Spell.GetSpellCooldown = function() return cd end
+            assert(button.pending and button:GetAttribute('*unit1'))
+            -- No plain unit attribute: the client would treat the head as a unit
+            -- frame and take over the cursor for that mouseover unit.
+            assert(button:GetAttribute('unit') == nil)
+            -- Set after the tooltip, whose showing resets the cursor.
+            local show = GameTooltip.Show
+            GameTooltip.Show = function(...) ResetCursor(); return show(...) end
+            button:GetScript('OnEnter')(button)
+            GameTooltip.Show = show
+            assert(cursor == CAST)
+            -- The client taking the cursor back doesn't stick while hovered.
+            ResetCursor()
+            for _, w in ipairs(widgets) do
+                local tick = w.parent == frame and w:IsShown() and w:GetScript('OnUpdate')
+                if tick then tick(w) end
+            end
+            assert(cursor == CAST)
+            -- The global cooldown makes the head inert: back to the normal cursor.
+            cd = { startTime = WOW_TIME, duration = 1.5 }
+            frame:GetScript('OnEvent')(frame, 'SPELL_UPDATE_COOLDOWN')
+            assert(cursor == nil)
+            WOW_TIME = WOW_TIME + 2
+            frame:GetScript('OnEvent')(frame, 'SPELL_UPDATE_COOLDOWN')
+            assert(cursor == CAST)
+            -- Dragging and leaving restore it.
+            button:GetScript('OnMouseDown')(button)
+            button:GetScript('OnDragStart')(button)
+            assert(cursor == nil)
+            button:GetScript('OnDragStop')(button)
+            assert(cursor == CAST)
+            button:GetScript('OnLeave')(button)
+            assert(cursor == nil)
+            -- Nothing to cast: no cast cursor, and others' cursors are left alone.
+            button.pending = nil
+            frame:GetScript('OnEvent')(frame, 'SPELL_UPDATE_COOLDOWN')
+            button:GetScript('OnEnter')(button)
+            assert(cursor == nil)
+            cursor = 'UI_MOVE_CURSOR'
+            button:GetScript('OnLeave')(button)
+            assert(cursor == 'UI_MOVE_CURSOR')
         """)
 
     def test_minimap_drag_does_not_click_or_announce(self):
@@ -2083,7 +2166,7 @@ class AddonTests(unittest.TestCase):
             ns.Paladins.Set('A-Realm', 'AURA', 'NONE'); runTimers()
             ns.Tracker.Refresh()
             local button = Buffeteria_CastButton
-            assert(button:GetAttribute('spell') == '25780' and button:GetAttribute('unit') == 'player')
+            assert(button:GetAttribute('spell') == '25780' and button:GetAttribute('*unit1') == 'player')
             assert(ns.Tracker.Summary().perKey.RFURY.bad == 1)
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and i == 1 then return {name='25780', expirationTime=0, sourceUnit='player'} end
@@ -2111,7 +2194,7 @@ class AddonTests(unittest.TestCase):
             ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {}
             ns.Tracker.Refresh()
             local button = Buffeteria_CastButton
-            assert(button:GetAttribute('spell') == '25289' and button:GetAttribute('unit') == 'player')
+            assert(button:GetAttribute('spell') == '25289' and button:GetAttribute('*unit1') == 'player')
             -- 60 seconds left is fine; 20 seconds left warns despite the 5-minute setting.
             local left = 60
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
@@ -2157,7 +2240,7 @@ class AddonTests(unittest.TestCase):
                     ns.Tracker.Refresh()
                     frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
                     COMBAT = true; ns.Tracker.Refresh()
-                    assert(head:GetAttribute('spell') == spell and head:GetAttribute('unit') == 'player')
+                    assert(head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == 'player')
                     assert(not ns.Tracker.Summary().next and not frame.gief:IsShown())
                     -- It falls off mid-fight: the head demands it and the click casts it.
                     up = false; ns.Tracker.Refresh()
@@ -2269,7 +2352,7 @@ class AddonTests(unittest.TestCase):
             ns.Assignments.result.expected['B-Realm'] = {}
             ns.Tracker.Refresh()
             local button = Buffeteria_CastButton
-            assert(button:GetAttribute('spell') == '10952' and button:GetAttribute('unit') == 'player')
+            assert(button:GetAttribute('spell') == '10952' and button:GetAttribute('*unit1') == 'player')
             -- 90 seconds left is fine; 45 seconds left warns despite the 5-minute setting.
             local left = 90
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
@@ -2352,7 +2435,7 @@ class AddonTests(unittest.TestCase):
             ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {} -- isolate the tank cast
             ns.Tracker.Refresh()
             assert(Buffeteria_CastButton:GetAttribute('spell') == '9910')
-            assert(Buffeteria_CastButton:GetAttribute('unit') == 'party1')
+            assert(Buffeteria_CastButton:GetAttribute('*unit1') == 'party1')
             assert(table.concat(ns.Assignments.Lines(false), ';'):find('Thorns: A -> B', 1, true))
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'party1' and i == 1 then return {name='9910', expirationTime=WOW_TIME+60} end
@@ -2374,7 +2457,7 @@ class AddonTests(unittest.TestCase):
             assert(summary.perKey.CONC.bad == 1 and summary.overall == 'bad')
             local button = Buffeteria_CastButton
             -- Highest known rank of Concentration Aura, cast on myself.
-            assert(button:GetAttribute('spell') == '19746' and button:GetAttribute('unit') == 'player')
+            assert(button:GetAttribute('spell') == '19746' and button:GetAttribute('*unit1') == 'player')
             -- Another paladin's Concentration Aura is not mine.
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if unit == 'player' and i == 1 then return {name='19746', expirationTime=0, sourceUnit='party1'} end
