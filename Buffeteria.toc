@@ -1,0 +1,19 @@
+## Interface: 16001
+## Title: Buffeteria
+## Notes: All-you-can-buff. Everyone ranks the buffs they want, Buffeteria works out who casts what, and one click serves it.
+## Author: Jim
+## Version: @project-version@
+## SavedVariablesPerCharacter: BuffeteriaCharDB
+## AddonCompartmentFunc: Buffeteria_OnAddonCompartmentClick
+# CurseForge publishing uses the repository Actions variable CF_PROJECT_ID.
+## IconTexture: Interface\AddOns\Buffeteria\Media\Icon
+
+Data.lua
+Solver.lua
+Core.lua
+Comm.lua
+Scan.lua
+Tracker.lua
+Minimap.lua
+Preview.lua
+Prefs.lua

@@ -1,0 +1,71 @@
+-- Buffeteria: preview mode. Fills the tracker with a fake 25-player raid
+-- that cycles through "all fed", "running low" and "missing" so you can see
+-- how it looks. Nothing is cast and nothing is sent to other players.
+local _, ns = ...
+local D = ns.Data
+
+local P = { active = false }
+ns.Preview = P
+
+local PHASE_SECONDS = 5
+local FAKE = {
+	{ "Thrallbuster", "WARRIOR" }, { "Shieldwalla", "WARRIOR" }, { "Bonkmaster", "WARRIOR" },
+	{ "Stabbity", "ROGUE" }, { "Sneakypete", "ROGUE" },
+	{ "Pewpewlazor", "HUNTER" }, { "Arrowsmith", "HUNTER" },
+	{ "Frostbyte", "MAGE" }, { "Pyromancy", "MAGE" }, { "Sheepish", "MAGE" },
+	{ "Doomscroll", "WARLOCK" }, { "Felbrain", "WARLOCK" },
+	{ "Holyhandgren", "PRIEST" }, { "Fortitudes", "PRIEST" },
+	{ "Moonkinz", "DRUID" }, { "Barkskin", "DRUID" },
+	{ "Bubblehearth", "PALADIN" }, { "Kingsley", "PALADIN" }, { "Mightymouse", "PALADIN" },
+	{ "Chainheals", "SHAMAN" }, { "Totemtom", "SHAMAN" },
+}
+local KEYS = { "KINGS", "MIGHT", "WISDOM", "SALV", "LIGHT", "FORT", "SPIRIT", "SHADOW", "MOTW", "INT" }
+local PHASES = { "bad", "warn", "ok" }
+
+-- Deterministic pseudo-random so each phase looks the same every cycle.
+local function roll(i, j, phase) return ((i * 7 + j * 13 + phase * 31) % 17) end
+
+function P.Summary()
+	local phaseIndex = math.floor(GetTime() / PHASE_SECONDS) % #PHASES
+	local phase = PHASES[phaseIndex + 1]
+	local s = { overall = phase, perKey = {}, problems = {}, any = true }
+	for _, key in ipairs(KEYS) do s.perKey[key] = { bad = 0, warn = 0, total = #FAKE } end
+
+	if phase ~= "ok" then
+		for i, who in ipairs(FAKE) do
+			for j, key in ipairs(KEYS) do
+				local r = roll(i, j, phaseIndex)
+				local st
+				if phase == "bad" then st = (r < 2 and "bad") or (r < 5 and "warn") or nil
+				else st = (r < 4 and "warn") or nil end
+				if st then
+					s.perKey[key][st] = s.perKey[key][st] + 1
+					table.insert(s.problems, { who = who[1], class = who[2], key = key, status = st,
+						rem = st == "warn" and (30 + r * 15) or nil })
+				end
+			end
+		end
+		if phase == "bad" then
+			table.insert(s.problems, { who = "Shieldwalla", class = "WARRIOR", key = "SALV", status = "unwanted" })
+		end
+		table.sort(s.problems, function(a, b)
+			if a.status ~= b.status then return a.status == "bad" end
+			if a.who ~= b.who then return a.who < b.who end
+			return a.key < b.key
+		end)
+		local b = D.byKey.KINGS
+		s.next = { spell = ns.SpellName(b.groupIds[1]) or "Greater Blessing of Kings", icon = ns.SpellIcon(b.groupIds[1]),
+			label = ns.ClassName("WARRIOR"), status = phase }
+	end
+	return s
+end
+
+function P.Set(on)
+	P.active = on and true or false
+	ns.Print(P.active and "preview on: a fake raid is on the menu (nothing will be cast)." or "preview off.")
+	if ns.Tracker then ns.Tracker.Refresh() end
+	if ns.Minimap then ns.Minimap.Refresh() end
+	if ns.Prefs and ns.Prefs.Refresh then ns.Prefs.Refresh() end
+end
+
+function P.Toggle() P.Set(not P.active) end

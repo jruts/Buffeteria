@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="CLICK Buffeteria_CastButton:LeftButton" header="BUFFETERIA" category="ADDONS">
+		-- handled by the secure button
+	</Binding>
+</Bindings>

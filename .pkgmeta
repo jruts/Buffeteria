@@ -1,0 +1,11 @@
+package-as: Buffeteria
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .github
+  - README.md
+  - RELEASING.md
+  - CHANGELOG.md

@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  # Build a downloadable ZIP for the first CurseForge submission, without uploading.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Build the add-on ZIP
+        uses: BigWigsMods/packager@6d50adb6e8517eefef63f4afb16a6518166a6b28 # v2.5.1
+        with:
+          args: -d
+          pandoc: 'false'
+
+      - name: Locate the ZIP and determine release type
+        id: package
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          shopt -s nullglob
+          archives=(.release/*.zip)
+          if [[ ${#archives[@]} -ne 1 ]]; then
+            echo '::error::Expected exactly one packaged ZIP.'
+            exit 1
+          fi
+          echo "archive_path=${archives[0]}" >> "$GITHUB_OUTPUT"
+          case "${RELEASE_TAG,,}" in
+            *alpha*|'') release_type=alpha ;;
+            *beta*) release_type=beta ;;
+            *) release_type=release ;;
+          esac
+          echo "release_type=$release_type" >> "$GITHUB_OUTPUT"
+
+      - name: Save the ZIP as a workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Buffeteria
+          path: ${{ steps.package.outputs.archive_path }}
+          if-no-files-found: error
+
+      - name: Attach the ZIP to the published GitHub release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          ARCHIVE_PATH: ${{ steps.package.outputs.archive_path }}
+        run: gh release upload "$RELEASE_TAG" "$ARCHIVE_PATH" --clobber
+
+      - name: Upload the same ZIP to CurseForge
+        if: github.event_name == 'release'
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CF_PROJECT_ID: ${{ vars.CF_PROJECT_ID }}
+          ARCHIVE_PATH: ${{ steps.package.outputs.archive_path }}
+          RELEASE_TYPE: ${{ steps.package.outputs.release_type }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: bash .github/scripts/upload-curseforge.sh
