@@ -1,5 +1,5 @@
 -- Buffeteria: preview mode. Fills the tracker with a fake raid
--- that cycles through "all fed", "running low" and "missing" so you can see
+-- that cycles through "empty", "missing", "running low" and "all fed" so you can see
 -- how it looks. Nothing is cast and nothing is sent to other players.
 local _, ns = ...
 local Buffs = ns.Buffs
@@ -20,14 +20,15 @@ local FAKE = {
 	{ "Chainheals", "SHAMAN" }, { "Totemtom", "SHAMAN" },
 }
 local KEYS = { "KINGS", "MIGHT", "WISDOM", "SALV", "LIGHT", "FORT", "SPIRIT", "SHADOW", "MOTW", "INT" }
-local PHASES = { "bad", "warn", "ok" }
+local PHASES = { "empty", "bad", "warn", "ok" }
 
 -- Deterministic pseudo-random so each phase looks the same every cycle.
 local function roll(i, j, phase) return ((i * 7 + j * 13 + phase * 31) % 17) end
 
 function Preview.Summary()
 	local phaseIndex = math.floor(GetTime() / PHASE_SECONDS) % #PHASES
-	local phase = PHASES[phaseIndex + 1]
+	local empty = PHASES[phaseIndex + 1] == "empty"
+	local phase = empty and "bad" or PHASES[phaseIndex + 1]
 	local s = { overall = phase, perKey = {}, problems = {}, any = true }
 	for _, key in ipairs(KEYS) do s.perKey[key] = { bad = 0, warn = 0, total = #FAKE } end
 
@@ -36,7 +37,8 @@ function Preview.Summary()
 			for j, key in ipairs(KEYS) do
 				local r = roll(i, j, phaseIndex)
 				local st
-				if phase == "bad" then st = (r < 2 and "bad") or (r < 5 and "warn") or nil
+				if empty then st = "bad"
+				elseif phase == "bad" then st = (r < 2 and "bad") or (r < 5 and "warn") or nil
 				else st = (r < 4 and "warn") or nil end
 				if st then
 					s.perKey[key][st] = s.perKey[key][st] + 1

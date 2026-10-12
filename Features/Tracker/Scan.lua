@@ -83,6 +83,7 @@ function Scan.Update()
 				local pk = summary.perKey[key] or { bad = 0, warn = 0, total = 0 }
 				summary.perKey[key] = pk
 				pk.total = pk.total + 1
+				if st == "unknown" then pk.unknown = (pk.unknown or 0) + 1 end
 				if st == "bad" or st == "warn" then
 					pk[st] = pk[st] + 1
 					table.insert(summary.problems, { who = full, key = key, status = st, rem = rem })

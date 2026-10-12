@@ -1,5 +1,6 @@
 """Run with python tests/test_addon.py (requires lupa with its Lua 5.1 runtime)."""
 from pathlib import Path
+import struct
 import unittest
 
 from lupa.lua51 import LuaRuntime
@@ -35,6 +36,22 @@ def full_addon(player_class="PALADIN", login=True):
 
 
 class AddonTests(unittest.TestCase):
+    def test_orc_textures_have_matching_dimensions_and_real_transparency(self):
+        for mood in ("Happy", "Grumpy", "Angry"):
+            with self.subTest(mood=mood):
+                data = (ROOT / "Media" / f"Orc{mood}.tga").read_bytes()
+                image_type = data[2]
+                width, height, depth, descriptor = struct.unpack_from("<HHBB", data, 12)
+                self.assertEqual((image_type, width, height, depth), (2, 256, 256, 32))
+                self.assertEqual(descriptor & 15, 8)
+                start = 18 + data[0]
+                alpha = data[start + 3:start + width * height * 4:4]
+                self.assertEqual(len(alpha), width * height)
+                self.assertIn(0, alpha)
+                self.assertIn(255, alpha)
+                for corner in (0, width - 1, (height - 1) * width, height * width - 1):
+                    self.assertEqual(alpha[corner], 0)
+
     def test_manifest_contains_each_runtime_module_once(self):
         files = addon_files()
         expected = {path.relative_to(ROOT).as_posix() for folder in ("App", "Shared", "Features")
@@ -78,6 +95,63 @@ class AddonTests(unittest.TestCase):
             assert(#timers == 1) -- resolving repeated changes is debounced
             runTimers()
             assert(refreshes == 1 and ns.Tracker.Summary().any)
+        """)
+
+    def test_orc_moods_distinguish_partial_empty_and_unreadable_buffs(self):
+        lua = runtime()
+        load(lua, "Features/Tracker/Status.lua")
+        lua.execute("""
+            local mood = ns.Status.Mood
+            assert(mood({any = false, overall = 'idle', perKey = {}}) == 'idle')
+            local s = {any = true, overall = 'bad', perKey = {
+                FORT = {bad = 2, warn = 0, total = 2},
+                INT = {bad = 1, warn = 0, total = 2},
+            }}
+            assert(mood(s) == 'grumpy') -- a missing buff is not an empty group
+            s.perKey.INT.bad = 2
+            assert(mood(s) == 'angry')
+            s.perKey.INT = {bad = 1, warn = 0, total = 2, unknown = 1}
+            assert(mood(s) == 'grumpy') -- unreadable is not missing
+            s.overall = 'ok'
+            s.perKey = {FORT = {bad = 0, warn = 0, total = 2, unknown = 2}}
+            assert(mood(s) == 'grumpy') -- unreadable is not fully buffed
+            s.perKey.FORT.unknown = 0
+            assert(mood(s) == 'happy')
+            s.overall = 'warn'; s.perKey.FORT.warn = 1
+            assert(mood(s) == 'grumpy')
+        """)
+
+    def test_preview_cycles_orc_artwork_without_casting_and_updates_in_combat(self):
+        lua = full_addon()
+        lua.execute("""
+            ns.Preview.Set(true)
+            local expected = {'Angry', 'Grumpy', 'Grumpy', 'Happy'}
+            for phase, suffix in ipairs(expected) do
+                WOW_TIME = 100 + (phase - 1) * 5
+                ns.Tracker.Refresh()
+                assert(Buffeteria_CastButton.icon.texture ==
+                    'Interface\\\\AddOns\\\\Buffeteria\\\\Media\\\\Orc' .. suffix)
+                assert(not Buffeteria_CastButton.icon.desaturated)
+                assert(not Buffeteria_CastButton:GetAttribute('spell'))
+                assert(not Buffeteria_CastButton:GetAttribute('unit'))
+            end
+            COMBAT = true
+            WOW_TIME = 120
+            ns.Tracker.Refresh()
+            assert(Buffeteria_CastButton.icon.texture:find('OrcAngry$'))
+            assert(not Buffeteria_CastButton:GetAttribute('spell'))
+            COMBAT = false
+            ns.Preview.Set(false)
+        """)
+
+    def test_unreadable_observations_keep_orc_grumpy(self):
+        lua = full_addon(login=False)
+        lua.execute("""
+            UnitIsVisible = function() return false end
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+            assert(ns.Tracker.Summary().any)
+            assert(ns.Status.Mood(ns.Tracker.Summary()) == 'grumpy')
+            assert(Buffeteria_CastButton.icon.texture:find('OrcGrumpy$'))
         """)
 
     def test_preview_and_combat_preserve_secure_button_behavior(self):

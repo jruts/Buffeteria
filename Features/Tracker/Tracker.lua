@@ -1,18 +1,23 @@
--- Buffeteria: the on-screen tracker (status colour + one-click cast button).
+-- Buffeteria: the on-screen orc mascot + one-click cast button.
 local _, ns = ...
 local Buffs = ns.Buffs
 
 local Tracker = {}
 ns.Tracker = Tracker
 
-local frame, ring, castBtn, cancelBtn, statusIcons, lastSummary
+local frame, castBtn, cancelBtn, statusIcons, lastSummary
 local editing = false
-local MAIN = 44                                  -- the big cast button
+local MAIN = 64                                  -- room to read the orc's expression
 local GAP = 2
 local COLS = 2                                   -- small icons per row under the big one
-local ICON_SIZE = (MAIN - GAP * (COLS - 1)) / COLS -- half size, so two fill the width exactly
+local ICON_SIZE = 21
 local BORDER = 2
-local ICON_FILE = ns.UI.ICON
+local LABEL_HEIGHT = 12
+local MOOD_TEXTURES = {
+	happy = "Interface\\AddOns\\Buffeteria\\Media\\OrcHappy",
+	grumpy = "Interface\\AddOns\\Buffeteria\\Media\\OrcGrumpy",
+	angry = "Interface\\AddOns\\Buffeteria\\Media\\OrcAngry",
+}
 local colorOf = ns.Status.Color
 local keyIcon = ns.UI.BuffIcon
 
@@ -28,7 +33,11 @@ local function showTooltip(owner)
 	if not s or not s.any then
 		GameTooltip:AddLine("Nothing on the menu yet.", 0.7, 0.7, 0.7)
 	elseif #s.problems == 0 then
-		GameTooltip:AddLine("Everyone is stuffed. All buffs up.", unpack(ns.Status.COLORS.ok))
+		if ns.Status.Mood(s) == "happy" then
+			GameTooltip:AddLine("Everyone is stuffed. All buffs up.", unpack(ns.Status.COLORS.ok))
+		else
+			GameTooltip:AddLine("Waiting for readable buff information.", unpack(ns.Status.COLORS.warn))
+		end
 	else
 		local shown = 0
 		for _, p in ipairs(s.problems) do
@@ -68,18 +77,11 @@ local function build()
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 
-	-- Coloured ring around the big button = overall status.
-	ring = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	ring:SetPoint("TOPLEFT")
-	ring:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2)
-	ring:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = BORDER })
-	ring:SetBackdropColor(0, 0, 0, 0.8)
-
 	-- The big secure cast button.
 	castBtn = CreateFrame("Button", "Buffeteria_CastButton", frame, "SecureActionButtonTemplate")
 	castBtn:SetSize(MAIN, MAIN)
 	castBtn:SetPoint("TOPLEFT", BORDER, -BORDER)
-	castBtn:SetFrameLevel(ring:GetFrameLevel() + 2)
+	castBtn:SetFrameLevel(frame:GetFrameLevel() + 2)
 	castBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	castBtn:SetAttribute("useOnKeyDown", false)
 	castBtn:SetAttribute("type", "spell")
@@ -88,8 +90,9 @@ local function build()
 	castBtn:SetAttribute("macrotext2", "")
 	castBtn.icon = castBtn:CreateTexture(nil, "ARTWORK")
 	castBtn.icon:SetAllPoints()
-	castBtn.icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
-	castBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	-- The alpha silhouette supplies the shape; no square background or highlight.
+	castBtn.icon:SetTexCoord(0, 1, 0, 1)
+	castBtn.icon:SetTexture(MOOD_TEXTURES.grumpy)
 	-- Press feedback belongs to the actual icon, without unrelated slot artwork.
 	castBtn:SetScript("OnMouseDown", function(self)
 		self.dragged = false
@@ -135,10 +138,10 @@ local function build()
 		end)
 	end)
 
-	-- Who it's for, written over the bottom of the big icon (like a macro name).
+	-- Keep the next recipient below the face, leaving the expression unobscured.
 	castBtn.label = castBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
-	castBtn.label:SetPoint("BOTTOMLEFT", 1, 2)
-	castBtn.label:SetPoint("BOTTOMRIGHT", -1, 2)
+	castBtn.label:SetPoint("TOPLEFT", castBtn, "BOTTOMLEFT", 1, -1)
+	castBtn.label:SetPoint("TOPRIGHT", castBtn, "BOTTOMRIGHT", -1, -1)
 	castBtn.label:SetJustifyH("CENTER")
 	castBtn.label:SetWordWrap(false)
 
@@ -214,7 +217,8 @@ local function layoutStatusIcons(s)
 		ic.key = key
 		ic:ClearAllPoints()
 		local col, row = (i - 1) % COLS, math.floor((i - 1) / COLS)
-		ic:SetPoint("TOPLEFT", frame, "TOPLEFT", BORDER + col * (ICON_SIZE + GAP), -(MAIN + BORDER * 2 + GAP + row * (ICON_SIZE + GAP)))
+		local left = (MAIN + BORDER * 2 - (COLS * ICON_SIZE + (COLS - 1) * GAP)) / 2
+		ic:SetPoint("TOPLEFT", frame, "TOPLEFT", left + col * (ICON_SIZE + GAP), -(MAIN + BORDER * 2 + LABEL_HEIGHT + GAP + row * (ICON_SIZE + GAP)))
 		local st = state[key]
 		local pk = s.perKey[key]
 		ic.tex:SetTexture(keyIcon(key))
@@ -228,7 +232,7 @@ local function layoutStatusIcons(s)
 	-- The frame holds secure buttons, so it can only be resized out of combat.
 	if not InCombatLockdown() then
 		local rows = math.ceil(#keys / COLS)
-		frame:SetHeight(MAIN + BORDER * 2 + (rows > 0 and (GAP + rows * (ICON_SIZE + GAP) - GAP) or 0))
+		frame:SetHeight(MAIN + BORDER * 2 + LABEL_HEIGHT + (rows > 0 and rows * (ICON_SIZE + GAP) or 0))
 	end
 end
 
@@ -267,11 +271,12 @@ function Tracker.Refresh()
 	frame.tag:SetShown(preview and true or false)
 	local s = preview and ns.Preview.Summary() or ns.Scan.Update()
 	lastSummary = s
-	ring:SetBackdropBorderColor(unpack(colorOf(s.overall)))
+	local mood = ns.Status.Mood(s)
+	castBtn.icon:SetTexture(MOOD_TEXTURES[mood] or MOOD_TEXTURES.grumpy)
+	castBtn.icon:SetDesaturated(mood == "idle")
 	layoutStatusIcons(s)
 
 	if InCombatLockdown() then
-		castBtn.icon:SetDesaturated(true)
 		castBtn.label:SetText("")
 		return
 	end
@@ -279,12 +284,8 @@ function Tracker.Refresh()
 	applySecure(preview and {} or s)
 	local n = s.next
 	if n then
-		castBtn.icon:SetTexture(n.icon)
-		castBtn.icon:SetDesaturated(false)
 		castBtn.label:SetText(n.label)
 	else
-		castBtn.icon:SetTexture(ICON_FILE)
-		castBtn.icon:SetDesaturated(false)
 		castBtn.label:SetText("")
 	end
 end

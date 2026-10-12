@@ -86,15 +86,23 @@ format changed for this feature.
 
 ## The tracker
 
-- **Big button:** release a click to cast your next buff on the right target. Its ring is
-  green when everyone is fed, orange when buffs are running low, red when something is
-  missing.
+- **Orc head:** release a click to cast your next buff on the right target. The
+  transparent mascot is green and smiling when everyone has their tracked buffs,
+  orange and grumpy when some are missing or running low, and red and furious
+  when all tracked buffs are missing across the group. With nothing to track,
+  he is grey and grumpy.
+  Unreadable buff observations also keep him grumpy until they can be checked.
+  His invisible click area is rectangular. The next recipient appears below him;
+  hover to see the next spell and targets.
 - **Small icons underneath:** which buffs need attention and how many players are
   affected. Hover for details.
 - Right-click the big button for options. Move it with Edit Mode, or unlock it in
   options and drag. Dragging only moves it; releasing a drag never casts or opens options.
 - The minimap icon also acts on click release; dragging it only changes its position.
 - Bind a key: Key Bindings > AddOns > Buffeteria > "Cast next buff".
+- Try `/buff preview` to cycle through furious, partly missing, running low, and
+  happy states every five seconds without casting. Run it again to return to the
+  real group.
 
 ## Commands
 
