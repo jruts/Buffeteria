@@ -5,7 +5,6 @@ local Buffs, Status = ns.Buffs, ns.Tracker.Status
 local Scan = {}
 ns.Tracker.Scan = Scan
 
-local EMPTY = ns.Util.EMPTY
 local isSecret = issecretvalue or function() return false end
 local nameToKey = {}
 local cache = {}          -- [fullName] = { [key] = { exp = number, name = string } }
@@ -112,7 +111,7 @@ local function readGroup(roster)
 end
 
 -- Scans the group and returns the observed part of the tracker summary
--- (everything but next and cancel; see Status.NewSummary).
+-- (everything but next; see Status.NewSummary).
 function Scan.Update(now, warnSec)
 	local roster, res, me = ns.Assignments.roster, ns.Assignments.result, ns.WoW.Me()
 	readGroup(roster)
@@ -149,10 +148,6 @@ function Scan.Update(now, warnSec)
 					if caster == me then summary.yours[key] = true end
 					if full == me then table.insert(summary.needs, { key = key, status = st, caster = caster }) end
 				end
-			end
-			-- Blessings the member does not want at all (e.g. Salvation on a tank).
-			for key in pairs(m.excluded or EMPTY) do
-				if not exp[key] and cache[full] and cache[full][key] then problem(full, key, "unwanted") end
 			end
 		end
 	end
@@ -197,14 +192,4 @@ function Scan.MissingAura()
 		if keyOf(a.name) == key then running = true end
 	end)
 	if readable and not running then return key end
-end
-
--- An excluded blessing sitting on me -> the aura name to cancel.
-function Scan.UnwantedOnMe()
-	local me = ns.WoW.Me()
-	local m, auras = ns.Assignments.roster.members[me], cache[me]
-	if not m or not auras then return nil end
-	for key in pairs(m.excluded or EMPTY) do
-		if not ns.Assignments.Served(me)[key] and auras[key] then return auras[key].name, key end
-	end
 end

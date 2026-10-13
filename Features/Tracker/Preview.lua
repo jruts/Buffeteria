@@ -55,9 +55,6 @@ function Preview.Summary()
 				end
 			end
 		end
-		if phase == "bad" then
-			table.insert(s.problems, { who = "Shieldwalla", class = "WARRIOR", key = "SALV", status = "unwanted" })
-		end
 		table.sort(s.problems, Status.CompareProblems)
 		if key then
 			s.mine.pending = math.max(1, s.perKey[key].bad + s.perKey[key].warn)

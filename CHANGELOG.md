@@ -1,5 +1,16 @@
 # Buffeteria
 
+## v0.6.11
+
+- Removed **Don't want**, blessing exclusions, and the tracker's unwanted-buff
+  warnings and removal button. Rank all six blessings from most to least useful;
+  saved rankings keep their blessing order without the old divider.
+- **Use my own order** now starts enabled for new characters and after resetting
+  preferences. Existing saved choices to follow the class plan are preserved.
+- Tracker icons, counts and expressions now follow your assigned buffs. Other
+  casters' missing buffs no longer affect your head; any missing buff assigned
+  to you makes it angry until your missing buffs are served.
+
 ## v0.6.10
 
 - Simplified Blessings preferences with one **Use my own order** checkbox.

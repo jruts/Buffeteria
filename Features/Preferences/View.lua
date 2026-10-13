@@ -146,7 +146,7 @@ function View.Create(host)
 	hint(cards[1], 12, -102, nil, "Most wanted at the top. Drag to reorder.")
 	list = ns.Preferences.RankList.Create(cards[1], served, function() ns.Preferences.Set("blessingsOverride", true) end)
 	list:SetPoint("TOPLEFT", 10, -120)
-	note = hint(cards[1], 12, -408)
+	note = hint(cards[1], 12, -368)
 	wants, tankButtons = {}, {}
 	for _, collection in ipairs({ Buffs.GROUP_BUFFS, Buffs.SELF_BUFFS }) do
 		for _, buff in ipairs(collection) do
@@ -169,7 +169,7 @@ function View.Create(host)
 		row:SetScript("OnEnter", function(self) buffTooltip(self, true) end)
 		row:SetScript("OnLeave", GameTooltip_Hide); tankButtons[key] = row
 	end
-	tankTip = UI.Text(cards[3], "GameFontNormalSmall", 12, -230, nil, "Keep Salvation excluded from your ranking while tanking.")
+	tankTip = UI.Text(cards[3], "GameFontNormalSmall", 12, -230, nil, "Use my own order and move Salvation to the bottom while tanking.")
 	panel.roleHelp = hint(cards[3], 12, -CARD_H + 44, 180, "Auto follows your assigned Tank role or raid main-tank assignment.")
 	panel.wants, panel.tankButtons, panel.roles = wants, tankButtons, roles
 	panel.rankList, panel.rankRows, panel.rankGhost = list, list.rows, list.ghost

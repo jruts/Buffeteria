@@ -1,5 +1,6 @@
 -- Wire format. Keep version 2 compatible with existing group members:
---   S|2|wants|ranking|excluded|caps|override   preferences and spellbook
+--   S|2|wants|ranking|reserved|caps|override   preferences and spellbook
+-- The reserved field is empty; retain its position for older clients.
 --   P|2|paladin|slot|key|revision|author       one paladin plan cell
 --   R|2                                        request everyone's state
 local _, ns = ...

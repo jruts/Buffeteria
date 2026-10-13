@@ -10,7 +10,7 @@ ns.Solver = Solver
 	members = { [fullName] = {
 		name, class, group (1-8),
 		wants = { FORT=bool, ... },
-		ranking = { "KINGS", "MIGHT", ... }, excluded = { SALV=true },
+		ranking = { "KINGS", "MIGHT", ... },
 		blessingsOverride = bool, -- explicitly use my ranking over the class plan
 		caps = { KINGS=true, gKINGS=true, FORT=true, gFORT=true, DEVO=true, ... },
 	} }
@@ -38,10 +38,9 @@ local function countKnown(p, keys, knows)
 	return count
 end
 
--- Weighted Borda points: rank 1 = NB points, rank 2 = NB-1 ...; excluded = 0.
--- Majority rules for the Greater Blessing; anyone who excluded it gets a personal override.
+-- Weighted Borda points: rank 1 = NB points, rank 2 = NB-1 ...
+-- Majority rules for the Greater Blessing.
 local function blessingPoints(member, key)
-	if member.excluded and member.excluded[key] then return 0 end
 	for i, k in ipairs(member.ranking or EMPTY) do
 		if k == key then return NB - i + 1 end
 	end
@@ -100,8 +99,7 @@ end
 -- the group are planned from their defaults, so whoever joins is already covered.
 local function planClass(ctx, class, voters)
 	if #voters == 0 then
-		local ranking, excluded = Buffs.DefaultRanking(class)
-		voters = { { ranking = ranking, excluded = excluded } }
+		voters = { { ranking = Buffs.DefaultRanking(class) } }
 	end
 	local paladins, knows, home, homeOf = ctx.paladins, ctx.knows, ctx.home, ctx.homeOf
 	local order = rankBlessings(voters, true)
@@ -126,7 +124,7 @@ local function planClass(ctx, class, voters)
 		if matched >= #paladins then break end
 		if not taken[b] and augment(b, candidates, p2b, {}) then matched = matched + 1 end
 	end
-	return p2b, fixed
+	return p2b
 end
 
 -- Explicit personal rankings ignore the manual plan completely. Keep matching
@@ -146,7 +144,7 @@ local function personalBlessings(ctx, n, m, p2b, out)
 		return c
 	end
 	for _, b in ipairs(m.ranking or EMPTY) do
-		if not wanted[b] and not (m.excluded or EMPTY)[b] then
+		if not wanted[b] then
 			wanted[b] = true
 			augment(b, candidates, personal, {})
 		end
@@ -158,26 +156,9 @@ local function personalBlessings(ctx, n, m, p2b, out)
 	end
 end
 
--- Members on the class plan get it, except blessings they excluded, which are
--- swapped for the next ranked blessing that paladin can give.
-local function planBlessings(ctx, n, m, p2b, fixed, out)
-	local provided = {}
-	for _, b in pairs(p2b) do provided[b] = true end
-	for _, p in ipairs(sortedKeys(p2b)) do
-		local b = p2b[p]
-		-- A manually chosen class blessing is the source of truth for
-		-- default users, even if class defaults would exclude it.
-		if not fixed[p] and m.excluded and m.excluded[b] then
-			local pick = false
-			for _, r in ipairs(m.ranking or EMPTY) do
-				if not provided[r] and can(ctx.roster.members[p], r) then pick = r; break end
-			end
-			setOverride(out, n, p, pick)
-			if pick then provided[pick] = true; out.expected[n][pick] = p end
-		else
-			out.expected[n][b] = p
-		end
-	end
+-- Members without a personal ranking receive their class plan.
+local function planBlessings(n, p2b, out)
+	for p, b in pairs(p2b) do out.expected[n][b] = p end
 end
 
 local function solvePaladins(roster, names, paladins, out)
@@ -214,12 +195,12 @@ local function solvePaladins(roster, names, paladins, out)
 	for _, class in ipairs(classes) do
 		local classNames, voters = byClass[class] or EMPTY, {}
 		for _, n in ipairs(classNames) do voters[#voters + 1] = members[n] end
-		local p2b, fixed = planClass(ctx, class, voters)
+		local p2b = planClass(ctx, class, voters)
 		out.pally[class] = p2b
 		for _, n in ipairs(classNames) do
 			local m = members[n]
 			if m.blessingsOverride then personalBlessings(ctx, n, m, p2b, out)
-			else planBlessings(ctx, n, m, p2b, fixed, out) end
+			else planBlessings(n, p2b, out) end
 		end
 	end
 end

@@ -207,7 +207,7 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             ns.Paladins.Set('A-Realm', 'PALADIN', 'KINGS')
             ns.Paladins.Set('B-Realm', 'PALADIN', 'WISDOM'); runTimers()
-            ns.db.order = {'MIGHT','KINGS','WISDOM','LIGHT','SANCT','|','SALV'}
+            ns.db.order = {'MIGHT','KINGS','WISDOM','LIGHT','SANCT','SALV'}
             ns.db.blessingsOverride = false
             local roster = ns.Assignments.roster
             local member = roster.members['A-Realm']
@@ -753,10 +753,7 @@ class AddonTests(unittest.TestCase):
             assert(head.done:IsShown() and not head.owed:IsShown())
             assert(head.done.width == math.floor(head:GetWidth() * 0.16 + 0.5) and head.done:GetAlpha() < 1)
             assert(head.done.point[1] == 'TOPRIGHT' and head.done.point[2] == head)
-            -- Beside the remove-unwanted-buff button, which owns the corner.
-            s.cancel = 'Blessing of Salvation'; ns.Tracker.Refresh()
-            assert(Buffeteria_CancelButton:IsShown() and head.done.point[2] == Buffeteria_CancelButton)
-            s.cancel = nil
+            assert(Buffeteria_CancelButton == nil)
             s.mine = {total=0, pending=0}; ns.Tracker.Refresh()
             assert(not head.done:IsShown() and not head.owed:IsShown())
             -- The tooltip names who I'm waiting for.
@@ -1083,9 +1080,9 @@ class AddonTests(unittest.TestCase):
                     SlashCmdList.BUFFETERIA('hide'); assert(not ns.db.showTracker)
                     SlashCmdList.BUFFETERIA('lock'); assert(ns.db.locked)
                     SlashCmdList.BUFFETERIA('minimap'); assert(ns.db.minimap.hide)
-                    ns.db.blessingsOverride = true
+                    ns.db.blessingsOverride = false
                     SlashCmdList.BUFFETERIA('reset'); runTimers()
-                    assert(not ns.db.blessingsOverride)
+                    assert(ns.db.blessingsOverride)
                     SlashCmdList.BUFFETERIA(''); assert(Buffeteria_Prefs:IsShown())
                     assert(findWidget('Paladins').parent:IsVisible() == (PLAYER_CLASS == 'PALADIN'))
                     Buffeteria_OnAddonCompartmentClick(nil, 'RightButton'); assert(openedCategory == 1)
@@ -1294,8 +1291,7 @@ class AddonTests(unittest.TestCase):
             ns.Tracker.Preview.Set(true)
             assert(not Buffeteria_CastButton:GetAttribute('spell'))
             assert(not Buffeteria_CastButton:GetAttribute('*unit1'))
-            assert(not Buffeteria_CancelButton:GetAttribute('spell'))
-            assert(not Buffeteria_CancelButton:IsShown())
+            assert(Buffeteria_CancelButton == nil)
             ns.Tracker.Preview.Set(false)
             local spell, unit = Buffeteria_CastButton:GetAttribute('spell'), Buffeteria_CastButton:GetAttribute('*unit1')
             COMBAT = true
@@ -1637,9 +1633,9 @@ class AddonTests(unittest.TestCase):
         load(lua, "Features/Assignments/Solver.lua")
         lua.execute("""
             function member(class, caps, override, order)
-                local ranking, excluded = ns.Buffs.SplitOrder(order or ns.Buffs.DEFAULT_ORDER[class])
+                local ranking = ns.Buffs.NormalizeOrder(order or ns.Buffs.DEFAULT_ORDER[class], class)
                 return {class=class, group=1, caps=caps or {}, ranking=ranking,
-                    excluded=excluded, wants=ns.Buffs.DefaultWants(class), blessingsOverride=override}
+                    wants=ns.Buffs.DefaultWants(class), blessingsOverride=override}
             end
             all = {KINGS=true, MIGHT=true, SALV=true, WISDOM=true, LIGHT=true, SANCT=true}
         """)
@@ -1666,17 +1662,19 @@ class AddonTests(unittest.TestCase):
             BuffeteriaCharDB = {order={'SALV','MIGHT','KINGS','LIGHT','SANCT','|','WISDOM'}}
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
             assert(ns.db.blessingsOverride)
+            assert(table.concat(ns.db.order, ',') == 'SALV,MIGHT,KINGS,LIGHT,SANCT,WISDOM')
+            assert(ns.Preferences.Get().excluded == nil)
             assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'SALV')
             ns.db.blessingsOverride = false
             assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'MIGHT')
             assert(ns.db.order[1] == 'SALV') -- preserve the order for re-enabling
-            ns.Roster.peers['B-Realm'] = {caps={KINGS=true},ranking={'SALV'},excluded={},wants={},blessingsOverride=true}
+            ns.Roster.peers['B-Realm'] = {caps={KINGS=true},ranking={'SALV'},wants={},blessingsOverride=true}
             assert(ns.Roster.Build().members['B-Realm'].blessingsOverride)
             ns.Roster.peers['B-Realm'].blessingsOverride = false
             assert(ns.Roster.Build().members['B-Realm'].ranking[1] == 'WISDOM') -- paladin default
             BuffeteriaCharDB = {}
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
-            assert(not ns.db.blessingsOverride)
+            assert(ns.db.blessingsOverride)
         """)
 
     def test_paladin_editor_and_settings_share_controls(self):
@@ -1732,6 +1730,7 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.tankRole == 'TANK' and ns.Preferences.Get().wants.RFURY)
             -- Dragging a blessing lifts it, reorders while moving, and saves on release.
             local list, rankRows, ghost = panel.rankList, panel.rankRows, panel.rankGhost
+            assert(#rankRows == #ns.Buffs.BLESSINGS and #ns.db.order == #rankRows)
             local cursor, held = 0, true
             GetCursorPosition = function() return 0, cursor end
             IsMouseButtonDown = function() return held end
@@ -1864,6 +1863,53 @@ class AddonTests(unittest.TestCase):
             assert(r.overrides.Custom.Pal == 'MIGHT')
         """)
 
+    def test_personal_order_defaults_on_and_preserves_saved_off_choice(self):
+        for player_class in ("WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "PALADIN", "SHAMAN"):
+            with self.subTest(player_class=player_class):
+                lua = self.core_runtime(player_class)
+                lua.execute("""
+                    BuffeteriaCharDB = {}
+                    ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
+                    assert(ns.db.blessingsOverride and ns.Preferences.Get().blessingsOverride)
+                    ns.Preferences.Set('blessingsOverride', false)
+                    ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
+                    assert(not ns.db.blessingsOverride)
+                    ns.Preferences.Reset()
+                    assert(ns.db.blessingsOverride and #ns.db.order == 6)
+                    -- Old saves without the toggle adopt the new default too.
+                    BuffeteriaCharDB = {order=ns.Buffs.DefaultRanking(PLAYER_CLASS)}
+                    ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
+                    assert(ns.db.blessingsOverride)
+                """)
+
+    def test_full_rankings_normalize_saved_and_legacy_peer_data(self):
+        lua = self.core_runtime("ROGUE")
+        lua.execute("""
+            BuffeteriaCharDB = {defaultOrderVersion=2, blessingsOverride=true,
+                order={'KINGS','|','SALV','|','MIGHT','SALV','BOGUS'}}
+            ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
+            assert(table.concat(ns.db.order, ',') == 'KINGS,SALV,MIGHT,LIGHT,SANCT,WISDOM')
+            ns.Preferences.Reset()
+            assert(#ns.db.order == 6 and ns.db.blessingsOverride)
+            for _, class in ipairs(ns.Buffs.CLASS_KEYS) do
+                local ranking = ns.Buffs.DefaultRanking(class)
+                assert(#ranking == 6 and not table.concat(ranking, ','):find('|', 1, true))
+            end
+            ns.Events.Emit('Received:S', 'B-Realm', 'FORT', 'SALV,KINGS',
+                'MIGHT,WISDOM,LIGHT,SANCT', 'MIGHT,gMIGHT', '1')
+            local peer = ns.Roster.peers['B-Realm']
+            assert(peer.excluded == nil and peer.caps.MIGHT and peer.caps.gMIGHT and peer.wants.FORT)
+            local member = ns.Roster.Build().members['B-Realm']
+            assert(member.excluded == nil and member.blessingsOverride and #member.ranking == 6)
+            assert(member.ranking[1] == 'SALV' and member.ranking[2] == 'KINGS')
+            local sent
+            ns.Comm.Send = function(msg) sent = msg end
+            ns.Events.Emit('BroadcastRequested')
+            local kind, version, wants, ranking, reserved, caps, override = ns.Protocol.Decode(sent)
+            assert(kind == 'S' and version == '2' and reserved == '' and override == '1')
+            assert(#ns.Protocol.List(ranking) == 6 and caps:find('KINGS', 1, true))
+        """)
+
     def test_class_defaults_lead_with_role_blessing_and_migrate_untouched_orders(self):
         self.solver("""
             assert(ns.Buffs.DEFAULT_ORDER.WARLOCK[1] == 'WISDOM' and ns.Buffs.DEFAULT_ORDER.WARRIOR[1] == 'MIGHT')
@@ -1887,7 +1933,7 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.order[1] == 'KINGS' and ns.db.blessingsOverride)
         """)
 
-    def test_manual_plan_can_override_class_default_exclusion(self):
+    def test_manual_plan_can_select_lowest_class_priority(self):
         self.solver("""
             local r = ns.Solver.Solve({members={Pal=member('PALADIN', all), Rogue=member('ROGUE')},
                 paladinAssignments={ROGUE={Pal='WISDOM'}}})
@@ -1901,18 +1947,20 @@ class AddonTests(unittest.TestCase):
             assert(r.pally.ROGUE.A == 'MIGHT' and r.pally.ROGUE.B == 'KINGS')
         """)
 
-    def test_none_and_custom_exclusions(self):
+    def test_none_and_lowest_personal_priority(self):
         self.solver("""
             local roster = {members={A=member('PALADIN', all), B=member('PALADIN', all),
-                Rogue=member('ROGUE'), Tank=member('WARRIOR', {}, true, {'KINGS','MIGHT','|','SALV'})},
+                Rogue=member('ROGUE'), Tank=member('WARRIOR', {}, true,
+                    {'KINGS','MIGHT','WISDOM','LIGHT','SANCT','SALV'})},
                 paladinAssignments={ROGUE={A='NONE', B='NONE'}, WARRIOR={A='SALV', B='NONE'}}}
             local r = ns.Solver.Solve(roster)
             assert(next(r.expected.Rogue) == nil)
             assert(r.expected.Tank.KINGS and r.expected.Tank.MIGHT and not r.expected.Tank.SALV)
             assert(r.overrides.Tank.A and r.overrides.Tank.B)
-            roster.members.Tank.ranking = {}; roster.members.Tank.excluded = all
+            -- Lowest priority remains available once enough paladins can cover the list.
+            for _, name in ipairs({'C','D','E','F'}) do roster.members[name] = member('PALADIN', all) end
             r = ns.Solver.Solve(roster)
-            assert(next(r.expected.Tank) == nil and r.overrides.Tank.A == false)
+            for _, key in ipairs(ns.Buffs.BLESSING_KEYS) do assert(r.expected.Tank[key], key) end
         """)
 
     def test_scarce_spells_and_group_buffs(self):
@@ -2102,7 +2150,7 @@ class AddonTests(unittest.TestCase):
         lua = self.plan_runtime()
         load(lua, "Features/Roster/Roster.lua")
         lua.execute("""
-            ns.Preferences.Get = function() return {wants={},ranking={'KINGS'},excluded={},blessingsOverride=true} end
+            ns.Preferences.Get = function() return {wants={},ranking={'KINGS'},blessingsOverride=true} end
             ns.Roster.Capabilities = function() return {KINGS=true} end
             ns.WoW.Short = function(n) return n end; ns.WoW.Print = function() end
             ns.Roster.peers = {}
@@ -2158,6 +2206,7 @@ class AddonTests(unittest.TestCase):
     def test_late_messages_apply_personal_preferences_and_paladin_plan(self):
         lua = full_addon("WARRIOR")
         lua.execute("""
+            ns.Preferences.Set('blessingsOverride', false) -- test following the shared class plan
             NAMES = {player='A', party1='Pal', party2='Rogue'}
             CLASSES = {player='WARRIOR', party1='PALADIN', party2='ROGUE'}
             function UnitFullName(u) return NAMES[u], nil end
@@ -2281,7 +2330,6 @@ class AddonTests(unittest.TestCase):
                 local t = {}
                 for i, k in ipairs(KEYS) do t[i] = k end
                 for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
-                table.insert(t, math.random(1, #t + 1), '|')
                 return t
             end
             -- Best achievable personal result by brute force, as a 0/1 string in ranking order.
@@ -2290,7 +2338,7 @@ class AddonTests(unittest.TestCase):
                 local function rec(i, got, used)
                     if i > #pals then
                         local v = {}
-                        for _, b in ipairs(m.ranking) do if not m.excluded[b] then v[#v + 1] = got[b] and 1 or 0 end end
+                        for _, b in ipairs(m.ranking) do v[#v + 1] = got[b] and 1 or 0 end
                         local s = table.concat(v)
                         if not top or s > top then top = s end
                         return
@@ -2298,7 +2346,7 @@ class AddonTests(unittest.TestCase):
                     local p, c = pals[i], members[pals[i]].caps
                     rec(i + 1, got, used)
                     for _, b in ipairs(m.ranking) do
-                        if not used[b] and not m.excluded[b] and (c[b] or (plan[p] == b and c['g' .. b])) then
+                        if not used[b] and (c[b] or (plan[p] == b and c['g' .. b])) then
                             used[b] = true; got[b] = true; rec(i + 1, got, used); used[b] = nil; got[b] = nil
                         end
                     end
@@ -2320,7 +2368,7 @@ class AddonTests(unittest.TestCase):
                 for _, m in pairs(members) do
                     m.group, m.wants = 1, {}
                     m.blessingsOverride = math.random() < 0.5
-                    m.ranking, m.excluded = B.SplitOrder(m.blessingsOverride and shuffled() or B.DEFAULT_ORDER[m.class])
+                    m.ranking = B.NormalizeOrder(m.blessingsOverride and shuffled() or B.DEFAULT_ORDER[m.class], m.class)
                 end
                 for _, class in ipairs(B.CLASS_KEYS) do
                     manual[class] = {}
@@ -2365,9 +2413,8 @@ class AddonTests(unittest.TestCase):
                     if m.blessingsOverride then
                         local v = {}
                         for _, b in ipairs(m.ranking) do
-                            if not m.excluded[b] then v[#v + 1] = got[b] and 1 or 0 end
+                            v[#v + 1] = got[b] and 1 or 0
                         end
-                        for b in pairs(got) do assert(not m.excluded[b], where .. name .. ' excluded ' .. b) end
                         assert(table.concat(v) == best(m, pals, members, plan), where .. name .. ' personal ranking not optimal')
                     end
                 end
@@ -2414,16 +2461,15 @@ class AddonTests(unittest.TestCase):
             ns.Assignments.result.overrides = {C={Pal=false}}; ns.Assignments.result.expected.C = {}
             assert(not nextCast().big)
             ns.WoW.FullName = function() return 'R' end
-            ns.Assignments.roster.members.R.excluded = {WISDOM=true}
             ns.Assignments.result.expected.R = {WISDOM='Pal'}
             C_UnitAuras.GetAuraDataByIndex = function(_, i)
                 if i == 1 then return {name='25290', expirationTime=0} end
             end
             local summary = ns.Tracker.Scan.Update(100, 300)
-            assert(not ns.Tracker.Scan.UnwantedOnMe())
-            for _, problem in ipairs(summary.problems) do assert(problem.status ~= 'unwanted') end
+            assert(#summary.problems == 0)
             ns.Assignments.result.expected.R = {}
-            assert(ns.Tracker.Scan.UnwantedOnMe() == '25290')
+            summary = ns.Tracker.Scan.Update(100, 300)
+            assert(#summary.problems == 0) -- extra blessings do not demand attention
         """)
 
 
@@ -2796,6 +2842,7 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             GROUP_SIZE = 0
+            ns.Preferences.Set('blessingsOverride', false) -- None suppresses class-plan blessings
             ns.db.tankRole = 'TANK'; ns.db.wants = {}
             ns.Paladins.Set('A-Realm', 'PALADIN', 'NONE')
             ns.Paladins.Set('A-Realm', 'AURA', 'NONE'); runTimers()

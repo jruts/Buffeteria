@@ -73,20 +73,20 @@ Buffs.CLASS_KEYS = { "WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", 
 
 Buffs.MANA_CLASSES = { PALADIN = true, PRIEST = true, DRUID = true, MAGE = true, WARLOCK = true, SHAMAN = true, HUNTER = true }
 
--- Default blessing order per class. Everything after "|" is "don't want".
+-- Default blessing order per class, from highest to lowest priority.
 -- Melee lead with Might, mana users with Wisdom, hunters with Kings (agility;
 -- Might has no effect on ranged attack power). Kings and Salvation follow for everyone.
 Buffs.DEFAULT_ORDER_VERSION = 2
 Buffs.DEFAULT_ORDER = {
-	WARRIOR = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
-	ROGUE   = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
-	HUNTER  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
-	MAGE    = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
-	WARLOCK = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
-	PRIEST  = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
-	DRUID   = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
-	PALADIN = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
-	SHAMAN  = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	WARRIOR = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "WISDOM" },
+	ROGUE   = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "WISDOM" },
+	HUNTER  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
+	MAGE    = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "MIGHT" },
+	WARLOCK = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "MIGHT" },
+	PRIEST  = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "MIGHT" },
+	DRUID   = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT" },
+	PALADIN = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT" },
+	SHAMAN  = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT" },
 }
 
 function Buffs.DefaultOrder(class) return Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR end
@@ -123,29 +123,17 @@ Buffs.ASSUMED_CAPS = {
 	MAGE    = { INT = true },
 }
 
--- Split "order" (with the "|" divider) into ranking + excluded set.
-function Buffs.SplitOrder(order)
-	local ranking, excluded, below = {}, {}, false
-	for _, k in ipairs(order or {}) do
-		if k == "|" then below = true
-		elseif below then excluded[k] = true
-		else ranking[#ranking + 1] = k end
-	end
-	return ranking, excluded
-end
+function Buffs.DefaultRanking(class) return Buffs.NormalizeOrder(Buffs.DefaultOrder(class), class) end
 
-function Buffs.DefaultRanking(class) return Buffs.SplitOrder(Buffs.DefaultOrder(class)) end
-
--- Make sure an order list contains every blessing exactly once plus the divider.
+-- Keep every blessing exactly once. Old saved dividers and unknown entries are
+-- discarded without changing the relative order of the blessings around them.
 function Buffs.NormalizeOrder(order, class)
-	local seen, out, hasBar = {}, {}, false
+	local seen, out = {}, {}
 	for _, k in ipairs(order or {}) do
-		if k == "|" and not hasBar then hasBar = true; out[#out + 1] = k
-		elseif Buffs.byKey[k] and Buffs.byKey[k].kind == "blessing" and not seen[k] then seen[k] = true; out[#out + 1] = k end
+		if Buffs.byKey[k] and Buffs.byKey[k].kind == "blessing" and not seen[k] then seen[k] = true; out[#out + 1] = k end
 	end
-	if not hasBar then out[#out + 1] = "|" end
 	for _, k in ipairs(Buffs.DefaultOrder(class)) do
-		if k ~= "|" and not seen[k] then seen[k] = true; table.insert(out, k) end
+		if not seen[k] then seen[k] = true; table.insert(out, k) end
 	end
 	return out
 end

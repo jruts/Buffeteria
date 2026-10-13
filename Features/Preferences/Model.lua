@@ -9,15 +9,15 @@ local KEYS = { "order", "wants", "blessingsOverride", "tankRole", "tankBuffs" }
 
 -- Version 1 defaults (Kings first for everyone), only used to migrate untouched rankings.
 local LEGACY_ORDER = {
-	WARRIOR = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
-	ROGUE   = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "|", "WISDOM" },
-	HUNTER  = { "KINGS", "MIGHT", "SALV", "WISDOM", "LIGHT", "SANCT", "|" },
-	MAGE    = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "|", "MIGHT" },
-	WARLOCK = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "|", "MIGHT" },
-	PRIEST  = { "KINGS", "WISDOM", "SALV", "LIGHT", "SANCT", "|", "MIGHT" },
-	DRUID   = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
-	PALADIN = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
-	SHAMAN  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT", "|" },
+	WARRIOR = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "WISDOM" },
+	ROGUE   = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "WISDOM" },
+	HUNTER  = { "KINGS", "MIGHT", "SALV", "WISDOM", "LIGHT", "SANCT" },
+	MAGE    = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "MIGHT" },
+	WARLOCK = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "MIGHT" },
+	PRIEST  = { "KINGS", "WISDOM", "SALV", "LIGHT", "SANCT", "MIGHT" },
+	DRUID   = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
+	PALADIN = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
+	SHAMAN  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
 }
 
 local function sameOrder(a, b) return table.concat(a, ",") == table.concat(b, ",") end
@@ -32,8 +32,8 @@ function ns.Preferences.Init()
 		db.order = Buffs.NormalizeOrder(Buffs.DefaultOrder(class), class)
 	end
 	db.defaultOrderVersion = Buffs.DEFAULT_ORDER_VERSION
-	-- Preserve deliberate rankings from before the explicit override toggle existed.
-	if db.blessingsOverride == nil then db.blessingsOverride = not sameOrder(db.order, Buffs.DefaultOrder(class)) end
+	-- Personal rankings are the default; keep an explicitly saved choice to follow the class plan.
+	if db.blessingsOverride == nil then db.blessingsOverride = true end
 	-- Self buffs added after a character's wants were saved start enabled for their class.
 	local defaults = Buffs.DefaultWants(class)
 	db.wants = db.wants or defaults
@@ -53,7 +53,7 @@ function ns.Preferences.IsTank()
 	return ns.WoW.IsTank("player")
 end
 
--- The saved blessing ranking, including the "|" divider; the ranking view reorders it in place.
+-- The saved blessing ranking; the ranking view reorders it in place.
 function ns.Preferences.Order() return ns.db.order end
 
 -- Preview either blessing mode without changing saved preferences or broadcasting.
@@ -66,15 +66,15 @@ function ns.Preferences.BlessingOutcome(override)
 	for name, member in pairs(source.members) do roster.members[name] = member end
 	for key, value in pairs(source.members[me]) do mine[key] = value end
 	mine.blessingsOverride = override
-	mine.ranking, mine.excluded = ns.Buffs.SplitOrder(override and ns.db.order or ns.Buffs.DefaultOrder(mine.class))
+	mine.ranking = Buffs.NormalizeOrder(override and ns.db.order or Buffs.DefaultOrder(mine.class), mine.class)
 	roster.members[me] = mine
 	return ns.Solver.Solve(roster).expected[me] or {}
 end
 
 -- My own preferences in the shape the solver wants.
 function ns.Preferences.Get()
-	local ranking, excluded = Buffs.SplitOrder(ns.db.order)
 	local class, tank = ns.WoW.PlayerClass(), ns.Preferences.IsTank()
+	local ranking = Buffs.NormalizeOrder(ns.db.order, class)
 	local wants = {}
 	for key, value in pairs(ns.db.wants) do wants[key] = value end
 	for _, buff in ipairs(Buffs.TANK_BUFFS) do
@@ -83,7 +83,7 @@ function ns.Preferences.Get()
 	for _, buff in ipairs(Buffs.SELF_BUFFS) do
 		wants[buff.key] = wants[buff.key] and Buffs.OfferedTo(buff, class) or false
 	end
-	return { wants = wants, ranking = ranking, excluded = excluded, blessingsOverride = ns.db.blessingsOverride }
+	return { wants = wants, ranking = ranking, blessingsOverride = ns.db.blessingsOverride }
 end
 
 function ns.Preferences.Changed()

@@ -356,7 +356,7 @@ function UI.MenuItem(parent, width, onClick)
 end
 
 -- A wanted-buff row: checkbox, framed icon, name and the caster serving it.
--- Unwanted rows dim; the row itself never fills with color.
+-- Skipped buff rows dim; the row itself never fills with color.
 function UI.BuffRow(parent, key, onClick)
 	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
 	row:SetSize(180, 48)

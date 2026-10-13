@@ -5,7 +5,7 @@ local Tracker = ns.Tracker
 local Status, Layout, Tooltip = Tracker.Status, Tracker.Layout, Tracker.Tooltip
 local Art = Tracker.Art
 
-local frame, castBtn, cancelBtn, lastSummary, pulse, shadeTicker, cursorTicker
+local frame, castBtn, lastSummary, pulse, shadeTicker, cursorTicker
 local showPlaceholder
 local statusIcons = {}
 local MAIN = 64                                  -- current clickable head size
@@ -318,24 +318,6 @@ local function buildCastButton()
 	end)
 end
 
--- Secure "remove unwanted buff from me" button (e.g. Salvation on a tank), top-right corner.
-local function buildCancelButton()
-	cancelBtn = CreateFrame("Button", ns.globalPrefix .. "_CancelButton", frame, "SecureActionButtonTemplate")
-	cancelBtn:SetSize(14, 14)
-	cancelBtn:SetPoint("CENTER", castBtn, "TOPRIGHT", -2, -2)
-	cancelBtn:SetFrameLevel(castBtn:GetFrameLevel() + 3)
-	cancelBtn:RegisterForClicks("AnyUp", "AnyDown")
-	cancelBtn:SetAttribute("type", "cancelaura")
-	cancelBtn:SetNormalTexture("Interface\\Buttons\\UI-StopButton")
-	cancelBtn:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:AddLine("Remove " .. tostring(self:GetAttribute("spell")) .. " from yourself")
-		GameTooltip:Show()
-	end)
-	cancelBtn:SetScript("OnLeave", GameTooltip_Hide)
-	cancelBtn:Hide()
-end
-
 local function build()
 	frame = CreateFrame("Frame", ns.globalPrefix .. "_Tracker", UIParent)
 	frame:SetSize(MAIN + BORDER * 2, MAIN + BORDER * 2)
@@ -344,7 +326,6 @@ local function build()
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 	buildCastButton()
-	buildCancelButton()
 
 	-- Always identify the development copy, even when preview is off.
 	frame.tag = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmallOutline")
@@ -381,16 +362,12 @@ end
 
 -- The "your part" badge: what I still owe, a check once I've served everyone,
 -- or nothing when I have no buffs to give. It sits in the head's top-right
--- corner, beside the remove-unwanted-buff button when that is showing.
+-- corner.
 local function showBadge(s)
 	local pending = s.mine and s.mine.pending or 0
 	for _, badge in ipairs({ castBtn.done, castBtn.owed }) do
 		badge:ClearAllPoints()
-		if cancelBtn:IsShown() then
-			badge:SetPoint("RIGHT", cancelBtn, "LEFT", -1, 0)
-		else
-			badge:SetPoint("TOPRIGHT", castBtn, "TOPRIGHT", -2, -2)
-		end
+		badge:SetPoint("TOPRIGHT", castBtn, "TOPRIGHT", -2, -2)
 	end
 	local size = math.max(9, math.floor(MAIN * BADGE_SCALE + 0.5))
 	local check = math.max(8, math.floor(MAIN * DONE_SCALE + 0.5))
@@ -495,8 +472,6 @@ local function applySecure(s)
 	castBtn:SetAttribute("spell", n.spell)
 	castBtn:SetAttribute("*unit1", n.unit)
 	castBtn.pending = s.next
-	cancelBtn:SetAttribute("spell", s.cancel)
-	cancelBtn:SetShown(s.cancel ~= nil)
 end
 
 -- PLAYER_REGEN_DISABLED arrives just before combat lockdown: hold my combat self
@@ -544,7 +519,7 @@ local function groupUnit(unit)
 	return unit == "player" or unit:match("^party%d+$") ~= nil or unit:match("^raid%d+$") ~= nil
 end
 
--- The full summary: the observed group, my next cast, and what to cancel on me.
+-- The full summary: the observed group and my next cast.
 function Tracker.Compute()
 	if Tracker.Preview.active then return Tracker.Preview.Summary() end
 	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
@@ -568,7 +543,6 @@ function Tracker.Compute()
 			s.yours[n.key] = true
 		end
 	end
-	s.cancel = Tracker.Scan.UnwantedOnMe()
 	return s
 end
 

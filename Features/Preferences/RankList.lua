@@ -1,52 +1,33 @@
--- The blessing ranking: one row per entry of the saved order, including the "not
--- wanted" divider. Dragging lifts a row that follows the cursor while the others
--- slide aside; the order is saved as it changes.
+-- The blessing ranking: one row per blessing, highest priority first. Dragging
+-- lifts a row that follows the cursor while the others slide aside; the order
+-- is saved as it changes.
 local _, ns = ...
 local Buffs, GOLD = ns.Buffs, ns.UI.GOLD
 local RankList = {}
 ns.Preferences.RankList = RankList
 local ROW_H, ROW, ICON = 40, 30, 24
-local GREY, RED = ns.UI.COLOR.GREY, ns.UI.COLOR.RED
 -- Drag state: the slot being moved, where the cursor grabbed it, and the lifted copy.
 local list, rows, ghost, served, onMoved, cutoff
 local dragging, grabY, ghostY, dropping, moved
 
 -- Paint one ranking row (or the lifted copy) for a key.
-local function paintRow(r, key, rank, below, mine)
-	local divider = key == "|"
-	r.icon:SetShown(not divider); r.border:SetShown(not divider); r.rule:SetShown(divider)
-	for _, edge in ipairs(r.edges) do edge:SetShown(not divider) end
-	r.check:SetShown(not divider and mine[key] ~= nil)
+local function paintRow(r, key, rank, mine)
+	r.icon:Show(); r.border:Show()
+	for _, edge in ipairs(r.edges) do edge:Show() end
+	r.check:SetShown(mine[key] ~= nil)
 	r.text:ClearAllPoints()
-	if divider then
-		-- A heading for the blessings below it, not a row of its own.
-		r.rank:SetText(""); r.served:SetText("")
-		r.text:SetPoint("LEFT", 4, -2)
-		r.text:SetText(RED .. "Don't want|r")
-		r.bg:SetColorTexture(0, 0, 0, 0)
-		r.accent:SetColorTexture(0, 0, 0, 0)
-		return
-	end
 	r.text:SetPoint("LEFT", r.icon, "RIGHT", 10, mine[key] and 6 or 0)
 	r.text:SetPoint("RIGHT", r.grip, "LEFT", -28, 0)
 	r.icon:SetTexture(ns.UI.BuffIcon(key))
-	r.icon:SetDesaturated(below)
-	if below then
-		r.border:SetVertexColor(0.25, 0.25, 0.25)
-		r.rank:SetText(""); r.served:SetText(mine[key] and ns.Roster.Name(mine[key]) or "")
-		r.text:SetText(GREY .. Buffs.byKey[key].label .. "|r")
-		r.accent:SetColorTexture(0, 0, 0, 0)
-		r.bg:SetColorTexture(0.12, 0.03, 0.02, 0.35)
-	else
-		r.border:SetVertexColor(0, 0, 0)
-		r.rank:SetText(tostring(rank))
-		r.text:SetText(Buffs.byKey[key].label)
-		-- The paladin actually serving this blessing to you.
-		r.served:SetText(mine[key] and ns.Roster.Name(mine[key]) or "")
-		-- A thin gold accent marks blessings someone is actually casting on you.
-		if mine[key] then r.accent:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.9) else r.accent:SetColorTexture(0, 0, 0, 0) end
-		r.bg:SetColorTexture(0, 0, 0, 0.4)
-	end
+	r.icon:SetDesaturated(false)
+	r.border:SetVertexColor(0, 0, 0)
+	r.rank:SetText(tostring(rank))
+	r.text:SetText(Buffs.byKey[key].label)
+	-- The paladin actually serving this blessing to you.
+	r.served:SetText(mine[key] and ns.Roster.Name(mine[key]) or "")
+	-- A thin gold accent marks blessings someone is actually casting on you.
+	if mine[key] then r.accent:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.9) else r.accent:SetColorTexture(0, 0, 0, 0) end
+	r.bg:SetColorTexture(0, 0, 0, 0.4)
 end
 
 local function showContent(r, shown)
@@ -60,32 +41,29 @@ local function setGrip(r, lit)
 	end
 end
 
--- Repaint every row; returns how many blessings are ranked above the divider.
+-- Repaint every blessing row.
 local function refreshRows()
-	local rank, below, mine = 0, false, served()
+	local mine = served()
 	local prefix, assigned, gap = 0, 0, false
 	for i, key in ipairs(ns.Preferences.Order()) do
 		local r = rows[i]
-		if key == "|" then below = true elseif not below then rank = rank + 1 end
-		if key ~= "|" then
-			if mine[key] then
-				assigned = assigned + 1
-				if not gap and not below then prefix = i end
-			else gap = true end
-		end
+		if mine[key] then
+			assigned = assigned + 1
+			if not gap then prefix = i end
+		else gap = true end
 		if i == dragging then
 			-- The empty slot the lifted row will drop into.
 			showContent(r, false)
 			r.icon:Hide(); r.border:Hide()
 			r.bg:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.08)
-			paintRow(ghost, key, rank, below and key ~= "|", mine)
-			if key ~= "|" then ghost.bg:SetColorTexture(0.22, 0.15, 0.02, 0.97) end
-			ghost.grip:SetShown(key ~= "|")
+			paintRow(ghost, key, i, mine)
+			ghost.bg:SetColorTexture(0.22, 0.15, 0.02, 0.97)
+			ghost.grip:Show()
 		else
 			showContent(r, true)
-			paintRow(r, key, rank, below and key ~= "|", mine)
+			paintRow(r, key, i, mine)
 		end
-		r.grip:SetShown(key ~= "|" and i ~= dragging)
+		r.grip:SetShown(i ~= dragging)
 	end
 	-- A cutoff is honest only when assignments form a contiguous ranked prefix.
 	cutoff:SetShown(ns.db.blessingsOverride and not dragging and prefix > 0 and prefix == assigned)
@@ -94,7 +72,6 @@ local function refreshRows()
 		cutoff:ClearAllPoints(); cutoff:SetPoint("TOPLEFT", 0, -prefix * ROW_H + ROW_H - ROW)
 		cutoff.label:SetText(assigned == 1 and "You get the top blessing" or ("You get the top " .. assigned))
 	end
-	return rank
 end
 
 local function placeRows()
@@ -208,10 +185,7 @@ local function rowVisuals(r)
 	r.check = r:CreateTexture(nil, "OVERLAY")
 	r.check:SetSize(18, 18); r.check:SetPoint("RIGHT", r.grip, "LEFT", -8, 0)
 	r.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-	-- The red rule after the "Excluded" heading.
-	r.rule = ns.UI.Line(r, 0.9, 0.25, 0.15, 0.6)
-	r.rule:SetPoint("LEFT", r.text, "RIGHT", 8, 0); r.rule:SetPoint("RIGHT", r, "RIGHT", -4, -2)
-	r.content = { r.accent, r.rank, r.served, r.text, r.check, r.rule }
+	r.content = { r.accent, r.rank, r.served, r.text, r.check }
 	-- Gold outline, shown on the empty drop slot and the lifted row.
 	r.outline = {}
 	for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", "H" }, { "BOTTOMLEFT", "BOTTOMRIGHT", "H" },
@@ -230,15 +204,10 @@ end
 local function rowTooltip(r, i)
 	local order = ns.Preferences.Order()
 	local key = order[i]
-	if key == "|" then return end
-	local below = false
-	for j = 1, i do if order[j] == "|" then below = true end end
 	local caster = served()[key]
 	GameTooltip:SetOwner(r, "ANCHOR_RIGHT"); GameTooltip:SetText(Buffs.byKey[key].label)
 	if caster then
 		GameTooltip:AddLine("Cast on you by " .. ns.Roster.Name(caster) .. ".", 1, 1, 1, true)
-	elseif below then
-		GameTooltip:AddLine("You don't want this blessing. Drag it up to rank it.", 1, 1, 1, true)
 	elseif ns.db.blessingsOverride then
 		GameTooltip:AddLine("Not cast on you: there aren't enough paladins for it.", 1, 1, 1, true)
 	else
@@ -279,9 +248,9 @@ end
 function RankList.Create(parent, servedBy, movedCallback)
 	served, onMoved = servedBy, movedCallback
 	list = CreateFrame("Frame", nil, parent)
-	list:SetHeight(ROW_H * (#Buffs.BLESSINGS + 1))
+	list:SetHeight(ROW_H * #Buffs.BLESSINGS)
 	rows = {}
-	for i = 1, #Buffs.BLESSINGS + 1 do rows[i] = createRow(i) end
+	for i = 1, #Buffs.BLESSINGS do rows[i] = createRow(i) end
 	ghost = createGhost()
 	-- "You get the top N": a gold label between two gold rules.
 	cutoff = CreateFrame("Frame", nil, list)

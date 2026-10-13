@@ -18,18 +18,19 @@ function ns.Roster.Capabilities()
 	return caps
 end
 
--- S|2|wants|ranking|excluded|caps|override: my preferences and spellbook.
+-- S|2|wants|ranking|reserved|caps|override: my preferences and spellbook.
+-- The reserved field stays empty so older clients can still read version 2.
 ns.Events.On("BroadcastRequested", function()
 	local p = ns.Preferences.Get()
 	ns.Comm.Send(Protocol.Encode("S", Protocol.SetString(p.wants), table.concat(p.ranking, ","),
-		Protocol.SetString(p.excluded), Protocol.SetString(ns.Roster.Capabilities()), p.blessingsOverride and "1" or "0"))
+		"", Protocol.SetString(ns.Roster.Capabilities()), p.blessingsOverride and "1" or "0"))
 end)
 
 -- Keep state even if the sender isn't in our roster yet (they just joined or
 -- haven't loaded); Build only uses peers who are in the group.
-ns.Events.On("Received:S", function(sender, wants, ranking, excluded, caps, override)
+ns.Events.On("Received:S", function(sender, wants, ranking, reserved, caps, override)
 	ns.Roster.peers[sender] = { wants = Protocol.Set(wants), ranking = Protocol.List(ranking),
-		excluded = Protocol.Set(excluded), caps = Protocol.Set(caps), blessingsOverride = override == "1" }
+		caps = Protocol.Set(caps), blessingsOverride = override == "1" }
 	ns.Events.Emit("PeersChanged")
 end)
 
@@ -75,13 +76,13 @@ function ns.Roster.Build()
 			for k, v in pairs(Buffs.ASSUMED_CAPS[class] or {}) do m.caps[k] = v end
 		end
 		if peer and peer.ranking then
-			m.wants, m.ranking, m.excluded = peer.wants, peer.ranking, peer.excluded
+			m.wants, m.ranking = peer.wants, Buffs.NormalizeOrder(peer.ranking, class)
 			m.blessingsOverride = peer.blessingsOverride and true or false
 		else
 			m.wants = defaultWants(class, unit)
 		end
 		-- Without an explicit override, members follow their class plan.
-		if not m.blessingsOverride then m.ranking, m.excluded = Buffs.DefaultRanking(class) end
+		if not m.blessingsOverride then m.ranking = Buffs.DefaultRanking(class) end
 		roster.members[full] = m
 		roster.units[full] = unit
 	end)

@@ -4,7 +4,7 @@ local _, ns = ...
 ns.Tracker = {}
 local Status = {
 	COLORS = { ok = { 0.25, 0.85, 0.35 }, warn = { 1.0, 0.6, 0.1 }, bad = { 0.95, 0.2, 0.2 }, idle = { 0.5, 0.5, 0.5 } },
-	PRIORITY = { bad = 1, warn = 2, unwanted = 3, ok = 4, unknown = 5, idle = 6 },
+	PRIORITY = { bad = 1, warn = 2, ok = 3, unknown = 4, idle = 5 },
 }
 ns.Tracker.Status = Status
 
@@ -19,7 +19,7 @@ function Status.Worst(a, b) return Status.PRIORITY[b] < Status.PRIORITY[a] and b
 --   unreadable  members whose buffs can't be read; any  something is tracked
 --   yours     keys I have to cast; needs  { key, status, caster } I'm missing
 --   mine      { total, pending } recipient pairs assigned to me, and those still missing or low
---   next      my next cast (Actions.Next); cancel  unwanted aura on me
+--   next      my next cast (Actions.Next)
 function Status.NewSummary()
 	return { overall = "ok", perKey = {}, problems = {}, unreadable = {}, any = false, yours = {}, needs = {},
 		mine = { total = 0, pending = 0 } }

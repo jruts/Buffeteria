@@ -23,10 +23,10 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   Brilliance) but one cast per player without it, so the work evens out. On a tie, a
   caster keeps their own group, where they are in range. Everyone should update
   together: copies that split groups differently disagree on who buffs which group.
-- **Personal exclusions.** With **Use my own order** ticked, drag Salvation
-  below **Don't want** to avoid it while tanking. With it off, you get your
-  class's blessings from the shared plan, including manual assignments;
-  exclusions belong to your own order.
+- **Personal priorities.** With **Use my own order** ticked, put less useful
+  blessings at the bottom, for example Salvation while tanking. Paladins serve
+  your highest available blessings first. With it off, you get your class's
+  blessings from the shared plan, including manual assignments.
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
   same preferences. Players without the add-on get sensible class defaults.
 
@@ -36,8 +36,11 @@ cursor, an outlined slot marks where it will land, and the other rows slide asid
 New installs start from a class default ranking: warriors and rogues want Might
 first; mages, warlocks, priests, druids, paladins, and shamans want Wisdom first;
 hunters want Kings first (Might doesn't raise ranged attack power). Kings and
-Salvation follow for everyone. Casters don't want Might, and warriors and rogues
-don't want Wisdom. Players without the add-on are planned from the same defaults,
+Salvation follow for everyone. Might is last for mages, warlocks and priests;
+Wisdom is last for warriors and rogues. All six blessings remain eligible;
+lower-ranked blessings are served when enough paladins can provide them. Saved
+rankings keep their blessing order when the old divider is removed.
+Players without the add-on are planned from the same defaults,
 and so are classes Auto and **Lock in Auto picks** cover on the Paladins tab. If your saved
 ranking still matches the old Kings-first default, it moves to the new one; a
 ranking you reordered is kept.
@@ -147,7 +150,9 @@ Use **Announce to group** to communicate the plan to players without the addon.
 Buffeteria cannot provide a cast button on a client that doesn't have it installed.
 
 An explicit personal blessing preference takes priority over this class plan.
-The Blessings panel has one checkbox, **Use my own order**. Off, you get the
+The Blessings panel has one checkbox, **Use my own order**, enabled by default
+for new characters and after resetting preferences. An existing saved choice
+to turn it off is kept. Off, you get the
 Greater Blessings planned for your class; your list is saved but greyed out and
 not used. On, you get the blessings at the top of your list. The line under the
 checkbox names the blessings you get; hover it for the casters. Dragging the list
@@ -260,7 +265,6 @@ Existing tracker visibility and display choices are preserved.
   aura) you still have to serve. A small, faint green check means everyone assigned
   to you is served. With no buffs
   to give, there is no badge. Players out of range aren't counted against your check.
-  When the remove-unwanted-buff button occupies the corner, the badge sits beside it.
   Hover the head or the small icons to see who you're waiting for.
 - **Mash away.** A cast counts once it actually goes off, so pressing the button or
   key binding during the global cooldown never skips a target. Presses during the
