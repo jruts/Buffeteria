@@ -46,7 +46,7 @@ function Sample.Refresh(preview)
 	for i, key in ipairs(KEYS) do
 		local remaining = i == 2 and 120 or 240
 		local state = preview.mood == "happy" and "ok" or preview.mood == "angry" and "bad"
-			or (i % 2 == 1 and "bad" or remaining < ns.db.warnMinutes * 60 and "warn" or "ok")
+			or (remaining < ns.db.warnMinutes * 60 and "warn" or "ok")
 		local show = ns.db.buffDisplay == "ALL" or ns.db.buffDisplay == "MISSING" and state == "bad"
 			or ns.db.buffDisplay == "EXPIRING" and state == "warn"
 			or ns.db.buffDisplay == "PROBLEMS" and state ~= "ok"

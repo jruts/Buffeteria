@@ -170,7 +170,7 @@ function View.Create(host)
 	box:SetPoint("LEFT", minus, "RIGHT", 2, 0); warnValue = box.value
 	local plus = UI.Chip(controls, "+", 26, function() set("warnMinutes", ns.db.warnMinutes + 1) end, "GameFontNormal")
 	plus:SetPoint("LEFT", box, "RIGHT", 2, 0)
-	hint(controls, 22, -424, nil, "Warn when any recipient has less time left.")
+	hint(controls, 22, -424, nil, "Warn when your recipients have less time left.")
 	for i, entry in ipairs({ { "bad", "Missing" }, { "warn", "Expiring" }, { "ok", "Buffed" } }) do
 		local swatch = CreateFrame("Frame", nil, controls, "BackdropTemplate")
 		swatch:SetSize(16, 16); swatch:SetPoint("TOPLEFT", 22 + (i - 1) * 120, -452)

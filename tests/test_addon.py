@@ -150,7 +150,7 @@ class AddonTests(unittest.TestCase):
                                 assert(mode ~= 'PROBLEMS' or icon.state ~= 'ok')
                             end
                         end
-                        assert(n == (mode == 'MISSING' and 2 or mode == 'EXPIRING' and 2 or 4))
+                        assert(n == (mode == 'ALL' and 4 or mode == 'MISSING' and 0 or 4))
                     end
                     ns.Database.Set('warnMinutes', 1)
                     ns.Database.Set('buffDisplay', 'EXPIRING')
@@ -321,6 +321,10 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
             local s = ns.Tracker.Preview.Summary()
+            -- A dense synthetic menu keeps layout coverage independent of class assignments.
+            for _, key in ipairs({'KINGS','MIGHT','WISDOM','SALV','LIGHT','FORT','SPIRIT','SHADOW','MOTW','INT'}) do
+                s.perKey[key] = {bad=1, warn=0, total=1}
+            end
             ns.Tracker.Compute = function() return s end
             ns.db.buffDisplay = 'ALL'
             local function check(side, columns, expectedCount)
@@ -424,7 +428,13 @@ class AddonTests(unittest.TestCase):
         lua = full_addon()
         lua.execute("""
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
-            ns.Tracker.Compute = ns.Tracker.Preview.Summary
+            ns.Tracker.Compute = function()
+                local s = ns.Tracker.Preview.Summary()
+                for _, key in ipairs({'KINGS','MIGHT','WISDOM','SALV','LIGHT','FORT','SPIRIT','SHADOW','MOTW','INT'}) do
+                    s.perKey[key] = {bad=1, warn=0, total=1}
+                end
+                return s
+            end
             ns.db.iconPosition, ns.db.buffDisplay = 'AUTO', 'ALL'
             local headScale = 1
             head.GetEffectiveScale = function() return headScale end
@@ -614,7 +624,7 @@ class AddonTests(unittest.TestCase):
                                 assert(w:GetWidth() == size and w:GetHeight() == size)
                             end
                         end
-                        assert(visible > 0)
+                        assert(visible > 0 or PLAYER_CLASS == 'ROGUE')
                         assert(frame.point == point and frame:GetWidth() == width and frame:GetHeight() == height)
                         assert(head:GetWidth() == 96 and head:GetAttribute('spell') == spell and head:GetAttribute('*unit1') == unit)
                     end
@@ -699,21 +709,24 @@ class AddonTests(unittest.TestCase):
             end
             for i = 0, 4 do WOW_TIME = WOW_TIME + 0.1; pulse:GetScript('OnUpdate')(pulse) end
             assert(head.halo.width > head:GetWidth())
-            -- Annoyed glows a soft orange; angry glows full red.
+            -- Expiring buffs glow orange; even one missing buff glows full red.
             local compute = ns.Tracker.Compute
-            local function glowFor(bad)
+            local function glowFor(bad, warn)
                 ns.Tracker.Compute = function()
                     return {any=true, overall='bad', problems={}, yours={FORT=true}, needs={},
-                        next=action, perKey={FORT={bad=bad, warn=0, total=2, casters={}}}}
+                        next={status=bad > 0 and 'bad' or 'warn', spell=action.spell},
+                        perKey={FORT={bad=bad, warn=warn, total=2, casters={}}}}
                 end
                 ns.Tracker.Refresh()
                 pulse:GetScript('OnUpdate')(pulse)
                 return head.halo.vertexColor, head.halo:GetAlpha()
             end
-            local c, annoyed = glowFor(1)
+            local c, annoyed = glowFor(0, 1)
             assert(c[1] == 1 and c[2] > 0.5 and c[3] < 0.2)
-            local c2, angry = glowFor(2)
+            local c2, angry = glowFor(1, 1)
             assert(c2[1] == 1 and c2[2] < 0.2 and annoyed < angry)
+            local c3, allMissing = glowFor(2, 0)
+            assert(c3[2] == c2[2] and allMissing == angry)
             ns.Tracker.Compute = compute
             -- Nothing to cast: no glow, but the head never fades.
             local s = {any=true, overall='bad', problems={}, yours={KINGS=true},
@@ -731,7 +744,7 @@ class AddonTests(unittest.TestCase):
             for _, w in ipairs(widgets) do
                 if w.parent == frame and w.key and w.tex and w:IsShown() then alpha[w.key] = w:GetAlpha() end
             end
-            assert(alpha.FORT == 1 and alpha.KINGS == 1 and alpha.INT < 1)
+            assert(alpha.FORT == 1 and alpha.KINGS == 1 and alpha.INT == 1)
             -- The badge: my pending count, a check when done, nothing with no job.
             s.mine = {total=3, pending=2}; ns.Tracker.Refresh()
             assert(head.owed:IsShown() and head.owed:GetText() == 2 and not head.done:IsShown())
@@ -875,7 +888,8 @@ class AddonTests(unittest.TestCase):
                             for _, entry in ipairs({{'ok', 'Happy'}, {'warn', 'Grumpy'}, {'bad', 'Angry'}}) do
                                 ns.Tracker.Compute = function()
                                     return {any=true, overall=entry[1], perKey={FORT={total=1,
-                                        bad=entry[1] == 'bad' and 1 or 0, warn=entry[1] == 'warn' and 1 or 0}}, next=s.next}
+                                        bad=entry[1] == 'bad' and 1 or 0, warn=entry[1] == 'warn' and 1 or 0}},
+                                        next={spell=s.next.spell, icon=s.next.icon, status=entry[1]}}
                                 end
                                 ns.Tracker.Refresh()
                                 assert(head.icon.texture == ns.mediaPath .. choice.prefix .. variant .. entry[2])
@@ -1027,7 +1041,9 @@ class AddonTests(unittest.TestCase):
                     COMBAT = true
                     for _, choice in ipairs(ns.Tracker.Art.CHOICES) do
                         ns.Database.Set('headStyle', choice.key)
-                        for phase, suffix in ipairs({'Angry', 'Grumpy', 'Grumpy', 'Happy'}) do
+                        local phases = PLAYER_CLASS == 'ROGUE' and {'Happy','Happy','Happy','Happy'}
+                            or {'Angry', 'Angry', 'Grumpy', 'Happy'}
+                        for phase, suffix in ipairs(phases) do
                             WOW_TIME = 100 + (phase - 1) * 5
                             ns.Tracker.Refresh()
                             assert(head.icon.texture == ns.mediaPath .. choice.prefix .. 'Colored' .. suffix)
@@ -1092,7 +1108,72 @@ class AddonTests(unittest.TestCase):
             assert(refreshes == 1 and ns.Tracker.Summary().any)
         """)
 
-    def test_orc_moods_distinguish_partial_empty_and_unreadable_buffs(self):
+    def test_tracker_only_signals_my_recipients_and_offered_overdue_help(self):
+        lua = full_addon('PRIEST')
+        lua.execute("""
+            local me, other, recipient = 'A-Realm', 'B-Realm', 'R-Realm'
+            ns.Assignments.roster = {
+                members={
+                    [me]={class='PRIEST', group=1, unit='player', caps={FORT=true}},
+                    [other]={class='PRIEST', group=2, unit='party1', caps={FORT=true}},
+                    [recipient]={class='ROGUE', group=3, unit='party2', caps={}},
+                }, units={[me]='player', [other]='party1', [recipient]='party2'}
+            }
+            ns.Assignments.result = {
+                expected={[me]={FORT=me, INT=other}, [other]={FORT=other, KINGS=other},
+                    [recipient]={FORT=me}},
+                groups={FORT={[1]=me, [2]=other, [3]=me}}, auras={}, pally={}, overrides={}
+            }
+            ns.db.helpOthers, ns.db.resurrect = false, false
+            local missing, expiring = true, false
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if i == 1 and (unit == 'player' or unit == 'party2' and not missing) then
+                    return {name='10938', expirationTime=unit == 'party2' and expiring and WOW_TIME + 60 or 0}
+                end
+            end
+            local head, frame = Buffeteria_CastButton, Buffeteria_Tracker
+            local function icons()
+                local shown = {}
+                for _, w in ipairs(widgets) do
+                    if w.parent == frame and w.key and w.tex and w:IsShown() then shown[w.key] = w end
+                end
+                return shown
+            end
+            ns.Tracker.Refresh()
+            local s = ns.Tracker.Summary()
+            assert(s.perKey.FORT.total == 2 and s.perKey.FORT.bad == 1)
+            assert(not s.perKey.INT and not s.perKey.KINGS)
+            assert(s.mine.pending == 1 and s.overall == 'bad')
+            assert(s.next.who == recipient and head.icon.texture:find('Angry$'))
+            assert(head.halo:IsShown() and head.halo.vertexColor[2] < 0.2)
+            assert(icons().FORT.count:GetText() == 1)
+            -- My work is done; other casters still owe buffs, including Fortitude.
+            missing = false; ns.Tracker.Refresh(); s = ns.Tracker.Summary()
+            assert(s.overall == 'ok' and s.mine.pending == 0 and not s.next)
+            assert(head.icon.texture:find('Happy$') and not head.halo:IsShown())
+            assert(not next(icons()))
+            ns.db.buffDisplay = 'ALL'; ns.Tracker.Refresh()
+            local shown = icons()
+            assert(shown.FORT and not shown.INT and not shown.KINGS)
+            assert(shown.FORT.count:GetText() == '' and shown.FORT.borderColor[2] == ns.Tracker.Status.COLORS.ok[2])
+            -- Only my recipient is running low: orange, even though theirs are missing.
+            expiring = true; ns.Tracker.Refresh(); s = ns.Tracker.Summary()
+            assert(s.perKey.FORT.bad == 0 and s.perKey.FORT.warn == 1 and s.overall == 'warn')
+            assert(head.icon.texture:find('Grumpy$') and head.halo.vertexColor[2] > 0.5)
+            assert(s.next.status == 'warn' and s.next.who == recipient)
+            -- Helping appears only once it is offered; switching it off clears it.
+            expiring = false; ns.db.helpOthers = true
+            WOW_TIME = WOW_TIME + 31; ns.Tracker.Refresh(); s = ns.Tracker.Summary()
+            assert(s.next.helping == other and s.next.who == other)
+            assert(s.perKey.FORT.total == 3 and s.perKey.FORT.bad == 1)
+            assert(s.mine.pending == 0 and head.icon.texture:find('Angry$'))
+            assert(head.halo:IsShown() and icons().FORT.count:GetText() == 1)
+            ns.db.helpOthers = false; ns.Tracker.Refresh(); s = ns.Tracker.Summary()
+            assert(not s.next and s.perKey.FORT.total == 2 and s.perKey.FORT.bad == 0)
+            assert(head.icon.texture:find('Happy$') and not head.halo:IsShown())
+        """)
+
+    def test_orc_moods_prioritize_any_missing_buff_over_expiring_and_ignore_unreadable(self):
         lua = runtime()
         load(lua, "Features/Tracker/Status.lua")
         lua.execute("""
@@ -1102,13 +1183,13 @@ class AddonTests(unittest.TestCase):
                 FORT = {bad = 2, warn = 0, total = 2},
                 INT = {bad = 1, warn = 0, total = 2},
             }}
-            assert(mood(s) == 'grumpy') -- a missing buff is not an empty group
+            assert(mood(s) == 'angry') -- even one missing buff demands red
             s.perKey.INT.bad = 2
             assert(mood(s) == 'angry')
             s.perKey.INT = {bad = 1, warn = 0, total = 2, unknown = 1}
             assert(mood(s) == 'angry') -- every readable pair is missing
             s.perKey.INT.bad = 0
-            assert(mood(s) == 'grumpy')
+            assert(mood(s) == 'angry') -- Fortitude is still missing
             s.overall = 'ok'
             s.perKey = {FORT = {bad = 0, warn = 0, total = 2, unknown = 2}}
             assert(mood(s) == 'idle') -- nothing readable: can't judge
@@ -1118,13 +1199,19 @@ class AddonTests(unittest.TestCase):
             assert(mood(s) == 'happy')
             s.overall = 'warn'; s.perKey.FORT.warn = 1
             assert(mood(s) == 'grumpy')
+            s.perKey = {}; s.overall = 'bad'
+            assert(mood(s) == 'happy') -- nothing assigned to me
+            s.next = {status='bad', helping='Other'}
+            assert(mood(s) == 'angry') -- offered help also demands red
+            s.next = {status='bad', resurrect=true}
+            assert(mood(s) == 'angry')
         """)
 
     def test_preview_cycles_orc_artwork_without_casting_and_updates_in_combat(self):
         lua = full_addon()
         lua.execute("""
             ns.Tracker.Preview.Set(true)
-            local expected = {'Angry', 'Grumpy', 'Grumpy', 'Happy'}
+            local expected = {'Angry', 'Angry', 'Grumpy', 'Happy'}
             for phase, suffix in ipairs(expected) do
                 WOW_TIME = 100 + (phase - 1) * 5
                 ns.Tracker.Refresh()
@@ -1188,11 +1275,11 @@ class AddonTests(unittest.TestCase):
             Buffeteria_CastButton:GetScript('OnEnter')(Buffeteria_CastButton)
             GameTooltip.AddDoubleLine = add
             assert(table.concat(lines, ';'):find('out of range', 1, true))
-            -- Back in range without his buffs: orange again, naming what he misses.
+            -- Back in range without my assigned buffs: red again, naming what he misses.
             UnitIsVisible = function() return true end
             ns.Tracker.Refresh()
             s = ns.Tracker.Summary()
-            assert(#s.unreadable == 0 and ns.Tracker.Status.Mood(s) == 'grumpy')
+            assert(#s.unreadable == 0 and ns.Tracker.Status.Mood(s) == 'angry')
             local named = false
             for _, p in ipairs(s.problems) do if p.who == far and p.status == 'bad' then named = true end end
             assert(named)

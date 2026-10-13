@@ -196,8 +196,8 @@ in combat, without changing the next spell or target.
 Prefer no mascot? Pick **None (clean)** at the bottom of the head menu. The
 tracker then shows just the small icons. Only when you have something to cast
 does a plain square button appear, showing the icon of that cast with a border
-colored like the small icons (orange when some buffs are missing or low, red
-when all are missing); click it or use the key binding. It keeps its place
+colored like the small icons (orange when your buffs are expiring, red
+when any of your buffs are missing); click it or use the key binding. It keeps its place
 while hidden, so the small icons don't move. To move the tracker while the
 button is hidden, drag any small icon (when unlocked), or use Edit Mode, which
 marks the button's spot with a faint Buffeteria icon. There is no halo, GIEF call-out,
@@ -207,9 +207,12 @@ your last head is kept for when you switch back.
 
 Choose which small buff icons appear: **All**, **Missing**,
 **Missing or expiring** (the default), or **Expiring**. A buff counts as
-expiring when at least one recipient has less than the configured time left.
+expiring when at least one of your assigned recipients has less than the configured time left.
 The counts follow the selected filter. These filters affect the small icons;
-the head's expression and next cast still consider all tracked buffs.
+the head's expression and next cast still consider all your assigned buffs.
+Other casters' work does not appear in the small icons or affect your head's mood,
+even when you share the same buff type. Overdue help appears when the head offers
+you that cast.
 Blessings, buffs, and auras all use the same full-color icons, with red borders
 when missing, orange when expiring, and green when buffed. Missing takes priority
 if some recipients are missing a buff while others have it running low.
@@ -232,16 +235,18 @@ preview tag and Edit Mode label.
 Existing tracker visibility and display choices are preserved.
 
 - **Character head:** release a click to cast your next buff on the right target.
-  The transparent mascot smiles when everyone has their tracked buffs, turns
-  grumpy when some are missing or running low, and furious when all tracked buffs are missing
-  across the group. With nothing to track, the head is grey and grumpy.
+  The transparent mascot smiles when your assigned recipients have their buffs, turns
+  grumpy when your buffs are running low, and furious when any buff you are assigned
+  to give is missing. Missing buffs take priority over expiring ones, so casting
+  one buff keeps the head red until all your missing buffs are served. Other
+  casters' missing buffs do not change your head. With nothing to track, the head
+  is grey and grumpy.
   Players whose buffs can't be read (usually because they are out of range) don't
   change the mood; hovering lists them as out of range, and they count again once
   they are back in range. If nobody's buffs can be read, the head is grey.
   Its invisible click area is rectangular.
-- **Is it my turn?** The mood is the whole group's, so the head also shows what *you* should
-  do. When you have something to cast, a glow breathes around it
-  (soft orange while the head is annoyed, strong red when it is angry, flaring up
+- **Is it my turn?** When you have something to cast, a glow breathes around the head
+  (soft orange for expiring buffs, strong red for missing buffs, flaring up
   whenever the next spell changes) and it demands the buff above the face,
   for example **GIEF Fortitude!** The halo stays behind the head; the face is never
   brightened by an additive shimmer. Hover to see the spell and target. When
@@ -251,9 +256,9 @@ Existing tracker visibility and display choices are preserved.
   just needing a buff never triggers them. In combat, only Battle Shout and Inner
   Fire are demanded.
 - **Your part vs. theirs.** A badge in the head's top-right corner shows your own
-  share, separate from the group's mood. A gold number counts the players (and your
+  share. A gold number counts the players (and your
   aura) you still have to serve. A small, faint green check means everyone assigned
-  to you is served, so a grumpy head with a check is someone else's job. With no buffs
+  to you is served. With no buffs
   to give, there is no badge. Players out of range aren't counted against your check.
   When the remove-unwanted-buff button occupies the corner, the badge sits beside it.
   Hover the head or the small icons to see who you're waiting for.
@@ -274,17 +279,16 @@ Existing tracker visibility and display choices are preserved.
   caster is dead or out of sight. Several helpers take turns 10 seconds apart, so
   only one steps in. Hover to see who you're covering for. Blessings are never
   covered: a paladin's new blessing on a player replaces their previous one.
-- **Small icons by the head:** which buffs need attention and how many players are
-  affected. Buffs that are someone else's job are dimmed; yours and the ones you're
-  missing stay bright. Hover to see who casts each one.
+- **Small icons by the head:** your assigned buffs and how many of your recipients
+  need attention. Other casters' buffs are hidden. Hover for details.
 - Right-click the big button for options. Move it with Edit Mode, or unlock it in
   options and drag. Dragging only moves it; releasing a drag never casts or opens options.
 - The minimap icon also acts on click release; dragging it only changes its position.
 - Bind a key: Key Bindings > AddOns > Buffeteria > "Cast next buff".
-- Try `/buff preview` to cycle through furious, partly missing, running low, and
+- Try `/buff preview` to cycle through all missing, partly missing, running low, and
   happy states every five seconds without casting. Paladins, priests, druids and
-  mages see the GIEF call-out; other classes see what it looks like to wait for
-  a buff. Run it again to return to the
+  mages see the GIEF call-out and both missing phases stay furious; other classes
+  stay happy while waiting for buffs from others. Run it again to return to the
   real group.
 
 The window remembers your last tab. On first opening, paladins in a raid start on

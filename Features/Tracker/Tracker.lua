@@ -18,7 +18,6 @@ local HALO = {
 	angry = { 1, 0.12, 0.08, 1 },
 	default = { 1, 0.6, 0.12, 0.6 },
 }
-local OTHERS_ALPHA = 0.5  -- small icons for buffs that are someone else's job
 local BADGE_SCALE = 0.18  -- "your part" count size relative to the head
 local DONE_SCALE = 0.16   -- the "done" check is a quiet confirmation, not a call to act
 local DONE_ALPHA = 0.6
@@ -36,7 +35,7 @@ local DISPLAY = {
 local function editing() return Tracker.EditMode.active end
 -- The clean style: a plain spell button instead of the mascot, without halo or GIEF.
 local function clean() return ns.db.trackerStyle == "CLEAN" end
--- The clean button's border follows the group's state, like the small icons.
+-- The clean button's border follows my buff status, like the small icons.
 local MOOD_STATUS = { happy = "ok", grumpy = "warn", angry = "bad", idle = "idle" }
 
 -- The cooldown holding up the head's cast, as start time and duration (0, 0 when
@@ -161,10 +160,6 @@ local function layoutStatusIcons(s)
 		if state[a] ~= state[b] then return Status.PRIORITY[state[a]] < Status.PRIORITY[state[b]] end
 		return a < b
 	end)
-	-- Full strength for buffs you cast or are missing yourself; others are dimmed.
-	local relevant = {}
-	for key in pairs(s.yours or {}) do relevant[key] = true end
-	for _, need in ipairs(s.needs or {}) do relevant[need.key] = true end
 	local size = ns.db.statusIconSize
 	local grid = Layout.Grid(#keys, placement())
 	for i, key in ipairs(keys) do
@@ -175,7 +170,7 @@ local function layoutStatusIcons(s)
 		ic:ClearAllPoints()
 		ic:SetPoint("TOPLEFT", castBtn, grid.side, Layout.Offset(i, #keys, size, grid))
 		ic.tex:SetTexture(ns.UI.BuffIcon(key))
-		ic:SetAlpha((relevant[key] or state[key] == "ok") and 1 or OTHERS_ALPHA)
+		ic:SetAlpha(1)
 		ic:SetBackdropBorderColor(unpack(Status.Color(state[key])))
 		ic.count:SetText(count > 0 and count or "")
 		ic:Show()
@@ -238,7 +233,7 @@ local function buildCastButton()
 	-- Faded rather than hidden: it is a child of the secure button.
 	castBtn.edge:SetAlpha(0)
 	-- "Your part" badge in the top-right corner: casts I still owe, or a check
-	-- once I've served everyone assigned to me. Separate from the group's mood.
+	-- once I've served everyone assigned to me.
 	castBtn.done = castBtn:CreateTexture(nil, "OVERLAY")
 	castBtn.done:SetTexture(DONE_TEXTURE)
 	castBtn.done:SetAlpha(DONE_ALPHA)
@@ -443,7 +438,7 @@ function showPlaceholder()
 	castBtn.icon:SetAlpha(0.5)
 end
 
--- The head's face for the group's mood, or in the clean style the icon of my
+-- The head's face for my buff status, or in the clean style the icon of my
 -- next cast. With nothing for me to cast, the clean button is invisible and only
 -- the small icons show; the button keeps its place so they don't jump.
 local function showFace(s, mood)
@@ -559,6 +554,20 @@ function Tracker.Compute()
 		ns.db.resurrect)
 	-- In combat the button casts only what it was armed with as combat began.
 	if combat and s.next and s.next.spell ~= castBtn:GetAttribute("spell") then s.next = nil end
+	-- Overdue help becomes my work only once the cast selector offers it. Keep
+	-- other casters' recipients out of my counts, including for shared buff keys.
+	local n = s.next
+	if n then
+		s.any = true
+		s.overall = Status.Worst(s.overall == "idle" and "ok" or s.overall, n.status)
+		if n.helping then
+			local pk = s.perKey[n.key] or Status.NewCounts()
+			s.perKey[n.key] = pk
+			local count = #(n.covers or { n.who })
+			pk.total, pk[n.status], pk.casters[ns.WoW.Me()] = pk.total + count, pk[n.status] + count, true
+			s.yours[n.key] = true
+		end
+	end
 	s.cancel = Tracker.Scan.UnwantedOnMe()
 	return s
 end

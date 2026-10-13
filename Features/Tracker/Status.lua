@@ -14,7 +14,7 @@ function Status.Color(status) return Status.COLORS[status] or Status.COLORS.idle
 function Status.Worst(a, b) return Status.PRIORITY[b] < Status.PRIORITY[a] and b or a end
 
 -- The tracker summary read by the head, tooltips and minimap button:
---   overall   worst status; perKey  buff key -> counts (see NewCounts)
+--   overall   my worst status; perKey  buff key -> my recipient counts (see NewCounts)
 --   problems  { who, key, status, rem, caster } worst first
 --   unreadable  members whose buffs can't be read; any  something is tracked
 --   yours     keys I have to cast; needs  { key, status, caster } I'm missing
@@ -36,20 +36,24 @@ function Status.NewCounts()
 	return { bad = 0, warn = 0, total = 0, unknown = 0, casters = {} }
 end
 
--- Count expected buff/recipient pairs, rather than treating any missing buff
--- as an empty menu. Unreadable pairs (e.g. players out of range) are left out:
--- they neither upset nor satisfy him. With nothing readable he stays idle.
+-- Only my recipients affect the face. Any missing buff is angry; expiring buffs
+-- are grumpy. Unreadable recipients neither upset nor satisfy him. A helper cast
+-- or resurrection also demands attention, even when my assigned work is done.
 function Status.Mood(summary)
 	if not summary or not summary.any then return "idle" end
-	local readable, missing = 0, 0
+	local total, readable, missing, expiring = 0, 0, 0, 0
 	for _, counts in pairs(summary.perKey or {}) do
+		total = total + counts.total
 		readable = readable + counts.total - (counts.unknown or 0)
 		missing = missing + counts.bad
+		expiring = expiring + counts.warn
 	end
+	local nextStatus = summary.next and summary.next.status
+	if missing > 0 or nextStatus == "bad" then return "angry" end
+	if expiring > 0 or nextStatus == "warn" then return "grumpy" end
+	if total == 0 then return "happy" end
 	if readable <= 0 then return "idle" end
-	if missing == readable then return "angry" end
-	if summary.overall == "ok" then return "happy" end
-	return "grumpy"
+	return "happy"
 end
 
 -- Worst first, then by player and buff (entries without a player sort by buff).

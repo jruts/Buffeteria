@@ -119,7 +119,6 @@ function Scan.Update(now, warnSec)
 	local summary, since = Status.NewSummary(), {}
 	local function problem(full, key, status, rem, caster)
 		table.insert(summary.problems, { who = full, key = key, status = status, rem = rem, caster = caster })
-		summary.overall = Status.Worst(summary.overall, status == "unwanted" and "warn" or status)
 	end
 	for full, exp in pairs(res.expected) do
 		local m = roster.members[full]
@@ -127,24 +126,25 @@ function Scan.Update(now, warnSec)
 			for key, caster in pairs(exp) do
 				summary.any = true
 				local st, rem = Scan.Rate(full, key, now, warnSec)
+				local pk
 				if caster == me then
 					summary.mine.total = summary.mine.total + 1
 					if st == "bad" or st == "warn" then summary.mine.pending = summary.mine.pending + 1 end
+					pk = summary.perKey[key] or Status.NewCounts()
+					summary.perKey[key] = pk
+					pk.total = pk.total + 1
+					pk.casters[me] = true
+					summary.overall = Status.Worst(summary.overall, st)
 				end
-				local pk = summary.perKey[key] or Status.NewCounts()
-				summary.perKey[key] = pk
-				pk.total = pk.total + 1
-				summary.overall = Status.Worst(summary.overall, st)
 				if st == "unknown" then
-					pk.unknown = pk.unknown + 1
+					if pk then pk.unknown = pk.unknown + 1 end
 					if summary.unreadable[#summary.unreadable] ~= full then table.insert(summary.unreadable, full) end
 				elseif st == "bad" or st == "warn" then
 					if st == "bad" then
 						local id = full .. ":" .. key
 						since[id] = missingSince[id] or now
 					end
-					pk[st] = pk[st] + 1
-					pk.casters[caster] = true
+					if pk then pk[st] = pk[st] + 1 end
 					problem(full, key, st, rem, caster)
 					if caster == me then summary.yours[key] = true end
 					if full == me then table.insert(summary.needs, { key = key, status = st, caster = caster }) end
@@ -165,6 +165,7 @@ function Scan.Update(now, warnSec)
 		summary.perKey[aura] = pk
 		summary.mine.total = summary.mine.total + 1
 		if missingAura then
+			summary.overall = Status.Worst(summary.overall, "bad")
 			summary.mine.pending = summary.mine.pending + 1
 			summary.yours[aura] = true
 			problem(me, aura, "bad", nil, me)

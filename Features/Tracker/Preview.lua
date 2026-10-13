@@ -69,6 +69,11 @@ function Preview.Summary()
 			s.needs[1] = { key = "KINGS", status = phase, caster = "Kingsley" }
 		end
 	end
+	-- The live tracker shows only my work; the fake raid follows the same rule.
+	for buffKey in pairs(s.perKey) do
+		if buffKey ~= key then s.perKey[buffKey] = nil end
+	end
+	if not key then s.overall = "ok" end
 	return s
 end
 

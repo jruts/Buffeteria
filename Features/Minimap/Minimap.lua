@@ -6,7 +6,7 @@ ns.Minimap = MinimapButton
 
 local btn
 local RADIUS_PAD = 10
-local MOOD_TEXT = { ok = "Everyone is fed.", warn = "Buffs running low.", bad = "Buffs missing!", idle = "Nothing to track." }
+local MOOD_TEXT = { ok = "Your buffs are served.", warn = "Your buffs are running low.", bad = "Your buffs need attention!", idle = "Nothing to track." }
 
 local function place()
 	local angle = math.rad(ns.db.minimap.angle or 200)
