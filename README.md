@@ -46,14 +46,15 @@ ranking still matches the old Kings-first default, it moves to the new one; a
 ranking you reordered is kept.
 
 Warriors see **Battle Shout** in the Buffs panel. It is on by default; click it to
-skip it. The tracker reminds you when your own shout is missing or has less than
-30 seconds left (it lasts only two minutes, so the expiring-buff setting would
-always flag it), and the big button casts it once you have enough rage. Other
+skip it. The tracker reminds you when your own shout is missing or reaches
+the configured percentage of its duration left (by default, 5% of its two
+minutes is six seconds), and the big button casts it once you have enough rage. Other
 classes never see it, and warriors without Buffeteria aren't tracked for it.
 
 Priests likewise see **Inner Fire** in the Buffs panel, on by default and skippable.
 The tracker reminds you when it is missing (including after its charges run out)
-or has less than 60 seconds of its ten minutes left, and the big button casts it
+or reaches the configured remaining percentage (by default, 5% of its ten
+minutes is 30 seconds), and the big button casts it
 once you have the mana. Other classes never see it, and priests without
 Buffeteria aren't tracked for it.
 
@@ -212,7 +213,8 @@ your last head is kept for when you switch back.
 
 Choose which small buff icons appear: **All**, **Missing**,
 **Missing or expiring** (the default), or **Expiring**. A buff counts as
-expiring when at least one of your assigned recipients has less than the configured time left.
+expiring when at least one of your assigned recipients reaches the configured
+percentage of their buff's full duration remaining.
 The counts follow the selected filter. These filters affect the small icons;
 the head's expression and next cast still consider all your assigned buffs.
 Other casters' work does not appear in the small icons or affect your head's mood,
@@ -222,7 +224,15 @@ Blessings, buffs, and auras all use the same full-color icons, with red borders
 when missing, orange when expiring, and green when buffed. Missing takes priority
 if some recipients are missing a buff while others have it running low.
 The border legend stays inside Buff icons. **Expiring below** selects the
-1–15 minute warning threshold. In the **Layout** panel, choose **2**, **3**, or **4** icons per row (default: 2).
+1–50% remaining-duration warning threshold (default: 5%). For example, ten-minute
+Thorns warns at 30 seconds remaining, while a one-hour buff warns at three minutes.
+The actual aura duration is used, including longer group versions and talents.
+Battle Shout and Inner Fire follow this setting too. Permanent buffs do not warn.
+If the client supplies no duration and no known base duration exists, the tracker
+still detects expiry but cannot give a percentage warning. Existing minute-based
+settings switch to 5%; saved percentage choices are preserved.
+
+In the **Layout** panel, choose **2**, **3**, or **4** icons per row (default: 2).
 Choose **Icon position: Left, Top, Right, Bottom, or Auto** (default: Bottom) from
 the compass of buttons around **Auto**.
 The four fixed positions keep the chosen side and icons per row, including near

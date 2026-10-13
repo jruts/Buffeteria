@@ -1,5 +1,16 @@
 # Buffeteria
 
+## v0.6.12
+
+- Changed **Expiring below** from minutes to a percentage of each buff's full
+  duration, adjustable from 1% to 50% and defaulting to 5%. Ten-minute Thorns
+  now warns at 30 seconds remaining; a one-hour buff warns at three minutes.
+- Warnings use each recipient's actual aura duration, including group spell
+  versions and talents. Battle Shout and Inner Fire use the same percentage
+  setting, including while their auras are hidden in combat.
+- Existing minute-based settings switch to 5%; saved percentage choices are
+  preserved. The Settings controls and tracker preview now show percentages.
+
 ## v0.6.11
 
 - Removed **Don't want**, blessing exclusions, and the tracker's unwanted-buff

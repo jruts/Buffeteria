@@ -32,15 +32,15 @@ end
 
 -- One search for my next cast: the inputs, and the candidates found so far.
 -- While ctx.helping, the search serves other casters' recipients instead of mine.
-local function newSearch(now, warnSec)
-	local ctx = { now = now, warnSec = warnSec, me = ns.WoW.Me(), cands = {},
+local function newSearch(now, warnPercent)
+	local ctx = { now = now, warnPercent = warnPercent, me = ns.WoW.Me(), cands = {},
 		roster = ns.Assignments.roster, res = ns.Assignments.result }
 
 	function ctx.casting(full, key) return (pendingUntil[full .. ":" .. key] or 0) > now end
 	-- "bad" or "warn" when the member needs the buff and no cast of it is on the way.
 	function ctx.needs(full, key)
 		if ctx.casting(full, key) then return nil end
-		local st = ns.Tracker.Scan.Rate(full, key, now, warnSec)
+		local st = ns.Tracker.Scan.Rate(full, key, now, warnPercent)
 		if st == "bad" or st == "warn" then return st end
 	end
 	function ctx.caster(full, key) return (ctx.res.expected[full] or EMPTY)[key] end
@@ -62,7 +62,7 @@ local function newSearch(now, warnSec)
 	-- once when the assigned caster is dead or out of sight.
 	local function helpable(full, key)
 		local caster = ctx.caster(full, key)
-		if not caster or caster == ctx.me or ns.Tracker.Scan.Rate(full, key, now, warnSec) ~= "bad" then return false end
+		if not caster or caster == ctx.me or ns.Tracker.Scan.Rate(full, key, now, warnPercent) ~= "bad" then return false end
 		local unit = ctx.roster.units[caster]
 		local away = not unit or UnitIsDeadOrGhost(unit) or not UnitIsVisible(unit)
 		local wait = (away and 0 or HELP_GRACE) + helperRank(key, caster) * HELP_STAGGER
@@ -200,8 +200,8 @@ end
 -- With help and nothing of my own to cast, I cover group buffs and Thorns for
 -- another caster (never blessings: a paladin's new blessing replaces their last).
 -- With resurrect, a dead group member comes before any buff.
-function Actions.Next(now, warnSec, missingAura, combat, help, resurrect)
-	local ctx = newSearch(now, warnSec)
+function Actions.Next(now, warnPercent, missingAura, combat, help, resurrect)
+	local ctx = newSearch(now, warnPercent)
 	if resurrect and not combat then
 		local rez = ns.Extra.Resurrect.Next(ctx.roster, now)
 		if rez then return rez end

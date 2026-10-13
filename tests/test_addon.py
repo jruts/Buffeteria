@@ -42,6 +42,119 @@ def full_addon(player_class="PALADIN", login=True, addon_name="Buffeteria"):
 
 
 class AddonTests(unittest.TestCase):
+    def test_expiry_percentage_migrates_and_updates_settings_controls(self):
+        lua = full_addon()
+        lua.execute("""
+            BuffeteriaCharDB = {warnMinutes=15, locked=true}
+            ns.Database.Init()
+            assert(ns.db.warnPercent == 5 and ns.db.warnMinutes == nil and ns.db.locked)
+            ns.Database.Set('warnPercent', 12)
+            ns.Database.Init()
+            assert(ns.db.warnPercent == 12)
+            for _, sample in ipairs({{0,1}, {100,50}, {'7',7}, {7.6,8}, {'invalid',5}}) do
+                ns.Database.Set('warnPercent', sample[1])
+                assert(ns.db.warnPercent == sample[2])
+            end
+            ns.Preferences.Init()
+            ns.Options.Toggle()
+            findWidget('Settings').parent:GetScript('OnClick')(findWidget('Settings').parent)
+            local controls = findWidget('Tracker settings').parent.controls
+            local minus, plus
+            for _, widget in ipairs(widgets) do
+                if widget.parent and widget.parent.parent == controls then
+                    if widget.label == '-' then minus = widget.parent end
+                    if widget.label == '+' then plus = widget.parent end
+                end
+            end
+            assert(minus and plus and findWidget('5%'):IsVisible())
+            plus:GetScript('OnClick')(plus)
+            assert(ns.db.warnPercent == 6 and findWidget('6%'):IsVisible())
+            minus:GetScript('OnClick')(minus)
+            assert(ns.db.warnPercent == 5 and findWidget('5%'):IsVisible())
+        """)
+
+    def test_percentage_warning_uses_each_recipients_duration_and_cached_read(self):
+        lua = self.tracker_actions("""
+            CLASS = 'DRUID'
+            ns.Assignments.roster = {members={Me={class='DRUID', unit='player'},
+                R={class='WARRIOR', unit='party1'}, S={class='WARRIOR', unit='party2'}},
+                units={Me='player', R='party1', S='party2'}}
+            ns.Assignments.result = {groups={}, auras={}, pally={}, overrides={},
+                expected={R={THORNS='Me'}, S={THORNS='Me'}}}
+        """)
+        lua.execute("""
+            local left, hidden = 300, false
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if hidden then error('hidden auras') end
+                if i == 1 and unit ~= 'player' then
+                    return {name='9910', expirationTime=NOW+left,
+                        duration=unit == 'party1' and 600 or 1200}
+                end
+            end
+            assert(nextCast() == nil) -- A fresh ten-minute Thorns isn't already expiring.
+            left = 45
+            local cast = nextCast()
+            assert(cast.who == 'S' and cast.status == 'warn')
+            assert(ns.Tracker.Scan.Rate('R', 'THORNS', NOW, 5) == 'ok')
+            left = 30
+            nextCast()
+            assert(ns.Tracker.Scan.Rate('R', 'THORNS', NOW, 5) == 'warn') -- inclusive boundary
+            assert(ns.Tracker.Scan.Rate('R', 'THORNS', NOW, 1) == 'ok')
+            hidden = true
+            NOW = NOW + 25
+            assert(nextCast().status == 'warn') -- Hidden reads retain each duration and expiry.
+            NOW = NOW + 5
+            assert(nextCast().status == 'bad')
+            VISIBLE.party1 = false
+            nextCast()
+            assert(ns.Tracker.Scan.Rate('R', 'THORNS', NOW, 5) == 'unknown')
+        """)
+
+    def test_percentage_duration_handles_group_versions_legacy_api_and_missing_data(self):
+        lua = self.tracker_actions("""
+            CLASS = 'DRUID'
+            ns.Assignments.roster = {members={Me={class='DRUID', unit='player'},
+                R={class='ROGUE', unit='party1', group=1}, S={class='ROGUE', unit='party2', group=2}},
+                units={Me='player', R='party1', S='party2'}}
+            ns.Assignments.result = {groups={MOTW={[1]='Me', [2]='Me'}}, auras={}, pally={}, overrides={},
+                expected={R={MOTW='Me'}, S={MOTW='Me'}}}
+        """)
+        lua.execute("""
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'party1' and i == 1 then
+                    return {name='9885', expirationTime=NOW+100, duration=1800}
+                elseif unit == 'party2' and i == 1 then
+                    return {name='21850', expirationTime=NOW+100, duration=3600}
+                end
+            end
+            assert(nextCast().who == 'S') -- Single and group versions share a key, not a duration.
+            -- When both versions exist, use the duration of the aura actually selected.
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'party1' then
+                    if i == 1 then return {name='21850', expirationTime=NOW+100, duration=3600} end
+                    if i == 2 then return {name='9885', expirationTime=NOW+110, duration=1800} end
+                elseif unit == 'party2' and i == 1 then
+                    return {name='21850', expirationTime=0, duration=3600}
+                end
+            end
+            assert(nextCast() == nil) -- Longer remaining aura wins; permanent auras never warn.
+            C_UnitAuras = nil
+            function UnitBuff(unit, i)
+                if unit ~= 'player' and i == 1 then
+                    return '9885', nil, nil, nil, 1800, NOW+90, 'player'
+                end
+            end
+            assert(nextCast().status == 'warn') -- Legacy tuple preserves duration.
+            function UnitBuff(unit, i)
+                if unit ~= 'player' and i == 1 then
+                    return '9885', nil, nil, nil, nil, 200, 'player'
+                end
+            end
+            assert(nextCast() == nil) -- No duration: don't invent a percentage.
+            NOW = 200
+            assert(nextCast().status == 'bad') -- Expiry still works without duration.
+        """)
+
     def test_unsized_settings_preview_does_not_abort_navigation_initialization(self):
         lua = full_addon()
         lua.execute("""
@@ -152,7 +265,7 @@ class AddonTests(unittest.TestCase):
                         end
                         assert(n == (mode == 'ALL' and 4 or mode == 'MISSING' and 0 or 4))
                     end
-                    ns.Database.Set('warnMinutes', 1)
+                    ns.Database.Set('warnPercent', 1)
                     ns.Database.Set('buffDisplay', 'EXPIRING')
                     assert(sample.visibleCount == 0)
                     ns.Database.Set('buffDisplay', 'ALL')
@@ -1125,7 +1238,7 @@ class AddonTests(unittest.TestCase):
             local missing, expiring = true, false
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if i == 1 and (unit == 'player' or unit == 'party2' and not missing) then
-                    return {name='10938', expirationTime=unit == 'party2' and expiring and WOW_TIME + 60 or 0}
+                    return {name='10938', expirationTime=unit == 'party2' and expiring and WOW_TIME + 60 or 0, duration=1800}
                 end
             end
             local head, frame = Buffeteria_CastButton, Buffeteria_Tracker
@@ -2442,7 +2555,7 @@ class AddonTests(unittest.TestCase):
             ns.WoW.KnowsAny = function(ids) return true, ids[#ids] end
             ns.WoW.ItemCount = function() return 10 end
             ns.WoW.SpellInRange = function() return true end
-            ns.db = {warnMinutes=5}
+            ns.db = {warnPercent=5}
             ns.Assignments.roster = {members={R={class='ROGUE',unit='party1'}, C={class='ROGUE',unit='party2'}},
                 units={R='party1', C='party2'}}
             ns.Assignments.result = {groups={}, auras={}, pally={ROGUE={Pal='KINGS'}},
@@ -2451,7 +2564,7 @@ class AddonTests(unittest.TestCase):
         load(lua, "Features/Tracker/Scan.lua")
         load(lua, "Features/Tracker/Actions.lua")
         lua.execute("""
-            local function nextCast() ns.Tracker.Scan.Update(100, 300); return ns.Tracker.Actions.Next(100, 300) end
+            local function nextCast() ns.Tracker.Scan.Update(100, 5); return ns.Tracker.Actions.Next(100, 5) end
             local action = nextCast()
             assert(action and not action.big)
             assert(action.spell == '20217')
@@ -2465,10 +2578,10 @@ class AddonTests(unittest.TestCase):
             C_UnitAuras.GetAuraDataByIndex = function(_, i)
                 if i == 1 then return {name='25290', expirationTime=0} end
             end
-            local summary = ns.Tracker.Scan.Update(100, 300)
+            local summary = ns.Tracker.Scan.Update(100, 5)
             assert(#summary.problems == 0)
             ns.Assignments.result.expected.R = {}
-            summary = ns.Tracker.Scan.Update(100, 300)
+            summary = ns.Tracker.Scan.Update(100, 5)
             assert(#summary.problems == 0) -- extra blessings do not demand attention
         """)
 
@@ -2529,8 +2642,8 @@ class AddonTests(unittest.TestCase):
         load(lua, "Features/Tracker/Actions.lua")
         lua.execute("""
             function nextCast(help, resurrect)
-                ns.Tracker.Scan.Update(NOW, 300)
-                return ns.Tracker.Actions.Next(NOW, 300, nil, false, help, resurrect)
+                ns.Tracker.Scan.Update(NOW, 5)
+                return ns.Tracker.Actions.Next(NOW, 5, nil, false, help, resurrect)
             end
         """)
         return lua
@@ -2578,8 +2691,8 @@ class AddonTests(unittest.TestCase):
                     assert(nextCast(false, false) == nil)
                     assert(cast.spell == SPELL and cast.who == 'S' and cast.unit == 'party2' and cast.label == 'S')
                     -- In combat the head can't retarget, so it waits.
-                    ns.Tracker.Scan.Update(NOW, 300)
-                    assert(ns.Tracker.Actions.Next(NOW, 300, nil, true, false, true) == nil)
+                    ns.Tracker.Scan.Update(NOW, 5)
+                    assert(ns.Tracker.Actions.Next(NOW, 5, nil, true, false, true) == nil)
                     -- Out of range or already being resurrected by someone else: next body.
                     IsSpellInRange = function(_, unit) return unit == 'party2' and 0 or 1 end
                     assert(nextCast(false, true).who == 'R')
@@ -2864,7 +2977,7 @@ class AddonTests(unittest.TestCase):
             assert(not button:GetAttribute('spell'))
         """)
 
-    def test_warrior_battle_shout_is_optional_self_buff_with_short_warning(self):
+    def test_warrior_battle_shout_is_optional_self_buff_with_percentage_warning(self):
         lua = full_addon('WARRIOR')
         lua.execute("""
             assert(ns.db.wants.BSHOUT and ns.Preferences.Get().wants.BSHOUT)
@@ -2877,14 +2990,14 @@ class AddonTests(unittest.TestCase):
             ns.Tracker.Refresh()
             local button = Buffeteria_CastButton
             assert(button:GetAttribute('spell') == '25289' and button:GetAttribute('*unit1') == 'player')
-            -- 60 seconds left is fine; 20 seconds left warns despite the 5-minute setting.
+            -- At 5% of two minutes, 60 seconds is fine and six seconds warns.
             local left = 60
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if i == 1 then return {name='25289', expirationTime=WOW_TIME + left, sourceUnit='player'} end
             end
             ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.BSHOUT.warn == 0 and not button:GetAttribute('spell'))
-            left = 20; ns.Tracker.Refresh()
+            left = 6; ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.BSHOUT.warn == 1)
             -- Not enough rage: still tracked, but nothing to cast.
             C_Spell.IsSpellUsable = function() return false, true end
@@ -2954,9 +3067,9 @@ class AddonTests(unittest.TestCase):
             COMBAT = true; ns.Tracker.Refresh()
             assert(call() == nil)
             -- It runs out mid-fight: dated from the last read.
-            WOW_TIME = WOW_TIME + 75; ns.Tracker.Refresh()
+            WOW_TIME = WOW_TIME + 93; ns.Tracker.Refresh()
             assert(call() == 'BSHOUT' and ns.Tracker.Summary().perKey.BSHOUT.warn == 1)
-            WOW_TIME = WOW_TIME + 30; ns.Tracker.Refresh()
+            WOW_TIME = WOW_TIME + 12; ns.Tracker.Refresh()
             assert(call() == 'BSHOUT' and ns.Tracker.Summary().perKey.BSHOUT.bad == 1)
             -- Recast in combat: good for the learned duration, not the base two minutes.
             frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 25289)
@@ -2966,7 +3079,7 @@ class AddonTests(unittest.TestCase):
             -- Other units and other spells change nothing.
             frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'party1', 'guid', 25289)
             frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 12345)
-            WOW_TIME = WOW_TIME + 20; ns.Tracker.Refresh()
+            WOW_TIME = WOW_TIME + 33; ns.Tracker.Refresh()
             assert(call() == 'BSHOUT')
             COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
             assert(call() == nil) -- readable again: the real aura wins
@@ -3019,7 +3132,7 @@ class AddonTests(unittest.TestCase):
             assert(result.expected.W.BSHOUT == 'W' and not result.expected.P.BSHOUT and not result.expected.X.BSHOUT)
         """)
 
-    def test_priest_inner_fire_is_optional_self_buff_with_short_warning(self):
+    def test_priest_inner_fire_is_optional_self_buff_with_percentage_warning(self):
         lua = full_addon('PRIEST')
         lua.execute("""
             assert(ns.db.wants.IFIRE and ns.Preferences.Get().wants.IFIRE)
@@ -3035,14 +3148,14 @@ class AddonTests(unittest.TestCase):
             ns.Tracker.Refresh()
             local button = Buffeteria_CastButton
             assert(button:GetAttribute('spell') == '10952' and button:GetAttribute('*unit1') == 'player')
-            -- 90 seconds left is fine; 45 seconds left warns despite the 5-minute setting.
+            -- At 5% of ten minutes, 90 seconds is fine and 30 seconds warns.
             local left = 90
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if i == 1 then return {name='10952', expirationTime=WOW_TIME + left, sourceUnit='player'} end
             end
             ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.IFIRE.warn == 0 and not button:GetAttribute('spell'))
-            left = 45; ns.Tracker.Refresh()
+            left = 30; ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.IFIRE.warn == 1)
             -- Not enough mana: still tracked, but nothing to cast.
             C_Spell.IsSpellUsable = function() return false, true end
@@ -3120,12 +3233,12 @@ class AddonTests(unittest.TestCase):
             assert(Buffeteria_CastButton:GetAttribute('*unit1') == 'party1')
             assert(table.concat(ns.Assignments.Lines(false), ';'):find('Thorns: A -> B', 1, true))
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
-                if unit == 'party1' and i == 1 then return {name='9910', expirationTime=WOW_TIME+60} end
+                if unit == 'party1' and i == 1 then return {name='9910', expirationTime=WOW_TIME+30, duration=600} end
             end
             ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.THORNS.warn == 1)
             IsSpellInRange = function() return 0 end
-            assert(not ns.Tracker.Actions.Next(WOW_TIME, 300))
+            assert(not ns.Tracker.Actions.Next(WOW_TIME, 5))
             ns.Comm.OnMessage('BUFFETERIA', 'S|2||KINGS||MIGHT|0', 'PARTY', 'B-Realm'); runTimers()
             assert(not ns.Assignments.result.expected['B-Realm'].THORNS) -- explicit peer opt-out beats role default
         """)

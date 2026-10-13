@@ -7,7 +7,7 @@ ns.Database.RANGES = {
 	iconSize = { 32, 128, 4, 96 },
 	statusIconSize = { 16, 64, 1, 32 },
 	shoutSize = { 10, 24, 1, 16 },
-	warnMinutes = { 1, 15, 1, 5 },
+	warnPercent = { 1, 50, 1, 5 },
 }
 -- Allowed values, the first being the default.
 local CHOICES = {
@@ -47,6 +47,9 @@ function ns.Database.Init()
 	db.minimap = db.minimap or { angle = 200, hide = false }
 	-- onlyProblems is the setting's pre-buffDisplay form.
 	if db.onlyProblems == false and db.buffDisplay == nil then db.buffDisplay = "ALL" end
+	-- A fixed number of minutes has no equivalent across different buff durations.
+	-- Older characters start at the new 5% default; saved percentages are kept.
+	db.warnMinutes = nil
 	for key in pairs(CHOICES) do db[key] = ns.Database.Normalize(key, db[key]) end
 	for key in pairs(ns.Database.RANGES) do db[key] = ns.Database.Normalize(key, db[key]) end
 	ns.db = db

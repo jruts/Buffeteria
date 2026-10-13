@@ -7,8 +7,8 @@ ns.Tracker.Scan = Scan
 
 local isSecret = issecretvalue or function() return false end
 local nameToKey = {}
-local cache = {}          -- [fullName] = { [key] = { exp = number, name = string } }
-local durations = {}      -- [key] = seconds, from the last readable aura (talents can lengthen it)
+local cache = {}          -- [fullName] = { [key] = { exp, name, duration } }
+local durations = {}      -- My combat self buffs' last readable durations (including talents)
 local missingSince = {}   -- ["name:key"] = when an expected buff was first seen missing
 local selfKeys = {}       -- [spellID] = key, for my combat self buffs
 for _, b in ipairs(Buffs.SELF_BUFFS) do
@@ -30,8 +30,8 @@ local function auraAt(unit, i)
 	if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
 		return C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
 	end
-	local name, _, _, _, _, exp, source = UnitBuff(unit, i)
-	if name then return { name = name, expirationTime = exp, sourceUnit = source } end
+	local name, _, _, _, duration, exp, source = UnitBuff(unit, i)
+	if name then return { name = name, duration = duration, expirationTime = exp, sourceUnit = source } end
 end
 
 -- Calls visit(aura) for each helpful aura. False if the client hides them, or
@@ -46,7 +46,7 @@ local function eachAura(unit, visit)
 	return true
 end
 
--- Returns a key -> {exp,name} map, or nil if the client hides aura data right now.
+-- Returns a key -> {exp,name,duration} map, or nil if aura data is hidden.
 local function readAuras(unit)
 	if not UnitIsVisible(unit) then return nil end
 	local out = {}
@@ -55,13 +55,18 @@ local function readAuras(unit)
 		local key = keyOf(a.name)
 		if key then
 			local exp, prev = a.expirationTime or 0, out[key]
-			if not prev or (prev.exp ~= 0 and (exp == 0 or exp > prev.exp)) then
-				out[key] = { exp = exp, name = a.name }
-			end
 			local d = a.duration
-			if not isSecret(d) and type(d) == "number" and d > 0 then durations[key] = d end
+			if isSecret(d) or type(d) ~= "number" or d <= 0 then d = nil end
+			if not prev or (prev.exp ~= 0 and (exp == 0 or exp > prev.exp)) then
+				out[key] = { exp = exp, name = a.name, duration = d or Buffs.byKey[key].duration }
+			end
 		end
 	end)
+	if readable and unit == "player" then
+		for key, aura in pairs(out) do
+			if Buffs.byKey[key].combat and aura.duration then durations[key] = aura.duration end
+		end
+	end
 	return readable and out or nil
 end
 
@@ -80,21 +85,21 @@ function Scan.SelfCast(key, now)
 	local d = durations[key] or buff.duration
 	if not d then return end
 	cache[me] = cache[me] or {}
-	cache[me][key] = { exp = now + d, name = buff.label }
+	cache[me][key] = { exp = now + d, name = buff.label, duration = d }
 end
 
 -- status: "ok" | "warn" | "bad" | "unknown"
-function Scan.Rate(full, key, now, warnSec)
+function Scan.Rate(full, key, now, warnPercent)
 	local auras = cache[full]
 	if not auras then return "unknown" end
-	local short = Buffs.byKey[key] and Buffs.byKey[key].warnSeconds
-	if short then warnSec = math.min(warnSec, short) end
 	local a = auras[key]
 	if not a then return "bad" end
 	if a.exp == 0 then return "ok" end
 	local rem = a.exp - now
 	if rem <= 0 then return "bad" end
-	if rem <= warnSec then return "warn", rem end
+	-- Each recipient can have a different duration (single/group spells or talents).
+	-- Without a duration, keep tracking expiry without guessing a percentage.
+	if a.duration and rem <= a.duration * warnPercent / 100 then return "warn", rem end
 	return "ok", rem
 end
 
@@ -112,7 +117,7 @@ end
 
 -- Scans the group and returns the observed part of the tracker summary
 -- (everything but next; see Status.NewSummary).
-function Scan.Update(now, warnSec)
+function Scan.Update(now, warnPercent)
 	local roster, res, me = ns.Assignments.roster, ns.Assignments.result, ns.WoW.Me()
 	readGroup(roster)
 	local summary, since = Status.NewSummary(), {}
@@ -124,7 +129,7 @@ function Scan.Update(now, warnSec)
 		if m and not m.dead then
 			for key, caster in pairs(exp) do
 				summary.any = true
-				local st, rem = Scan.Rate(full, key, now, warnSec)
+				local st, rem = Scan.Rate(full, key, now, warnPercent)
 				local pk
 				if caster == me then
 					summary.mine.total = summary.mine.total + 1

@@ -522,10 +522,10 @@ end
 -- The full summary: the observed group and my next cast.
 function Tracker.Compute()
 	if Tracker.Preview.active then return Tracker.Preview.Summary() end
-	local now, warnSec = GetTime(), ns.db.warnMinutes * 60
-	local s = Tracker.Scan.Update(now, warnSec)
+	local now, warnPercent = GetTime(), ns.db.warnPercent
+	local s = Tracker.Scan.Update(now, warnPercent)
 	local combat = InCombatLockdown()
-	s.next = Tracker.Actions.Next(now, warnSec, Tracker.Scan.MissingAura(), combat, ns.db.helpOthers,
+	s.next = Tracker.Actions.Next(now, warnPercent, Tracker.Scan.MissingAura(), combat, ns.db.helpOthers,
 		ns.db.resurrect)
 	-- In combat the button casts only what it was armed with as combat began.
 	if combat and s.next and s.next.spell ~= castBtn:GetAttribute("spell") then s.next = nil end

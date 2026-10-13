@@ -65,7 +65,7 @@ function View.Refresh()
 	for _, bar in ipairs(sliders) do
 		bar:SetValue(ns.db[bar.key]); bar.readout:SetText(ns.db[bar.key] .. " px")
 	end
-	warnValue:SetText(ns.db.warnMinutes .. " min")
+	warnValue:SetText(ns.db.warnPercent .. "%")
 	combatNote:SetShown(InCombatLockdown())
 	refreshing = false
 	Tracker.SettingsPreview.Refresh(sample)
@@ -164,13 +164,14 @@ function View.Create(host)
 		option.mode = key; displayButtons[#displayButtons + 1] = option
 	end
 	UI.Text(controls, "GameFontHighlight", 22, -396, nil, "Expiring below")
-	local minus = UI.Chip(controls, "-", 26, function() set("warnMinutes", ns.db.warnMinutes - 1) end, "GameFontNormal")
+	local step = ns.Database.RANGES.warnPercent[3]
+	local minus = UI.Chip(controls, "-", 26, function() set("warnPercent", ns.db.warnPercent - step) end, "GameFontNormal")
 	minus:SetPoint("TOPLEFT", 140, -390)
 	local box = UI.ValueBox(controls, 64, 24, "GameFontHighlight")
 	box:SetPoint("LEFT", minus, "RIGHT", 2, 0); warnValue = box.value
-	local plus = UI.Chip(controls, "+", 26, function() set("warnMinutes", ns.db.warnMinutes + 1) end, "GameFontNormal")
+	local plus = UI.Chip(controls, "+", 26, function() set("warnPercent", ns.db.warnPercent + step) end, "GameFontNormal")
 	plus:SetPoint("LEFT", box, "RIGHT", 2, 0)
-	hint(controls, 22, -424, nil, "Warn when your recipients have less time left.")
+	hint(controls, 22, -424, nil, "Percent of buff duration left. 5% of 10 min = 30 sec.")
 	for i, entry in ipairs({ { "bad", "Missing" }, { "warn", "Expiring" }, { "ok", "Buffed" } }) do
 		local swatch = CreateFrame("Frame", nil, controls, "BackdropTemplate")
 		swatch:SetSize(16, 16); swatch:SetPoint("TOPLEFT", 22 + (i - 1) * 120, -452)

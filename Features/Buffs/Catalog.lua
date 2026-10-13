@@ -18,16 +18,15 @@ Buffs.GROUP_BUFFS = {
 -- Tank requests are single-target buffs; Righteous Fury can only be self-cast.
 Buffs.TANK_BUFFS = {
 	{ key = "RFURY", class = "PALADIN", label = "Righteous Fury", ids = {25780}, groupIds = {}, selfOnly = true },
-	{ key = "THORNS", class = "DRUID", label = "Thorns", ids = {467,782,1075,8914,9756,9910}, groupIds = {} },
+	{ key = "THORNS", class = "DRUID", label = "Thorns", ids = {467,782,1075,8914,9756,9910}, groupIds = {}, duration = 600 },
 }
 
--- Personal self buffs, offered only to their class. Battle Shout (two minutes) and
--- Inner Fire (ten minutes) warn shortly before expiring instead of at the global
--- threshold. combat = the tracker keeps offering them during combat, when the client
--- hides auras; duration (seconds) dates a recast until the aura is readable again.
+-- Personal self buffs, offered only to their class. combat = the tracker keeps
+-- offering them during combat, when the client hides auras. Base duration (seconds)
+-- dates a recast and supplies a fallback when the aura's duration is unavailable.
 Buffs.SELF_BUFFS = {
-	{ key = "BSHOUT", class = "WARRIOR", label = "Battle Shout", ids = {6673,5242,6192,11549,11550,11551,25289}, groupIds = {}, selfOnly = true, warnSeconds = 30, combat = true, duration = 120 },
-	{ key = "IFIRE", class = "PRIEST", label = "Inner Fire", ids = {588,7128,602,1006,10951,10952}, groupIds = {}, selfOnly = true, warnSeconds = 60, combat = true, duration = 600 },
+	{ key = "BSHOUT", class = "WARRIOR", label = "Battle Shout", ids = {6673,5242,6192,11549,11550,11551,25289}, groupIds = {}, selfOnly = true, combat = true, duration = 120 },
+	{ key = "IFIRE", class = "PRIEST", label = "Inner Fire", ids = {588,7128,602,1006,10951,10952}, groupIds = {}, selfOnly = true, combat = true, duration = 600 },
 }
 
 -- Paladin blessings. Greater versions hit every member of the target's class.
