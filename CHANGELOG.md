@@ -7,6 +7,7 @@
 
 <!-- buffeteria:auto-notes:start -->
 - Automate release versions and draft preparation ([8278193](https://github.com/jruts/Buffeteria/commit/8278193d9f9ade7a3b45c7ff4c5fedcf14f3de62))
+- Add Asmongold and EsfandTV tracker heads ([fc359b1](https://github.com/jruts/Buffeteria/commit/fc359b106ee8febd78fd539ead1a2ab27e420cdf))
 <!-- buffeteria:auto-notes:end -->
 
 ## v0.6.13
