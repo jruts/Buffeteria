@@ -1,5 +1,15 @@
 # Buffeteria
 
+## v0.6.13
+
+- Updated **Announce to group** to use the current WoW Forever chat API, with
+  a fallback for older clients.
+- Checked client API compatibility against WoW Forever **1.60.1 build 70790**.
+  The add-on interface remains **16001**.
+- Added automated startup coverage for all nine classes without legacy spell
+  or chat globals, plus announcement checks for Live and Dev. Layout and
+  protected casting still need an in-game check.
+
 ## v0.6.12
 
 - Changed **Expiring below** from minutes to a percentage of each buff's full

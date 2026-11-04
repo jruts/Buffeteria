@@ -42,6 +42,77 @@ def full_addon(player_class="PALADIN", login=True, addon_name="Buffeteria"):
 
 
 class AddonTests(unittest.TestCase):
+    def test_current_client_startup_without_legacy_spell_or_chat_globals(self):
+        for player_class in ("PALADIN", "PRIEST", "DRUID", "MAGE", "WARRIOR",
+                             "ROGUE", "HUNTER", "WARLOCK", "SHAMAN"):
+            with self.subTest(player_class=player_class):
+                lua = runtime()
+                lua.execute((ROOT / "tests/wow_mock.lua").read_text(encoding="utf-8"))
+                lua.globals().PLAYER_CLASS = player_class
+                lua.execute("""
+                    IsPlayerSpell = nil; IsSpellKnown = nil; SendChatMessage = nil
+                    GetSpellInfo = nil; GetSpellTexture = nil; GetSpellCooldown = nil
+                    IsUsableSpell = nil; IsSpellInRange = nil; GetItemCount = nil; UnitBuff = nil
+                    C_SpellBook = {IsSpellKnownOrInSpellBook = function() return true end}
+                    C_Spell.IsSpellUsable = function() return true, false end
+                    C_Spell.IsSpellInRange = function() return true end
+                    C_Spell.GetSpellCooldown = function() return {startTime=0, duration=0} end
+                    chat = {}
+                    C_ChatInfo.SendChatMessage = function(message, channel)
+                        chat[#chat + 1] = {message, channel}
+                    end
+                """)
+                for name in addon_files():
+                    load(lua, name)
+                lua.execute("""
+                    ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', ADDON_NAME)
+                    ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+                    assert(ns.Assignments.roster.members[ns.WoW.Me()])
+                    local caps = ns.Roster.Capabilities()
+                    for _, buff in pairs(ns.Buffs.byKey) do
+                        if buff.class == PLAYER_CLASS then assert(caps[buff.key]) end
+                    end
+                    ns.Options.Toggle()
+                    ns.Assignments.Announce()
+                    assert(#chat == #ns.Assignments.Lines(false))
+                    for i, line in ipairs(ns.Assignments.Lines(false)) do
+                        assert(chat[i][1] == '[Buffeteria] ' .. line and chat[i][2] == 'PARTY')
+                    end
+                """)
+
+    def test_announcements_prefer_current_api_and_keep_legacy_and_solo_support(self):
+        for addon_name in ("Buffeteria", DEV_NAME):
+            with self.subTest(addon_name=addon_name):
+                lua = full_addon(addon_name=addon_name)
+                lua.execute("""
+                    local chat, printed = {}, {}
+                    local function capture(message, channel)
+                        chat[#chat + 1] = {message, channel}
+                    end
+                    C_ChatInfo.SendChatMessage = capture
+                    SendChatMessage = function() error('legacy API should not be used') end
+                    local function check(channel)
+                        chat = {}
+                        ns.Assignments.Announce()
+                        local lines = ns.Assignments.Lines(false)
+                        assert(#chat == #lines)
+                        for i, line in ipairs(lines) do
+                            assert(chat[i][1] == '[' .. ns.title .. '] ' .. line)
+                            assert(chat[i][2] == channel)
+                        end
+                    end
+                    check('PARTY')
+                    IsInRaid = function() return true end
+                    check('RAID')
+                    C_ChatInfo.SendChatMessage = nil; SendChatMessage = capture
+                    check('RAID')
+                    IsInRaid = function() return false end
+                    IsInGroup = function() return false end
+                    ns.WoW.Print = function(line) printed[#printed + 1] = line end
+                    chat = {}; ns.Assignments.Announce()
+                    assert(#chat == 0 and #printed == #ns.Assignments.Lines(false))
+                """)
+
     def test_expiry_percentage_migrates_and_updates_settings_controls(self):
         lua = full_addon()
         lua.execute("""

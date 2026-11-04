@@ -3,6 +3,9 @@
 **All-you-can-buff.** Raid buff coordination for every class, not just paladins.
 
 Targets **World of Warcraft: Forever** (interface `16001`, client `1.60.1`).
+Client API compatibility checked against **build `70790`**; the interface number
+remains `16001`. Group announcements use `C_ChatInfo.SendChatMessage`, with a
+fallback for older clients. Layout and protected casting still need an in-game check.
 
 Buffeteria works out who casts what, and a one-click tracker serves it. Players can
 choose their own buffs, while paladins can manage class blessings for the whole group,

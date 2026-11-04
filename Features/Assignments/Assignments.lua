@@ -82,7 +82,8 @@ end
 
 function Assignments.Announce()
 	local chan = IsInRaid() and "RAID" or (IsInGroup() and "PARTY") or nil
+	local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
 	for _, l in ipairs(Assignments.Lines(false)) do
-		if chan then pcall(SendChatMessage, "[" .. ns.title .. "] " .. l, chan) else ns.WoW.Print(l) end
+		if chan then pcall(send, "[" .. ns.title .. "] " .. l, chan) else ns.WoW.Print(l) end
 	end
 end
