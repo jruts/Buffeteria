@@ -2,6 +2,9 @@
 
 ## v0.6.14
 
+- Added **Asmongold** and **EsfandTV** to the tracker head selector, with happy,
+  grumpy and angry expressions, optional colored hair, and matching cast halos.
+
 <!-- buffeteria:auto-notes:start -->
 - Automate release versions and draft preparation ([8278193](https://github.com/jruts/Buffeteria/commit/8278193d9f9ade7a3b45c7ff4c5fedcf14f3de62))
 <!-- buffeteria:auto-notes:end -->

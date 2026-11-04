@@ -192,13 +192,16 @@ never casts or changes the real tracker's target, position or preview mode.
 Head sizing on the real tracker waits until after combat; the Settings header
 shows this note only in combat. The sample can resize immediately.
 
-Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, Undead, or Xaru** using
+Choose **Head: Orc, Gnome, Night Elf, Tauren, Human, Troll, Undead, Xaru,
+Asmongold, or EsfandTV** using
 the native-arrow portrait menu. Each head has happy, grumpy and angry artwork
 and a matching cast halo. All are floating heads without necks or shoulders.
 **Colored hair** is on by default: subtly green when happy, orange when grumpy,
 and red when angry. Untick it to restore original hair colors. Skin, facial
 hair and accessories retain their natural colors. Xaru is the human mage homage
-with swept-back hair, moustache and goatee. Every class can select every head.
+with swept-back hair, moustache and goatee. Asmongold and EsfandTV are streamer
+homages with their own three expressions and natural or colored hair.
+Every class can select every head.
 Head and hair choices are saved per character and apply immediately, including
 in combat, without changing the next spell or target.
 
@@ -373,7 +376,7 @@ The mascot source sheets and their exact built-in ImageGen prompts are kept unde
 `Artwork/Tracker/`. [The tracker art guide](Artwork/Tracker/STYLE_GUIDE.md) defines
 Classic race features, lighting, expressions, and reference sources.
 Run `python tools/build_tracker_art.py` with Pillow to rebuild
-all eight heads' original and colored hair runtime portraits and silhouette glows
+all ten heads' original and colored hair runtime portraits and silhouette glows
 in `Media/`. Use `--colored-only` to rebuild just the colored hair variants.
 These are uncompressed 256×256 RGBA TGA textures for the game; source artwork
 and build tools are not deployed.

@@ -15,7 +15,7 @@ from make_orc_glow import glow, write_tga
 ROOT = Path(__file__).resolve().parents[1]
 SIZE = 256
 MOODS = ("Happy", "Grumpy", "Angry")
-HEADS = ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu")
+HEADS = ("Orc", "Gnome", "NightElf", "Tauren", "Human", "Troll", "Undead", "Xaryu", "Asmongold", "EsfandTV")
 
 
 def build(prefix):

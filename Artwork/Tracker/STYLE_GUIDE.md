@@ -46,12 +46,19 @@ of a race.
 | Troll | Long lean face and hooked nose, blue skin, long lower-jaw tusks, swept pointed ears, purple mohawk. | An orc jaw painted blue, short button nose, later Zandalari motifs. |
 | Undead | Gaunt formerly human face, hollow cheeks, dry grey-green skin and exposed bone, damaged nose, sparse hair. | A healthy grey human, a bare clean skull, wet gore or glowing haze. |
 | Xaru | Josh "Xaryu" Lujan's lean face, brown eyes, dark expressive brows, exposed widow's-peak hairline with high temples, longer swept-back dark hair falling behind the ears to jaw level with feathered ends, moustache and small goatee; visible painted tonal planes and grouped brushstrokes. | A generic wizard face, photographic skin, heavy full beard, short cropped hair, headband, circlet, hat or any accessory obscuring his hairline. |
+| Asmongold | Slender long face, high forehead and receding temples, long straight medium-brown hair, expressive brows, brown eyes, short brown moustache and beard. | A generic warrior face, bulky jaw, headwear or headphones, photographic rendering. |
+| EsfandTV | Moderately narrow face beneath a dense black beard, defined cheekbones and tapered jaw, thick black brows, brown eyes, long wavy dark hair falling beside the face. | Inflated cheeks or jowls, a broad round face, an oversized sideways hair silhouette, photographic rendering. |
 
 Xaryu is a streamer homage available to every class, with the same expressions
 and floating-head treatment as the race portraits. Likeness references are his
 [public profile portrait](https://x.com/xaryu), including its unobstructed hairline.
 The existing Human and Orc sheets supply the painting style, not the facial identity.
 His face and hairstyle identify this mage homage; no headwear is needed.
+
+Asmongold and EsfandTV use the same floating-head treatment. Likeness references
+are [Asmongold's Mythic Talent portrait](https://www.mythictalent.com/creators)
+and [Esfand's official event headshot](https://draft.esfand.tv/).
+Preserve their individual facial structures rather than copying the Human head.
 
 ## Expression and rendering
 
@@ -79,6 +86,10 @@ must never touch or cross its cell boundary.
 `prompts.json` stores the exact built-in ImageGen prompts and references for
 the original sheets. `colored-prompts.json` records the colored hair edits, and
 `colored-margin-repair.json` records the Troll margin correction.
+`streamer-prompts.json` records Asmongold and EsfandTV generation, Esfand's
+slimmer-face correction, and their colored-hair edits using built-in ImageGen.
+These two heads' source sheets are downsampled to 1536 x 512 pixels with
+LANCZOS resampling and PNG optimization, preserving their transparent edges.
 `python tools/build_tracker_art.py` packs both sets into
 uncompressed 256 x 256 RGBA TGAs and rebuilds each external silhouette halo.
 Packing preserves the generated artwork's alpha; it does not recolor faces.

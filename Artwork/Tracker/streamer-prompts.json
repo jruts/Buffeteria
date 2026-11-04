@@ -1,0 +1,59 @@
+{
+  "tool": "Built-in image_gen",
+  "cell_order": [
+    "Happy",
+    "Grumpy",
+    "Angry"
+  ],
+  "assets": [
+    {
+      "source": "Asmongold.png",
+      "prompt": "Use case: stylized-concept. Asset type: production transparent three-expression floating-head sprite sheet for Buffeteria, a WoW Classic add-on. Input 1 is a real person's LIKENESS reference only; input 2 is the PAINTING STYLE and sheet-layout reference only. Create a NEW subject, not a copy of input 2's face. Match the existing crisp detailed hand-painted Warcraft-like portrait style: matte skin, clearly painted tonal planes, grouped brushstrokes, expressive adult facial anatomy. Not a photograph, not plastic, not cute cartoon. Neutral daylight, stable natural skin and hair colors in all moods, no colored rim, no glow, no mood color wash. Canvas MUST be exactly 3:1 horizontal: three equal SQUARE cells in order HAPPY / GRUMPY / ANGRY, front-facing heads at consistent size. Happy: broad pleased smile, lifted relaxed brows, raised cheeks. Grumpy: closed-mouth downturned frown, lowered brows and narrowed eyes. Angry: tense nose, deeply compressed brows, bared clenched teeth. Same recognizable identity and hairstyle in all three. Isolated FLOATING HEADS ONLY ending at jaw, chin or beard; NO neck, throat, shoulders, body, clothing. Long hair ends naturally beside the jaw. Each complete head must fit within 78% of its square cell's width AND height; generous true alpha-transparent margin on ALL sides, no hair crosses cell edges. No background, checkerboard, text, labels, dividers, watermark, jewelry, headwear or headphones. Expressions must read at 32px.\nSubject: Asmongold, recognizable likeness from input 1: slender long face, pale natural skin, high forehead with receding temples, long straight medium-brown hair with a slightly off-center part, dark brown eyes, distinctive expressive arching brows, narrow nose, medium short brown moustache and beard following his narrow jaw. Preserve his natural slightly asymmetrical face; do not beautify him into the existing Human or Xaryu mascot.",
+      "references": [
+        "https://mythictalent.b-cdn.net/creators/asmongold.jpg",
+        "Artwork/Tracker/Xaryu.png"
+      ]
+    },
+    {
+      "source": "EsfandTV.png",
+      "prompt": "Use case: stylized-concept. Asset type: production transparent three-expression floating-head sprite sheet for Buffeteria, a WoW Classic add-on. Input 1 is a real person's LIKENESS reference only; input 2 is the PAINTING STYLE and sheet-layout reference only. Create a NEW subject, not a copy of input 2's face. Match the existing crisp detailed hand-painted Warcraft-like portrait style: matte skin, clearly painted tonal planes, grouped brushstrokes, expressive adult facial anatomy. Not a photograph, not plastic, not cute cartoon. Neutral daylight, stable natural skin and hair colors in all moods, no colored rim, no glow, no mood color wash. Canvas MUST be exactly 3:1 horizontal: three equal SQUARE cells in order HAPPY / GRUMPY / ANGRY, front-facing heads at consistent size. Happy: broad pleased smile, lifted relaxed brows, raised cheeks. Grumpy: closed-mouth downturned frown, lowered brows and narrowed eyes. Angry: tense nose, deeply compressed brows, bared clenched teeth. Same recognizable identity and hairstyle in all three. Isolated FLOATING HEADS ONLY ending at jaw, chin or beard; NO neck, throat, shoulders, body, clothing. Long hair ends naturally beside the jaw. Each complete head must fit within 78% of its square cell's width AND height; generous true alpha-transparent margin on ALL sides, no hair crosses cell edges. No background, checkerboard, text, labels, dividers, watermark, jewelry, headwear or headphones. Expressions must read at 32px.\nSubject: EsfandTV, recognizable likeness from input 1: broad rounded face, natural warm olive skin, brown eyes, thick black arched eyebrows, substantial nose, very long thick wavy nearly black hair parted near center with high forehead, dense full black beard and moustache forming a rounded jaw silhouette. Preserve his facial fullness and distinctive likeness; do not turn him into the existing Human or Xaryu mascot.",
+      "references": [
+        "https://otkdata-img.b-cdn.net/esfandtv/draft/esfand_headshot.jpg",
+        "Artwork/Tracker/Xaryu.png"
+      ],
+      "correction_prompt": "Use case: identity-preserve. Asset type: Buffeteria transparent three-expression head sheet. Input 1 is the generated EsfandTV sheet to CORRECT. Input 2 is Esfand's actual photographic LIKENESS reference. The generated cheeks, jaw and head silhouette are MUCH TOO FAT and broad, user explicitly rejected that. Correct all THREE portraits to an appreciably SLIMMER facial shape closer to the real man. Reduce lateral cheek fullness and jaw width by about 20%, define cheekbone planes and a more tapered natural jaw beneath beard, slightly elongate the face, remove swollen cheeks and excessive jowls. His actual face is moderately narrow under the beard, NOT round or chubby. Substantially narrow the bulky sideways hair silhouette; long wavy black hair falls vertically beside the face rather than forming an inflated halo. Keep his recognizable thick black brows, brown eyes, nose and dense natural black beard/moustache. Avoid gaunt extremes; maintain healthy natural likeness, just substantially less broad and heavy than input 1. Keep a painterly Warcraft-style finish with clear tonal planes and brushstrokes, neutral lighting and warm natural skin, NOT photographic skin. All three should look like the SAME person. Preserve exactly the three moods left HAPPY smile, middle GRUMPY closed-mouth frown, right ANGRY clenched teeth. Exactly 3:1 horizontal transparent sheet with three equal square cells. Consistent size, front-facing FLOATING HEAD ONLY ending at beard, no neck, shoulders or clothing. Each entire head including hair fits within 78% of square cell width and height, generous alpha transparency on every side. No text, labels, background, checkerboard, glow or colored lighting.",
+      "correction_references": [
+        "Initial draft (discarded; overly broad face)",
+        "https://otkdata-img.b-cdn.net/esfandtv/draft/esfand_headshot.jpg"
+      ]
+    }
+  ],
+  "colored_edits": [
+    {
+      "source": "AsmongoldColored.png",
+      "prompt": "Use case: precise-object-edit. Asset type: production transparent Buffeteria three-expression floating-head sprite sheet. Input is the exact edit target. Change ONLY scalp hair color: LEFT happy muted subtle forest/sage green, MIDDLE grumpy warm burnt orange/copper, RIGHT angry deeper crimson-red. Keep dark roots, matte painted shadows, grouped strands and restrained highlights. NOT neon or glowing. Keep EXACTLY the original face identity, facial anatomy, expressions, natural skin, eye colors, eyebrows, moustache and beard colors, hairstyle, size and lighting. Facial hair MUST stay original brown in every cell. Preserve the 3:1 horizontal canvas with three equal square cells, Happy/Grumpy/Angry order, full floating heads with generous true alpha transparent margins on all sides. No neck, throat, shoulders, body, clothes, background, checkerboard, text, labels, dividers, watermark, glow or skin wash. No clipping or cell overlap.",
+      "references": [
+        "Asmongold.png"
+      ]
+    },
+    {
+      "source": "EsfandTVColored.png",
+      "prompt": "Use case: precise-object-edit. Asset type: production transparent Buffeteria three-expression floating-head sprite sheet. Input is the exact edit target. Change ONLY scalp hair color: LEFT happy muted subtle forest/sage green, MIDDLE grumpy warm burnt orange/copper, RIGHT angry deeper crimson-red. Keep dark roots, matte painted shadows, grouped strands and restrained highlights. NOT neon or glowing. Keep EXACTLY the original face identity, facial anatomy, expressions, natural skin, eye colors, eyebrows, moustache and beard colors, hairstyle, size and lighting. Facial hair MUST stay original black in every cell. Preserve the 3:1 horizontal canvas with three equal square cells, Happy/Grumpy/Angry order, full floating heads with generous true alpha transparent margins on all sides. No neck, throat, shoulders, body, clothes, background, checkerboard, text, labels, dividers, watermark, glow or skin wash. No clipping or cell overlap.",
+      "references": [
+        "EsfandTV.png"
+      ]
+    }
+  ],
+  "postprocessing": {
+    "operation": "Downsample each source sheet to at most 512 pixels high, preserving its 3:1 aspect ratio and RGBA transparency; save optimized PNG.",
+    "resampling": "Pillow LANCZOS",
+    "source_dimensions": [
+      1536,
+      512
+    ],
+    "runtime_dimensions": [
+      256,
+      256
+    ]
+  }
+}
