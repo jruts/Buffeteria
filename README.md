@@ -390,6 +390,13 @@ for all nine classes, plus Dev identity, separate settings, and deployment with
 backups and release-file preservation. Layout and protected casting still need
 an in-game check.
 
+## Release versions
+
+Pushing to `main` automatically prepares the next patch release as a GitHub draft
+with a changelog entry. Further pushes update that draft; publishing remains a
+manual click after in-game testing. Use **Actions > Prepare release > Run workflow**
+for a minor or major version instead. See [RELEASING.md](RELEASING.md) for details.
+
 ## Code organization
 
 Each feature owns its logic and, when needed, its view:

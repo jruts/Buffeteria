@@ -38,17 +38,48 @@ In [repository Actions settings](https://github.com/jruts/Buffeteria/settings/se
 The GitHub token is supplied automatically by Actions. No additional GitHub secret
 is needed. Without the CurseForge settings, a published release still gets its ZIP,
 but the CurseForge step fails with setup instructions. After adding the missing
-settings, rerun the failed job. Manual **Run workflow** builds only and never uploads.
+settings, rerun the failed job. **Release > Run workflow** builds only and never uploads.
 
 ## Publish each release
 
-1. Add the version's notes at the top of `CHANGELOG.md` and push the code to GitHub.
-2. Open [GitHub Releases](https://github.com/jruts/Buffeteria/releases) and click
-   **Draft a new release**. Choose or create a version tag, for example `v0.5.0`,
-   targeting the commit containing your changes.
-3. Add a title and release notes, then click **Publish release**.
+1. Push changes to `main`. **Actions > Prepare release** runs the add-on and release
+   automation checks, calculates the next patch version from the highest published
+   stable release, commits its entry to `CHANGELOG.md`, and prepares a GitHub draft.
+   For example, `v0.6.13` becomes `v0.6.14`; no version editing is needed.
+2. Test in-game, then open the draft in
+   [GitHub Releases](https://github.com/jruts/Buffeteria/releases). Review its notes
+   and click **Publish release** after **Prepare release** finishes successfully.
+   The draft targets the exact checked commit, including its changelog entry.
+3. Further pushes update the same draft and notes until you publish it. The next
+   change after publication starts the next patch draft. A run with no changes
+   since the published version does not create an empty release.
 4. Watch **Actions > Release**. A successful run means CurseForge accepted the
    upload; its moderation process determines when the file becomes public.
+
+For a larger release, open
+[Actions > Prepare release](https://github.com/jruts/Buffeteria/actions/workflows/prepare-release.yml),
+click **Run workflow** on `main`, and choose **minor** (for example, `0.6.13` to
+`0.7.0`) or **major** (`1.0.0`). **auto** keeps an existing draft's version and
+otherwise chooses patch; **patch** explicitly switches a pending override back to
+the next patch version. Ordinary pushes retain the override until publication.
+
+Notes list commit subjects and links automatically. Put player-facing summaries
+above or below the `buffeteria:auto-notes` comments in the pending changelog
+section; those additions survive regeneration. In the GitHub draft, put manual
+text outside the `buffeteria:auto-release` comments. The text inside these blocks
+is regenerated on each push. Old published changelog sections are preserved.
+
+The workflow only manages the draft it created. It refuses conflicting releases,
+existing Git tags, multiple automated drafts, or a checkout that changed during
+validation. It never publishes a release, moves a tag, or force-pushes `main`.
+It uses the built-in GitHub token with `contents: write`; no new secret is needed.
+The changelog commit does not trigger another workflow run. Pull `main` before
+your next local push to include that commit. If branch protection is introduced,
+it must allow the automation's changelog commit or preparation will fail.
+
+You can rerun **Prepare release** after a transient failure. It reuses the draft
+and changelog entry instead of incrementing the version again. The separate
+**Release > Run workflow** command still builds a ZIP only.
 
 Tags containing `alpha` or `beta` upload as that type. A plain version tag uploads
 as Release unless you check GitHub's **pre-release** option, which uploads as Beta.
