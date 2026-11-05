@@ -7,7 +7,7 @@ local RankList = {}
 ns.Preferences.RankList = RankList
 local ROW_H, ROW, ICON = 40, 30, 24
 -- Drag state: the slot being moved, where the cursor grabbed it, and the lifted copy.
-local list, rows, ghost, served, onMoved, cutoff
+local list, rows, ghost, served, onMoved, cutoff, orderForView, previewing
 local dragging, grabY, ghostY, dropping, moved
 
 -- Paint one ranking row (or the lifted copy) for a key.
@@ -45,7 +45,7 @@ end
 local function refreshRows()
 	local mine = served()
 	local prefix, assigned, gap = 0, 0, false
-	for i, key in ipairs(ns.Preferences.Order()) do
+	for i, key in ipairs(orderForView()) do
 		local r = rows[i]
 		if mine[key] then
 			assigned = assigned + 1
@@ -63,7 +63,7 @@ local function refreshRows()
 			showContent(r, true)
 			paintRow(r, key, i, mine)
 		end
-		r.grip:SetShown(i ~= dragging)
+		r.grip:SetShown(i ~= dragging and not previewing())
 	end
 	-- A cutoff is honest only when assignments form a contiguous ranked prefix.
 	cutoff:SetShown(ns.db.blessingsOverride and not dragging and prefix > 0 and prefix == assigned)
@@ -202,18 +202,20 @@ end
 
 -- Explains a row: who casts it on you, or why nobody does.
 local function rowTooltip(r, i)
-	local order = ns.Preferences.Order()
+	local order = orderForView()
 	local key = order[i]
 	local caster = served()[key]
 	GameTooltip:SetOwner(r, "ANCHOR_RIGHT"); GameTooltip:SetText(Buffs.byKey[key].label)
-	if caster then
+	if previewing() then
+		GameTooltip:AddLine("Default class ranking.", 1, 1, 1, true)
+	elseif caster then
 		GameTooltip:AddLine("Cast on you by " .. ns.Roster.Name(caster) .. ".", 1, 1, 1, true)
 	elseif ns.db.blessingsOverride then
 		GameTooltip:AddLine("Not cast on you: there aren't enough paladins for it.", 1, 1, 1, true)
 	else
 		GameTooltip:AddLine("Not in your class's blessings. Your list is used only with Use my own order.", 1, 1, 1, true)
 	end
-	GameTooltip:AddLine("Drag to reorder.", 0.65, 0.65, 0.65, true)
+	if not previewing() then GameTooltip:AddLine("Drag to reorder.", 0.65, 0.65, 0.65, true) end
 	GameTooltip:Show()
 end
 
@@ -224,7 +226,7 @@ local function createRow(i)
 	r:SetScript("OnEnter", function(self) if not dragging then setGrip(self, true); rowTooltip(self, i) end end)
 	r:SetScript("OnLeave", function(self) setGrip(self, false); GameTooltip:Hide() end)
 	r:SetScript("OnMouseDown", function(self, button)
-		if button ~= "LeftButton" or dragging then return end
+		if button ~= "LeftButton" or dragging or previewing() then return end
 		setGrip(self, false); GameTooltip:Hide()
 		startDrag(i)
 	end)
@@ -245,8 +247,8 @@ local function createGhost()
 end
 
 -- servedBy() -> blessing key -> paladin; moved() runs once when a drag changed the order.
-function RankList.Create(parent, servedBy, movedCallback)
-	served, onMoved = servedBy, movedCallback
+function RankList.Create(parent, servedBy, movedCallback, getOrder, isPreview)
+	served, onMoved, orderForView, previewing = servedBy, movedCallback, getOrder, isPreview
 	list = CreateFrame("Frame", nil, parent)
 	list:SetHeight(ROW_H * #Buffs.BLESSINGS)
 	rows = {}

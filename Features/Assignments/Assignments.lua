@@ -5,7 +5,7 @@ local Buffs, Solver, sortedKeys = ns.Buffs, ns.Solver, ns.Util.SortedKeys
 -- resolve; other features read them and never write.
 local Assignments = {
 	roster = { members = {}, units = {} },
-	result = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, expected = {} },
+	result = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, raidGroupCasters = {}, expected = {} },
 }
 ns.Assignments = Assignments
 
@@ -62,20 +62,33 @@ function Assignments.Lines(withColor)
 		end
 	end
 	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
-		local byCaster = {}
-		for grp, c in pairs(r.groups[buff.key] or {}) do byCaster[c] = byCaster[c] or {}; table.insert(byCaster[c], grp) end
-		local parts = {}
-		for c, grps in pairs(byCaster) do parts[#parts + 1] = nm(c) .. " (G" .. table.concat(sorted(grps), ",") .. ")" end
-		if #parts > 0 then lines[#lines + 1] = buff.label .. ": " .. table.concat(sorted(parts), ", ") end
-	end
-	for _, buff in ipairs(Buffs.TANK_BUFFS) do
-		local parts = {}
-		for member, expected in pairs(r.expected) do
-			local caster = expected[buff.key]
-			if caster then parts[#parts + 1] = nm(caster) .. " -> " .. nm(member) end
+		local raidCaster = (r.raidGroupCasters or {})[buff.key]
+		if raidCaster then
+			local coverage = Assignments.roster.isRaid and "raid" or "group"
+			lines[#lines + 1] = buff.label .. ": " .. nm(raidCaster) .. " (" .. coverage .. ")"
+		else
+			local byCaster = {}
+			for grp, c in pairs(r.groups[buff.key] or {}) do byCaster[c] = byCaster[c] or {}; table.insert(byCaster[c], grp) end
+			local parts = {}
+			for c, grps in pairs(byCaster) do parts[#parts + 1] = nm(c) .. " (G" .. table.concat(sorted(grps), ",") .. ")" end
+			if #parts > 0 then lines[#lines + 1] = buff.label .. ": " .. table.concat(sorted(parts), ", ") end
 		end
-		for _, part in ipairs(sorted(parts)) do lines[#lines + 1] = buff.label .. ": " .. part end
 	end
+	for _, buff in ipairs(Buffs.RAID_SUPPORT) do
+		local caster = (r.raidSupport or {})[buff.key]
+		if caster then lines[#lines + 1] = buff.label .. ": " .. nm(caster) end
+	end
+	for _, collection in ipairs({ Buffs.TANK_BUFFS, Buffs.ENCOUNTER_BUFFS }) do
+		for _, buff in ipairs(collection) do
+			local parts = {}
+			for member, expected in pairs(r.expected) do
+				local caster = expected[buff.key]
+				if caster then parts[#parts + 1] = nm(caster) .. " -> " .. nm(member) end
+			end
+			for _, part in ipairs(sorted(parts)) do lines[#lines + 1] = buff.label .. ": " .. part end
+		end
+	end
+	if r.raidShout then lines[#lines + 1] = Buffs.byKey.BSHOUT.label .. ": " .. nm(r.raidShout) end
 	if #lines == 0 then lines[1] = "Nothing to assign. Find a buffer!" end
 	return lines
 end

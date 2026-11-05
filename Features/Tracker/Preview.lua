@@ -19,7 +19,7 @@ local FAKE = {
 	{ "Bubblehearth", "PALADIN" }, { "Kingsley", "PALADIN" }, { "Mightymouse", "PALADIN" },
 	{ "Chainheals", "SHAMAN" }, { "Totemtom", "SHAMAN" },
 }
-local KEYS = { "KINGS", "MIGHT", "WISDOM", "SALV", "LIGHT", "FORT", "SPIRIT", "SHADOW", "MOTW", "INT" }
+local KEYS = { "KINGS", "MIGHT", "WISDOM", "FORT", "SPIRIT", "SHADOW", "MOTW", "INT" }
 local PHASES = { "empty", "bad", "warn", "ok" }
 -- What the player's class would be asked to cast; other classes only receive.
 local CLASS_CAST = { PALADIN = "KINGS", PRIEST = "FORT", DRUID = "MOTW", MAGE = "INT" }

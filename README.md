@@ -21,14 +21,16 @@ including players who don't have Buffeteria installed. No PallyPower addon is re
   Thorns from a druid). Each buff row names its caster; missing casters are grey.
 - **Smart assignments.** Paladins serve your highest available blessings, subject
   to their spells and the class plan. Greater Blessings cover a whole class, so
-  each class gets what most of its players ranked highest. Priests, druids and mages split the raid groups by
-  work: a group is one cast for someone with the group spell (Prayer, Gift, Arcane
-  Brilliance) but one cast per player without it, so the work evens out. On a tie, a
-  caster keeps their own group, where they are in range. Everyone should update
-  together: copies that split groups differently disagree on who buffs which group.
+  each class gets what most of its players ranked highest. Each Prayer, Gift,
+  and Arcane Brilliance buff goes to one caster with the spell and its reagent.
+  The plan shares those raid-wide casts among eligible casters. The tracker uses one cast
+  for nearby recipients across subgroups and uses singles for a small number of
+  players or when the raid spell cannot reach them. When only singles are
+  available, casters share the work by subgroup, favoring their own subgroup on
+  a tie. Everyone should update together so their assignments agree.
 - **Personal priorities.** With **Use my own order** ticked, put less useful
-  blessings at the bottom, for example Salvation while tanking. Paladins serve
-  your highest available blessings first. With it off, you get your class's
+  blessings at the bottom. Paladins serve your highest available blessings
+  first. With it off, you get your class's
   blessings from the shared plan, including manual assignments.
 - **No raid leader needed.** Every copy of Buffeteria computes the same answer from the
   same preferences. Players without the add-on get sensible class defaults.
@@ -38,21 +40,22 @@ cursor, an outlined slot marks where it will land, and the other rows slide asid
 
 New installs start from a class default ranking: warriors and rogues want Might
 first; mages, warlocks, priests, druids, paladins, and shamans want Wisdom first;
-hunters want Kings first (Might doesn't raise ranged attack power). Kings and
-Salvation follow for everyone. Might is last for mages, warlocks and priests;
-Wisdom is last for warriors and rogues. All six blessings remain eligible;
-lower-ranked blessings are served when enough paladins can provide them. Saved
-rankings keep their blessing order when the old divider is removed.
+hunters want Kings first (Might doesn't raise ranged attack power). Might is last
+for mages, warlocks and priests. Wisdom is last for warriors and rogues. All three
+blessings are eligible (Kings, Might, and Wisdom). Lower-ranked
+blessings are served when enough paladins can provide them. Saved rankings keep
+the relative order of supported blessings when older entries are removed.
 Players without the add-on are planned from the same defaults,
 and so are classes Auto and **Lock in Auto picks** cover on the Paladins tab. If your saved
 ranking still matches the old Kings-first default, it moves to the new one; a
 ranking you reordered is kept.
 
 Warriors see **Battle Shout** in the Buffs panel. It is on by default; click it to
-skip it. The tracker reminds you when your own shout is missing or reaches
-the configured percentage of its duration left (by default, 5% of its two
-minutes is six seconds), and the big button casts it once you have enough rage. Other
-classes never see it, and warriors without Buffeteria aren't tracked for it.
+opt out of casting. One eligible warrior covers nearby party or raid members
+across subgroups. The tracker checks for missing and expiring shouts within the
+base 20-yard radius, and the head offers a cast once the warrior has enough
+rage. An opted-in warrior separated from the assigned caster can refresh
+their own shout. The default warning starts at nine seconds for a three-minute shout.
 
 Priests likewise see **Inner Fire** in the Buffs panel, on by default and skippable.
 The tracker reminds you when it is missing (including after its charges run out)
@@ -61,19 +64,29 @@ minutes is 30 seconds), and the big button casts it
 once you have the mana. Other classes never see it, and priests without
 Buffeteria aren't tracked for it.
 
-Shamans can choose a **Weapon imbue** under **My preferences > Buffs**. Pick a
-learned **Rockbiter Weapon**, **Flametongue Weapon**, **Frostbrand Weapon**, or
-**Windfury Weapon**, or leave the per-character choice at **None**. The tracker
+Shamans automatically track their first learned weapon imbue. Under
+**My preferences > Buffs**, choose a learned **Rockbiter Weapon**,
+**Flametongue Weapon**, **Frostbrand Weapon**, or **Windfury Weapon**, or select
+**None** to turn off imbue tracking. The choice is saved per character. The tracker
 checks your main-hand weapon and flags the chosen imbue if it is missing,
 replaced by another imbue, or near expiry (by default, 5% of an hour is three
 minutes). Oils and stones can coexist with the imbue. Click the head out of
 combat to apply the selected spell.
-In **Buffeteria-Dev**, other classes can try the picker with all four choices.
-Tracking and casting require a Shaman.
+In **Buffeteria-Dev**, select Shaman in the class preview to see all four choices.
+
+In **My preferences > Buffs**, mages can maintain **Frost Armor**, **Ice Armor**,
+or **Mage Armor**. Warlocks can maintain **Demon Skin** or **Demon Armor**.
+Shamans can maintain **Lightning Shield** or **Water Shield** alongside a weapon
+imbue. **Auto** follows Frost Armor into Ice Armor and Demon Skin into Demon
+Armor as you learn them, and prefers Lightning Shield on shamans. Select a
+learned spell to keep that choice or **None** to turn off this reminder. A
+chosen talent spell is tracked when you know it. The head offers the selected
+buff when it is missing or running low and can cast it out of combat.
 
 Battle Shout and Inner Fire are also tracked **during combat**. When combat starts,
-the head is set to cast your shout or Inner Fire, so if it runs low or falls off
-mid-fight the head demands it and a click recasts it. Other buffs wait until combat
+the head is set to cast Inner Fire or the warrior's assigned Battle Shout, so if
+it runs low mid-fight the head demands it and a click recasts it. A new Battle
+Shout caster can take over with the head after combat. Other buffs wait until combat
 ends (the game doesn't let add-ons change the button's target during combat).
 The client hides buffs during combat, so the tracker dates them from the last
 reading before the pull and from your own recasts. A buff you lose early
@@ -93,19 +106,38 @@ tracker and cast button as other buffs. Updated casters need Buffeteria's tank-b
 support to serve these requests; druids without the addon are named in the plan but
 must cast manually. `/buff who` and **Announce to group** still list the group's plan.
 
-## Extra: resurrect
+## Extra
 
 The **Extra** tab in `/buff` (or `/buff extra`) holds conveniences beyond buffs.
 **Resurrect with the head** is on by default for every class: priests
 (Resurrection), paladins (Redemption), shamans (Ancestral Spirit) and druids
-(Rebirth) see the head demand **GIEF** their resurrection when a group member is
-dead, and a click casts it, before any buff. Other classes have nothing to cast.
+(Revive, with Rebirth as a fallback if that's the only one learned) see the head
+demand **GIEF** their resurrection when a group member is dead, and a click casts
+it before any buff. Other classes have nothing to cast.
 Players who can resurrect are picked first, then the rest by name. Players who
 already released count too. Only players in range count; feigning hunters and
 players someone else is already resurrecting are skipped, and after your resurrection lands the player
 gets a minute to accept. It waits while you're out of mana or reagents, and while
 Rebirth is on cooldown. Combat keeps the head on your combat buff, so resurrecting
 waits until combat ends.
+
+The **Optional group buffs** card is off by default. Select **Request Fear
+Ward** for encounters with fear effects. The raid assigns willing recipients
+to priests who know it, and the head offers the ward when the priest's cooldown
+is ready.
+
+Hunters can opt in to **Trueshot Aura**. Buffeteria assigns one trained
+volunteer to maintain it for the raid and refreshes it when the assigned
+hunter's own aura runs low. Shamans can opt in to **Strength of Earth Totem**,
+**Windfury Totem**, and **Grace of Air Totem**. A single shaman can provide one
+air totem at a time, with Windfury taking priority if both are selected and no
+other volunteer can supply one. The head offers a totem when its slot is empty
+or that totem is expiring. A different active totem keeps its slot.
+
+Druids can opt in to tracking the shared critical-strike coverage from
+**Moonkin Aura** or **Leader of the Pack**. The plan selects an opted-in druid
+in an eligible form, and the tracker counts either aura as coverage. Change
+forms using your normal controls.
 
 ## Paladin assignments
 
@@ -132,17 +164,17 @@ communicated by color alone. A legend under the grid repeats these cues.
 - **None** removes that paladin's class assignment.
 
 Auras work the same way: Auto gives each paladin a different aura, in the order
-Devotion, Concentration, Sanctity, Retribution, Fire, Frost and Shadow Resistance.
-Paladins that know the fewest auras choose first, so a Concentration or Sanctity
-talent goes to the paladin who has it. Without Buffeteria, a paladin is assumed to
-know only the untalented auras. The tracker reminds you when your assigned aura
-isn't running, and the big button turns it on. Another paladin's copy of the same
+Devotion, Concentration, Retribution, Fire, Frost and Shadow Resistance.
+Paladins that know the fewest auras choose first. Without Buffeteria, a paladin
+is assumed to know the baseline auras available at their level. The tracker
+reminds you when your assigned aura isn't running, and the big button turns
+it on. Another paladin's copy of the same
 aura on you counts as covered, because the game shows only one copy.
 
 A paladin column marked **Unverified** means your client has not heard from that
-paladin's Buffeteria. Their spellbook is assumed untalented (no Kings, Concentration
-or Sanctity), so each client may give those to its own paladin and the plans
-disagree. `/buff sync` shows the channel in use, sent and failed messages, and
+paladin's Buffeteria. Buffeteria estimates their spellbook from their level,
+so plans can differ if the paladin skipped training. `/buff sync` shows the
+channel in use, sent and failed messages, and
 which players your client has heard from.
 
 **Lock in Auto picks** turns every resolved Auto blessing and aura into
@@ -271,7 +303,7 @@ Existing tracker visibility and display choices are preserved.
   to give is missing. Missing buffs take priority over expiring ones, so casting
   one buff keeps the head red until all your missing buffs are served. Other
   casters' missing buffs do not change your head. With nothing to track, the head
-  is grey and grumpy.
+  is grey and smiling.
   Players whose buffs can't be read (usually because they are out of range) don't
   change the mood; hovering lists them as out of range, and they count again once
   they are back in range. If nobody's buffs can be read, the head is grey.
@@ -366,6 +398,14 @@ previewing). A fresh Dev tracker starts 140 pixels to the right of Live's defaul
 position; any position you already saved is preserved. Hovering the head also
 identifies the copy. Having both folders installed does not mean both are enabled:
 with one copy enabled, seeing one head is expected. Use the AddOns menu to switch.
+
+In `/buffdev` or **Settings > AddOns > Buffeteria-Dev**, open the **Preview**
+dropdown beside the tabs and choose any class. The read-only view shows class
+defaults, a sample spellbook with the class's available options, and the
+Paladins tab with sample assignments when you select Paladin. The tracker
+sample follows the preview class. Select **Current character** to return to
+your own settings. The selection lasts until reload and has no effect on the
+live tracker, saved preferences, or group messages.
 
 After every workspace change, run:
 

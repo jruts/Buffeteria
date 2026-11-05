@@ -16,8 +16,6 @@ local TOOLTIP_EDGE = "Interface\\Tooltips\\UI-Tooltip-Border"
 local HIGHLIGHT = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
 local icons = {}
 -- Spell data may be unavailable on login; never cache a question-mark result.
-local FALLBACK_ICONS = { SANCT = "Interface\\Icons\\Spell_Nature_LightningShield" }
-
 function UI.BuffIcon(key)
 	if not icons[key] then
 		local buff = ns.Buffs.byKey[key]
@@ -32,7 +30,7 @@ function UI.BuffIcon(key)
 			end
 		end
 	end
-	return icons[key] or FALLBACK_ICONS[key] or 134400
+	return icons[key] or 134400
 end
 
 -- Prefer the client's class atlas, with the native character-create sheet fallback.

@@ -22,6 +22,7 @@ Output:
 	auras[paladin] = auraKey
 	overrides[member][paladin] = blessingKey | false  (false = nothing suitable)
 	groups[buffKey][groupNum] = caster
+	raidGroupCasters[buffKey] = caster for the raid-wide version
 	expected[member][buffKey] = caster   (what the tracker checks)
 ]]
 
@@ -207,7 +208,7 @@ end
 
 -- One aura per paladin, no aura twice. Manual picks stay; the rest follow the
 -- catalog's priority, with paladins who know the fewest auras served first so
--- talented auras (Concentration, Sanctity) land on the paladins who have them.
+-- each aura can go to a paladin who knows it.
 local function solveAuras(roster, paladins, out)
 	local function knows(p, a) return can(roster.members[p], a) end
 	local order, known = {}, {}
@@ -228,11 +229,9 @@ local function solveAuras(roster, paladins, out)
 	out.auras = p2a
 end
 
--- Each class splits the groups that want its buff between its casters, by work:
--- one cast per group with the group version, one per member without it. Biggest
--- groups go first, each to the caster who would finish with the least work; ties
--- go to a caster in that group (in range), then by name.
-local function splitGroups(roster, buff, casters, wanting)
+-- For single-target casts, split subgroups by the number of players to buff.
+-- Biggest groups go first. On equal work, prefer a caster in the group.
+local function splitGroups(roster, casters, wanting)
 	local groups, load, assign = sortedKeys(wanting), {}, {}
 	table.sort(groups, function(a, b)
 		if wanting[a] ~= wanting[b] then return wanting[a] > wanting[b] end
@@ -243,7 +242,7 @@ local function splitGroups(roster, buff, casters, wanting)
 		local best, bestLoad, bestHome
 		for _, c in ipairs(casters) do
 			local m = roster.members[c]
-			local total = load[c] + (can(m, "g" .. buff.key) and 1 or wanting[g])
+			local total = load[c] + wanting[g]
 			local home = (m.group or 1) == g
 			if not best or total < bestLoad or (total == bestLoad and home and not bestHome) then
 				best, bestLoad, bestHome = c, total, home
@@ -255,18 +254,33 @@ local function splitGroups(roster, buff, casters, wanting)
 end
 
 local function solveGroupBuffs(roster, names, out)
+	local raidWork = {}
 	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
-		local casters, wanting = {}, {}
+		local casters, wanting, raidCaster = {}, {}, nil
+		local bestWork
 		for _, n in ipairs(names) do
 			local m = roster.members[n]
-			if m.class == buff.class and canAny(m, buff.key) then casters[#casters + 1] = n end
+			if m.class == buff.class and not m.dead then
+				if can(m, buff.key) then casters[#casters + 1] = n end
+				local work = raidWork[n] or 0
+				if can(m, "g" .. buff.key) and (not bestWork or work < bestWork) then
+					raidCaster, bestWork = n, work
+				end
+			end
 			if (m.wants or EMPTY)[buff.key] then
 				local g = m.group or 1
 				wanting[g] = (wanting[g] or 0) + 1
 			end
 		end
-		if #casters > 0 then
-			local assign = splitGroups(roster, buff, casters, wanting)
+		if next(wanting) and (raidCaster or #casters > 0) then
+			local assign = {}
+			if raidCaster then
+				raidWork[raidCaster] = bestWork + 1
+				out.raidGroupCasters[buff.key] = raidCaster
+				for g in pairs(wanting) do assign[g] = raidCaster end
+			else
+				assign = splitGroups(roster, casters, wanting)
+			end
 			out.groups[buff.key] = assign
 			for _, n in ipairs(names) do
 				local m = roster.members[n]
@@ -274,6 +288,21 @@ local function solveGroupBuffs(roster, names, out)
 			end
 		end
 	end
+end
+
+-- Choose one living warrior who has Battle Shout enabled for the whole raid.
+local function solveBattleShout(roster, names, out)
+	local caster
+	for _, name in ipairs(names) do
+		local member = roster.members[name]
+		if member.class == "WARRIOR" and not member.dead and can(member, "BSHOUT") and (member.wants or EMPTY).BSHOUT then
+			caster = name
+			break
+		end
+	end
+	if not caster then return end
+	out.raidShout = caster
+	for _, name in ipairs(names) do out.expected[name].BSHOUT = caster end
 end
 
 -- Tank and self buffs are single-target: self-only ones are cast by the member
@@ -302,8 +331,36 @@ local function solveSingleBuffs(roster, names, out)
 	end
 end
 
+-- One volunteer maintains each raid support buff. Match by elemental slot so
+-- two shamans can supply both air effects without one shaman replacing their own.
+local function solveRaidSupport(roster, names, out)
+	local slots = {}
+	local function candidates(key)
+		local buff, eligible = Buffs.byKey[key], {}
+		for _, n in ipairs(names) do
+			local m = roster.members[n]
+			if not m.dead and m.class == buff.class and (m.wants or EMPTY)[key] and can(m, key) then
+				eligible[#eligible + 1] = n
+			end
+		end
+		return eligible
+	end
+	for _, buff in ipairs(Buffs.RAID_SUPPORT) do
+		local slot = buff.totemSlot or buff.key
+		slots[slot] = slots[slot] or {}
+		augment(buff.key, candidates, slots[slot], {})
+	end
+	out.raidSupport = {}
+	for _, held in pairs(slots) do
+		for caster, key in pairs(held) do
+			out.raidSupport[key] = caster
+			for _, n in ipairs(names) do out.expected[n][key] = caster end
+		end
+	end
+end
+
 function Solver.Solve(roster)
-	local out = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, expected = {} }
+	local out = { pally = {}, home = {}, auras = {}, overrides = {}, groups = {}, raidGroupCasters = {}, expected = {} }
 	local names, paladins = sortedKeys(roster.members), {}
 	for _, n in ipairs(names) do
 		out.expected[n] = {}
@@ -313,5 +370,7 @@ function Solver.Solve(roster)
 	solveAuras(roster, paladins, out)
 	solveGroupBuffs(roster, names, out)
 	solveSingleBuffs(roster, names, out)
+	solveRaidSupport(roster, names, out)
+	solveBattleShout(roster, names, out)
 	return out
 end

@@ -7,7 +7,8 @@ local win, content, panel
 local WIDTH, HEIGHT, CONTENT_H = 900, 714, 646
 local HEADER_H, TAB_BAR_H = 30, 40
 local FOOTER_H = 38
-local footer, channel
+local footer, channel, announce
+local previewClass, activeTab
 -- Tabs in order; Paladins only exists for paladins. Each view fills a panel below the tab bar.
 local TABS = {
 	{ key = "PERSONAL", label = "My preferences", view = ns.Preferences.View },
@@ -16,10 +17,15 @@ local TABS = {
 	{ key = "EXTRA", label = "Extra", view = ns.Extra.View },
 }
 
+function Options.ClassPreview() return previewClass end
+function Options.DisplayClass() return previewClass or ns.WoW.PlayerClass() end
+
 local function visibleTabs()
-	local out, paladin = {}, ns.WoW.IsPaladin()
+	local out, paladin = {}, Options.DisplayClass() == "PALADIN"
 	for _, tab in ipairs(TABS) do
-		if paladin or not tab.paladinOnly then out[#out + 1] = tab end
+		local visible = paladin or not tab.paladinOnly
+		tab.button:SetShown(visible)
+		if visible then out[#out + 1] = tab end
 	end
 	return out
 end
@@ -52,8 +58,9 @@ local function showTab(selected)
 	local known
 	for _, tab in ipairs(TABS) do known = known or tab.key == selected end
 	if not known then selected = "PERSONAL" end
-	if selected == "PALADIN" and not ns.WoW.IsPaladin() then selected = "PERSONAL" end
-	ns.db.optionsTab = selected
+	if selected == "PALADIN" and Options.DisplayClass() ~= "PALADIN" then selected = "PERSONAL" end
+	activeTab = selected
+	if not previewClass then ns.db.optionsTab = selected end
 	for _, tab in ipairs(TABS) do
 		local on = tab.key == selected
 		tab.panel:SetShown(on)
@@ -67,13 +74,59 @@ function Options.Refresh()
 	-- Position navigation and size the preview before any feature paints it.
 	layout()
 	for _, tab in ipairs(TABS) do tab.view.Refresh() end
-	channel:SetText("Channel: " .. (IsInRaid() and "Raid" or IsInGroup() and "Party" or "Local chat"))
+	announce:SetShown(not previewClass)
+	channel:SetText(previewClass and "Class preview  -  sample spellbook"
+		or ("Channel: " .. (IsInRaid() and "Raid" or IsInGroup() and "Party" or "Local chat")))
 end
 
 -- Show the shared controls in a host: this window or the Settings page.
 local function attach(host, top)
 	content:SetParent(host); content:ClearAllPoints(); content:SetPoint("TOPLEFT", 0, top); content:Show()
 	Options.Refresh()
+end
+
+local function createClassPicker()
+	local UI = ns.UI
+	local name = ns.globalPrefix .. "_ClassPreviewMenu"
+	local menu
+	local classPicker = UI.Chip(content, "Preview: Current character", 220, function()
+		menu:SetShown(not menu:IsShown())
+	end, "GameFontHighlight")
+	classPicker:SetPoint("TOPRIGHT", -12, -4)
+	classPicker:SetFrameLevel(content:GetFrameLevel() + 15)
+	classPicker.caption:ClearAllPoints(); classPicker.caption:SetPoint("LEFT", 10, 0)
+	local arrow = classPicker:CreateTexture(nil, "OVERLAY")
+	arrow:SetSize(22, 22); arrow:SetPoint("RIGHT", -4, 0)
+	arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+	menu = UI.Menu(classPicker, name)
+	menu:SetPoint("TOPRIGHT", classPicker, "BOTTOMRIGHT", 0, -2)
+	menu:SetSize(220, (#ns.Buffs.CLASS_KEYS + 1) * 24 + 16)
+	menu:SetFrameLevel(classPicker:GetFrameLevel() + 25)
+	menu:Hide()
+	tinsert(UISpecialFrames, name)
+	classPicker:SetScript("OnHide", function() menu:Hide() end)
+	local items = {}
+	local function addChoice(class)
+		local label = class and ns.WoW.ClassName(class) or "Current character"
+		local item
+		item = UI.MenuItem(menu, 204, function()
+			menu:Hide()
+			if previewClass == class then return end
+			for _, tab in ipairs(TABS) do tab.panel:Hide() end
+			previewClass = class
+			classPicker.caption:SetText("Preview: " .. label)
+			for _, choice in ipairs(items) do choice:SetChecked(choice == item) end
+			showTab(class and activeTab or ns.db.optionsTab)
+			Options.Refresh()
+		end)
+		item:SetPoint("TOPLEFT", 8, -8 - #items * 24)
+		item.caption:SetText(label)
+		UI.ClassIcon(item.icon, class or ns.WoW.PlayerClass())
+		item:SetChecked(class == nil)
+		items[#items + 1] = item
+	end
+	addChoice(nil)
+	for _, class in ipairs(ns.Buffs.CLASS_KEYS) do addChoice(class) end
 end
 
 local function build()
@@ -99,6 +152,7 @@ local function build()
 	content:SetSize(WIDTH, CONTENT_H)
 	content:SetFrameLevel(win:GetFrameLevel() + 5)
 	content:SetPoint("TOPLEFT", 0, -HEADER_H)
+	if ns.isDev then createClassPicker() end
 	local paladin = ns.WoW.IsPaladin()
 	for _, tab in ipairs(TABS) do
 		tab.button = ns.UI.Tab(content, tab.label, 140, function() showTab(tab.key); Options.Refresh() end)
@@ -115,7 +169,9 @@ local function build()
 	end
 	footer = ns.UI.Panel(content)
 	footer:SetPoint("BOTTOMLEFT", 12, 2); footer:SetPoint("BOTTOMRIGHT", -12, 2); footer:SetHeight(FOOTER_H - 2)
-	local announce = ns.UI.Button(footer, "Announce to group", 170, ns.Assignments.Announce)
+	announce = ns.UI.Button(footer, "Announce to group", 170, function()
+		if not previewClass then ns.Assignments.Announce() end
+	end)
 	announce:SetPoint("LEFT", 8, 0)
 	announce:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Announce to group")

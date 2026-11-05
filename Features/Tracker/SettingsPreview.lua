@@ -6,6 +6,7 @@ Tracker.SettingsPreview = Sample
 local KEYS = { "KINGS", "FORT", "MOTW", "INT" }
 local CAST = { PALADIN = "KINGS", PRIEST = "FORT", DRUID = "MOTW", MAGE = "INT",
 	WARRIOR = "BSHOUT" }
+local CLASS_CAST = { SHAMAN = "ROCKBITER", WARLOCK = "DEMONARMOR", HUNTER = "TRUESHOT" }
 
 function Sample.Create(parent)
 	local preview = CreateFrame("Frame", nil, parent)
@@ -57,7 +58,9 @@ function Sample.Refresh(preview)
 		return a < b
 	end)
 	preview.head:SetSize(headSize, headSize)
-	local cast = preview.mood ~= "happy" and CAST[ns.WoW.PlayerClass()]
+	local class = ns.Options and ns.Options.ClassPreview()
+	local key = CAST[class or ns.WoW.PlayerClass()] or (class and CLASS_CAST[class])
+	local cast = preview.mood ~= "happy" and key
 	-- The clean style's button is the next cast's icon, shown only with something to cast.
 	preview.head:SetShown(not clean or cast and true or false)
 	if clean and cast then

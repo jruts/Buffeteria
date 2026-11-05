@@ -5,26 +5,59 @@ local Buffs = ns.Buffs
 ns.Preferences = {}
 
 -- Preferences that Reset returns to their class defaults.
-local KEYS = { "order", "wants", "blessingsOverride", "tankRole", "tankBuffs", "weaponImbue" }
+local KEYS = { "order", "wants", "blessingsOverride", "tankRole", "tankBuffs", "weaponImbue", "personalBuff" }
 
 -- Version 1 defaults (Kings first for everyone), only used to migrate untouched rankings.
 local LEGACY_ORDER = {
-	WARRIOR = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "WISDOM" },
-	ROGUE   = { "KINGS", "MIGHT", "SALV", "LIGHT", "SANCT", "WISDOM" },
-	HUNTER  = { "KINGS", "MIGHT", "SALV", "WISDOM", "LIGHT", "SANCT" },
-	MAGE    = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "MIGHT" },
-	WARLOCK = { "KINGS", "SALV", "WISDOM", "LIGHT", "SANCT", "MIGHT" },
-	PRIEST  = { "KINGS", "WISDOM", "SALV", "LIGHT", "SANCT", "MIGHT" },
-	DRUID   = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
-	PALADIN = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
-	SHAMAN  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
+	WARRIOR = { "KINGS", "MIGHT", "WISDOM" },
+	ROGUE   = { "KINGS", "MIGHT", "WISDOM" },
+	HUNTER  = { "KINGS", "MIGHT", "WISDOM" },
+	MAGE    = { "KINGS", "WISDOM", "MIGHT" },
+	WARLOCK = { "KINGS", "WISDOM", "MIGHT" },
+	PRIEST  = { "KINGS", "WISDOM", "MIGHT" },
+	DRUID   = { "KINGS", "WISDOM", "MIGHT" },
+	PALADIN = { "KINGS", "WISDOM", "MIGHT" },
+	SHAMAN  = { "KINGS", "WISDOM", "MIGHT" },
 }
 
 local function sameOrder(a, b) return table.concat(a, ",") == table.concat(b, ",") end
 
 local function weaponChoice(key, class)
+	if key == false and (class == "SHAMAN" or ns.isDev) then return false end
 	local buff = Buffs.byKey[key]
 	if buff and buff.kind == "imbue" and (buff.class == class or ns.isDev) then return key end
+end
+
+local function personalChoice(key, class)
+	if key == false and Buffs.PERSONAL_BUFFS[class] then return false end
+	local buff = Buffs.byKey[key]
+	if buff and buff.kind == "personal" and buff.class == class then return key end
+end
+
+-- Auto follows learned upgrades. Keep explicit choices across talent changes,
+-- and only request their spell while it is available.
+function ns.Preferences.PersonalBuff()
+	local selected = ns.db.personalBuff
+	if selected ~= nil then
+		local buff = Buffs.byKey[selected]
+		if buff and ns.WoW.KnowsAny(buff.ids) then return buff end
+		return
+	end
+	for _, buff in ipairs(Buffs.PERSONAL_BUFFS[ns.WoW.PlayerClass()] or ns.Util.EMPTY) do
+		if ns.WoW.KnowsAny(buff.ids) then return buff end
+	end
+end
+
+-- Leave an unset choice open until the character learns an imbue. An explicit
+-- None is saved as false, and learning more imbues leaves the first pick in place.
+function ns.Preferences.SetDefaultWeaponImbue()
+	if ns.db.weaponImbue ~= nil or ns.WoW.PlayerClass() ~= "SHAMAN" then return end
+	for _, buff in ipairs(Buffs.WEAPON_IMBUES) do
+		if ns.WoW.KnowsAny(buff.ids) then
+			ns.db.weaponImbue = buff.key
+			return
+		end
+	end
 end
 
 -- Fill in and migrate my saved preferences; runs after Database.Init.
@@ -47,6 +80,7 @@ function ns.Preferences.Init()
 	end
 	db.tankRole = ns.Database.Normalize("tankRole", db.tankRole)
 	db.weaponImbue = weaponChoice(db.weaponImbue, class)
+	db.personalBuff = personalChoice(db.personalBuff, class)
 	db.tankBuffs = db.tankBuffs or {}
 	for _, buff in ipairs(Buffs.TANK_BUFFS) do
 		if db.tankBuffs[buff.key] == nil then db.tankBuffs[buff.key] = true end
@@ -78,7 +112,7 @@ function ns.Preferences.BlessingOutcome(override)
 end
 
 -- My own preferences in the shape the solver wants.
-function ns.Preferences.Get()
+function ns.Preferences.Get(includePersonal)
 	local class, tank = ns.WoW.PlayerClass(), ns.Preferences.IsTank()
 	local ranking = Buffs.NormalizeOrder(ns.db.order, class)
 	local wants = {}
@@ -89,6 +123,8 @@ function ns.Preferences.Get()
 	for _, buff in ipairs(Buffs.SELF_BUFFS) do
 		wants[buff.key] = wants[buff.key] and Buffs.OfferedTo(buff, class) or false
 	end
+	local personal = includePersonal and ns.Preferences.PersonalBuff()
+	if personal then wants[personal.key] = true end
 	return { wants = wants, ranking = ranking, blessingsOverride = ns.db.blessingsOverride }
 end
 
@@ -99,6 +135,7 @@ end
 -- Change one preference and share it.
 function ns.Preferences.Set(key, value)
 	if key == "weaponImbue" then value = weaponChoice(value, ns.WoW.PlayerClass()) end
+	if key == "personalBuff" then value = personalChoice(value, ns.WoW.PlayerClass()) end
 	ns.db[key] = ns.Database.Normalize(key, value)
 	ns.Preferences.Changed()
 end
@@ -113,5 +150,6 @@ end
 function ns.Preferences.Reset()
 	for _, key in ipairs(KEYS) do ns.db[key] = nil end
 	ns.Preferences.Init()
+	ns.Preferences.SetDefaultWeaponImbue()
 	ns.Preferences.Changed()
 end

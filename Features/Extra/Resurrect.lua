@@ -7,25 +7,35 @@ local SPELLS = {
 	PRIEST = { 2006, 2010, 10880, 10881, 20770 },   -- Resurrection
 	PALADIN = { 7328, 10322, 10324, 20772, 20773 }, -- Redemption
 	SHAMAN = { 2008, 20609, 20610, 20776, 20777 },  -- Ancestral Spirit
-	DRUID = { 20484, 20739, 20742, 20747, 20748 },  -- Rebirth
+	DRUID = { 437138, 1237948, 1237949, 1237950, 1237951 }, -- Revive
 }
+local REBIRTH = { 20484, 20739, 20742, 20747, 20748 }
 local GCD = 1.5
 local OFFER = 60    -- how long a resurrection waits for its answer
 local offered = {}  -- [full] = when my offer to them lapses
 
 function Resurrect.CanClass(class) return SPELLS[class] ~= nil end
 
--- My class's resurrection by name, learned or not; nil when my class has none.
-function Resurrect.SpellName()
-	local ids = SPELLS[ns.WoW.PlayerClass()]
-	return ids and ns.WoW.SpellName(ids[1])
+-- Highest learned rank and the first rank of its spell family.
+local function knownID(class)
+	local ids = SPELLS[class]
+	if not ids then return nil end
+	local _, id = ns.WoW.KnowsAny(ids)
+	if not id and class == "DRUID" then
+		_, id = ns.WoW.KnowsAny(REBIRTH)
+		if id then return id, REBIRTH[1] end
+	end
+	return id, ids[1]
 end
 
--- The highest rank I know: castable name, icon and ID.
-local function known()
-	local ok, id = ns.WoW.KnowsAny(SPELLS[ns.WoW.PlayerClass()] or {})
-	if not ok then return nil end
-	return ns.WoW.SpellName(id), ns.WoW.SpellIcon(id), id
+-- My class's resurrection by name, learned or not; nil when my class has none.
+function Resurrect.SpellName(previewClass)
+	if previewClass then
+		local ids = SPELLS[previewClass]
+		return ids and ns.WoW.SpellName(ids[1])
+	end
+	local _, first = knownID(ns.WoW.PlayerClass())
+	return first and ns.WoW.SpellName(first)
 end
 
 -- Enough mana and reagents, and no cooldown beyond the global one: a Rebirth
@@ -64,8 +74,10 @@ function Resurrect.Next(roster, now)
 		end
 	end
 	if #dead == 0 then return nil end
-	local spell, icon, id = known()
+	local id = knownID(ns.WoW.PlayerClass())
+	local spell = id and ns.WoW.SpellName(id)
 	if not spell or not ready(spell) then return nil end
+	local icon = ns.WoW.SpellIcon(id)
 	local function healer(full) return Resurrect.CanClass((roster.members[full] or {}).class) end
 	table.sort(dead, function(a, b)
 		if healer(a) ~= healer(b) then return healer(a) end

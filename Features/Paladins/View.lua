@@ -3,7 +3,7 @@ local _, ns = ...
 local UI, Buffs = ns.UI, ns.Buffs
 local View = {}
 ns.Paladins.View = View
-local panel, viewport, canvas, scrollbar, empty, picker, undo
+local panel, viewport, canvas, scrollbar, empty, picker, undo, fill, clear
 local columns, classRows = {}, {}
 local EDGE, STUB, HEADER, ROW, BOARD_H, BOARD_Y = 12, 148, 80, 42, 458, -56
 local columnWidth, contentWidth, scrollOffset, count = 144, 0, 0, 0
@@ -11,17 +11,38 @@ local GREY = UI.COLOR.GREY
 local PASS = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 local RED_EDGE, DARK_EDGE = { 1, 0.25, 0.15, 1 }, { 0.2, 0.19, 0.17, 1 }
 local closePicker
+local sampleRoster, sampleResult
+
+local function rosterForView()
+	if ns.Options.ClassPreview() ~= "PALADIN" then return ns.Assignments.roster end
+	if not sampleRoster then
+		local caps = {}
+		for _, key in ipairs(Buffs.BLESSING_KEYS) do caps[key] = true end
+		for _, key in ipairs(Buffs.AURA_KEYS) do caps[key] = true end
+		sampleRoster = { members = { ["Sample Paladin"] = { class = "PALADIN", caps = caps, hasAddon = true } } }
+		sampleResult = ns.Solver.Solve(sampleRoster)
+	end
+	return sampleRoster, sampleResult
+end
+
+local function resolved(name, slot, result)
+	if result then return slot == "AURA" and result.auras[name] or (result.pally[slot] or ns.Util.EMPTY)[name] end
+	if slot == "AURA" then return ns.Assignments.Aura(name) end
+	return ns.Assignments.ClassBlessing(slot, name)
+end
 
 local function tooltip(button)
 	local name = button.column.paladin
-	local member = name and ns.Assignments.roster.members[name]
+	local roster, sample = rosterForView()
+	local member = name and roster.members[name]
 	if not member then return end
 	GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
 	GameTooltip:SetText(ns.WoW.Short(name) .. " - " .. (button.class == "AURA" and "Aura" or ns.WoW.ClassName(button.class)))
 	GameTooltip:AddLine(button.detail or "", 1, 0.82, 0, true)
 	if button.duplicate then GameTooltip:AddLine("A newer assignment took this blessing. Choose another or reset to Auto.", 1, 0.35, 0.2, true) end
 	if not member.hasAddon then GameTooltip:AddLine("Spells unverified: choose only spells this paladin can cast.", 0.8, 0.8, 0.8, true) end
-	GameTooltip:AddLine("Click: choose. Right-click: Auto. Shift-click: None.", 1, 1, 1, true)
+	GameTooltip:AddLine(sample and "Sample assignment. Click to view the choices."
+		or "Click: choose. Right-click: Auto. Shift-click: None.", 1, 1, 1, true)
 	GameTooltip:Show()
 end
 
@@ -31,12 +52,21 @@ end
 
 local function openPicker(button)
 	local name, slot = button.column.paladin, button.class
-	local member = name and ns.Assignments.roster.members[name]
+	local roster, sample = rosterForView()
+	local member = name and roster.members[name]
 	if not member then return end
 	if picker:IsShown() and picker.target == button then closePicker(); return end
 	GameTooltip_Hide()
 	picker.target = button
-	local choices = ns.Paladins.Choices(name, slot)
+	local choices
+	if sample then
+		choices = { "AUTO", "NONE" }
+		for _, key in ipairs(slot == "AURA" and Buffs.AURA_KEYS or Buffs.BLESSING_KEYS) do
+			choices[#choices + 1] = key
+		end
+	else
+		choices = ns.Paladins.Choices(name, slot)
+	end
 	local height = #choices * 22 + 62
 	picker:SetSize(220, height)
 	-- Open just below the clicked slot, kept inside the page.
@@ -46,14 +76,14 @@ local function openPicker(button)
 	y = math.max(8, math.min(y, 560 - height))
 	picker:ClearAllPoints(); picker:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -y)
 	picker.title:SetText(ns.WoW.Short(name) .. " > " .. (slot == "AURA" and "Aura" or ns.WoW.ClassName(slot)))
-	picker.help:SetText(member.hasAddon and "Known spells only" or "Spells unverified; choose a castable spell")
-	local current = ns.Paladins.Get(name, slot)
+	picker.help:SetText(sample and "Sample spellbook" or (member.hasAddon and "Known spells only" or "Spells unverified; choose a castable spell"))
+	local current = sample and "AUTO" or ns.Paladins.Get(name, slot)
 	for i, key in ipairs(choices) do
 		local choice = picker.choices[i]
 		if not choice then
 			choice = UI.MenuItem(picker, 204, function(self)
 				local target = picker.target
-				if target and target.column.paladin == self.paladin then
+				if not ns.Options.ClassPreview() and target and target.column.paladin == self.paladin then
 					ns.Paladins.Set(self.paladin, target.class, self.key)
 				end
 				closePicker()
@@ -62,13 +92,12 @@ local function openPicker(button)
 			picker.choices[i] = choice
 		end
 		choice.key, choice.paladin = key, name
-		local resolved = slot == "AURA" and ns.Assignments.Aura(name) or ns.Assignments.ClassBlessing(slot, name)
-		local buff = Buffs.byKey[key == "AUTO" and resolved or key]
+		local buff = Buffs.byKey[key == "AUTO" and resolved(name, slot, sample) or key]
 		choice.caption:SetText(key == "AUTO" and ("Auto: " .. (buff and buff.label or "None"))
 			or (key == "NONE" and "None" or buff.label))
 		choice.icon:SetTexture(buff and UI.BuffIcon(buff.key) or PASS)
 		choice.icon:SetDesaturated(buff == nil)
-		choice:SetChecked(key == current); choice:Show()
+		choice:SetChecked(key == current); choice:SetEnabled(not sample); choice:Show()
 	end
 	for i = #choices + 1, #picker.choices do picker.choices[i]:Hide() end
 	picker:Show()
@@ -97,7 +126,12 @@ local function slotButton(parent, column, slot, rowIndex)
 	button.auto = button.autoBox.text
 	button:SetScript("OnClick", function(self, mouseButton)
 		local name = self.column.paladin
-		if not name or not ns.Assignments.roster.members[name] then return end
+		local roster, sample = rosterForView()
+		if not name or not roster.members[name] then return end
+		if sample then
+			if mouseButton == "LeftButton" then openPicker(self) end
+			return
+		end
 		if mouseButton == "RightButton" then closePicker(); ns.Paladins.Set(name, slot, "AUTO")
 		elseif IsShiftKeyDown() then closePicker(); ns.Paladins.Set(name, slot, "NONE")
 		else openPicker(self) end
@@ -126,10 +160,10 @@ local function createColumn()
 	return column
 end
 
-local function showSlot(button, name, slot, resolved)
-	local key = ns.Paladins.Get(name, slot)
-	local buff = Buffs.byKey[key == "AUTO" and resolved or key]
-	local duplicate = ns.Paladins.Overruled(name, slot)
+local function showSlot(button, name, slot, sample)
+	local key = sample and "AUTO" or ns.Paladins.Get(name, slot)
+	local buff = Buffs.byKey[key == "AUTO" and resolved(name, slot, sample) or key]
+	local duplicate = not sample and ns.Paladins.Overruled(name, slot)
 	local state = duplicate and "red" or not buff and "grey" or key == "AUTO" and "green" or "gold"
 	button.state, button.duplicate = state, duplicate
 	button.detail = key == "AUTO" and ("Auto: " .. (buff and buff.label or "None"))
@@ -172,11 +206,12 @@ end
 
 function View.Refresh()
 	if not panel then return end
-	local pals = ns.Roster.Paladins()
+	local roster, sample = rosterForView()
+	local pals = ns.Roster.Paladins(roster)
 	count = #pals
 	empty:SetShown(count == 0)
 	local stats = {}
-	for _, member in pairs(ns.Assignments.roster.members) do
+	for _, member in pairs(roster.members) do
 		local st = stats[member.class] or { count = 0, overrides = 0 }
 		st.count = st.count + 1; st.overrides = st.overrides + (member.blessingsOverride and 1 or 0)
 		stats[member.class] = st
@@ -190,15 +225,15 @@ function View.Refresh()
 	end
 	for i, name in ipairs(pals) do
 		columns[i] = columns[i] or createColumn()
-		local column, member = columns[i], ns.Assignments.roster.members[name]
+		local column, member = columns[i], roster.members[name]
 		column.paladin, column.index = name, i; column:Show()
 		column.title:SetText(ns.WoW.ClassColorName(name, "PALADIN"))
 		local covered = 0
 		for class, row in pairs(column.rows) do
-			if showSlot(row, name, class, ns.Assignments.ClassBlessing(class, name)) then covered = covered + 1 end
+			if showSlot(row, name, class, sample) then covered = covered + 1 end
 			row:SetAlpha((stats[class] and stats[class].count > 0) and 1 or 0.45)
 		end
-		showSlot(column.aura, name, "AURA", ns.Assignments.Aura(name))
+		showSlot(column.aura, name, "AURA", sample)
 		column.note:SetText(covered .. "/9 classes" .. (member.hasAddon and "" or "  -  Unverified"))
 	end
 	for i = count + 1, #columns do columns[i].paladin = nil; columns[i]:Hide() end
@@ -206,7 +241,8 @@ function View.Refresh()
 		local target = picker.target
 		if not target.column.paladin or target.column.paladin ~= picker.choices[1].paladin then closePicker() end
 	end
-	undo:SetEnabled(ns.Paladins.CanUndo())
+	undo:SetEnabled(not sample and ns.Paladins.CanUndo())
+	fill:SetEnabled(not sample); clear:SetEnabled(not sample)
 	View.Layout(panel.layoutWidth or 900)
 end
 
@@ -228,13 +264,19 @@ end
 function View.Create(host)
 	panel = host
 	UI.PageHeader(panel, "Class blessings", "Classes are rows, paladins are columns.")
-	undo = UI.Button(panel, "Undo", 64, function() closePicker(); ns.Paladins.Undo() end,
+	undo = UI.Button(panel, "Undo", 64, function()
+		if not ns.Options.ClassPreview() then closePicker(); ns.Paladins.Undo() end
+	end,
 		"Undo the last bulk action. Newer group edits are preserved.")
 	undo:SetPoint("TOPRIGHT", -12, -14)
-	local clear = UI.Button(panel, "Reset all to Auto", 136, function() closePicker(); ns.Paladins.Clear(); View.Refresh() end,
+	clear = UI.Button(panel, "Reset all to Auto", 136, function()
+		if not ns.Options.ClassPreview() then closePicker(); ns.Paladins.Clear(); View.Refresh() end
+	end,
 		"Reset every blessing and aura to Auto. You can undo this action.")
 	clear:SetPoint("RIGHT", undo, "LEFT", -6, 0)
-	local fill = UI.Button(panel, "Lock in Auto picks", 146, function() closePicker(); ns.Paladins.Fill(); View.Refresh() end,
+	fill = UI.Button(panel, "Lock in Auto picks", 146, function()
+		if not ns.Options.ClassPreview() then closePicker(); ns.Paladins.Fill(); View.Refresh() end
+	end,
 		"Keep Auto's current assignments when the group changes. Manual choices stay.")
 	fill:SetPoint("RIGHT", clear, "LEFT", -6, 0)
 	local board = UI.Panel(panel)

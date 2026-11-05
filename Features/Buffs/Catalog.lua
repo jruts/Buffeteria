@@ -1,11 +1,11 @@
--- Buffeteria: static buff data (Classic/vanilla spell set).
+-- Buffeteria: WoW Forever buff data.
 local _, ns = ...
 
 local Buffs = {}
 ns.Buffs = Buffs
 
--- Single-source "group" buffs. Each class splits the raid groups between its casters.
--- ids = every rank of the single-target spell, groupIds = every rank of the party version.
+-- Group buffs have a single-target spell and a raid-wide version.
+-- Reagents follow the rank order in groupIds, or use one common item.
 -- want = class default: true for everyone, "mana" for mana users, false for nobody.
 Buffs.GROUP_BUFFS = {
 	{ key = "FORT",   class = "PRIEST", label = "Fortitude",         ids = {1243,1244,1245,2791,10937,10938}, groupIds = {21562,21564}, reagents = {17028,17029}, want = true },
@@ -21,12 +21,48 @@ Buffs.TANK_BUFFS = {
 	{ key = "THORNS", class = "DRUID", label = "Thorns", ids = {467,782,1075,8914,9756,9910}, groupIds = {}, duration = 600 },
 }
 
+-- Encounter buffs are explicitly requested by the recipient.
+Buffs.ENCOUNTER_BUFFS = {
+	{ key = "FWARD", class = "PRIEST", label = "Fear Ward", ids = {6346}, groupIds = {}, duration = 180, cooldown = true },
+}
+
+-- Raid support is enabled by its caster. The optional aura IDs are the effects
+-- applied to players, separate from the spells used to summon a totem or shapeshift.
+Buffs.RAID_SUPPORT = {
+	{ key = "TRUESHOT", class = "HUNTER", label = "Trueshot Aura", ids = {1299346,1299348,19506,20905,20906}, duration = 1800, raidRadius = 45 },
+	{ key = "STRENGTHEARTH", class = "SHAMAN", label = "Strength of Earth Totem", ids = {8075,8160,8161,10442,25361},
+		auraIds = {8076,8162,8163,10441,25362}, totemSlot = 2 },
+	{ key = "WINDFURYTOTEM", class = "SHAMAN", label = "Windfury Totem", ids = {8512,10613,10614},
+		auraIds = {8515,10609,10612}, totemSlot = 4 },
+	{ key = "GRACEOFAIR", class = "SHAMAN", label = "Grace of Air Totem", ids = {8835,10627,25359},
+		auraIds = {8836,10626,25360}, totemSlot = 4 },
+	{ key = "DRUIDCRIT", class = "DRUID", label = "Druid crit aura", ids = {17007,24858},
+		auraIds = {24932,24907}, passive = true, raidRadius = 45 },
+}
+
 -- Personal self buffs, offered only to their class. combat = the tracker keeps
 -- offering them during combat, when the client hides auras. Base duration (seconds)
 -- dates a recast and supplies a fallback when the aura's duration is unavailable.
 Buffs.SELF_BUFFS = {
-	{ key = "BSHOUT", class = "WARRIOR", label = "Battle Shout", ids = {6673,5242,6192,11549,11550,11551,25289}, groupIds = {}, selfOnly = true, combat = true, duration = 120 },
+	{ key = "BSHOUT", class = "WARRIOR", label = "Battle Shout", ids = {6673,5242,6192,11549,11550,11551,25289}, groupIds = {}, selfOnly = true, combat = true, duration = 180, raidRadius = 20 },
 	{ key = "IFIRE", class = "PRIEST", label = "Inner Fire", ids = {588,7128,602,1006,10951,10952}, groupIds = {}, selfOnly = true, combat = true, duration = 600 },
+}
+
+-- One maintained armor or shield per class, in automatic selection priority.
+Buffs.PERSONAL_BUFFS = {
+	MAGE = {
+		{ key = "ICEARMOR", label = "Ice Armor", ids = {7302,7320,10219,10220}, duration = 1800 },
+		{ key = "FROSTARMOR", label = "Frost Armor", ids = {168,7300,7301}, duration = 1800 },
+		{ key = "MAGEARMOR", label = "Mage Armor", ids = {6117,22782,22783}, duration = 1800 },
+	},
+	WARLOCK = {
+		{ key = "DEMONARMOR", label = "Demon Armor", ids = {706,1086,11733,11734,11735}, duration = 1800 },
+		{ key = "DEMONSKIN", label = "Demon Skin", ids = {687,696}, duration = 1800 },
+	},
+	SHAMAN = {
+		{ key = "LIGHTNINGSHIELD", label = "Lightning Shield", ids = {324,325,905,945,8134,10431,10432}, duration = 600 },
+		{ key = "WATERSHIELD", label = "Water Shield", ids = {408510}, duration = 600 },
+	},
 }
 
 -- Forever main-hand imbues have their own enchant type, alongside oils and stones.
@@ -43,9 +79,6 @@ Buffs.BLESSINGS = {
 	{ key = "KINGS",  label = "Kings",     ids = {20217},                                   groupIds = {25898} },
 	{ key = "MIGHT",  label = "Might",     ids = {19740,19834,19835,19836,19837,19838,25291}, groupIds = {25782,25916} },
 	{ key = "WISDOM", label = "Wisdom",    ids = {19742,19850,19852,19853,19854,25290},     groupIds = {25894,25918} },
-	{ key = "SALV",   label = "Salvation", ids = {1038},                                    groupIds = {25895} },
-	{ key = "LIGHT",  label = "Light",     ids = {19977,19978,19979},                       groupIds = {25890} },
-	{ key = "SANCT",  label = "Sanctuary", ids = {20911,20912,20913,20914},                 groupIds = {25899} },
 }
 Buffs.BLESSING_REAGENT = 21177 -- Symbol of Kings, for every Greater Blessing
 
@@ -53,7 +86,6 @@ Buffs.BLESSING_REAGENT = 21177 -- Symbol of Kings, for every Greater Blessing
 Buffs.AURAS = {
 	{ key = "DEVO",      label = "Devotion Aura",          ids = {465,10290,643,10291,1032,10292,10293} },
 	{ key = "CONC",      label = "Concentration Aura",     ids = {19746} },
-	{ key = "SANCTITY",  label = "Sanctity Aura",          ids = {20218} },
 	{ key = "RETRI",     label = "Retribution Aura",       ids = {7294,10298,10299,10300,10301} },
 	{ key = "FIRERES",   label = "Fire Resistance Aura",   ids = {19891,19899,19900} },
 	{ key = "FROSTRES",  label = "Frost Resistance Aura",  ids = {19888,19897,19898} },
@@ -63,6 +95,8 @@ Buffs.AURAS = {
 Buffs.byKey = {}
 for _, b in ipairs(Buffs.GROUP_BUFFS) do b.kind = "group"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.TANK_BUFFS) do b.kind = "tank"; Buffs.byKey[b.key] = b end
+for _, b in ipairs(Buffs.ENCOUNTER_BUFFS) do b.kind = "encounter"; Buffs.byKey[b.key] = b end
+for _, b in ipairs(Buffs.RAID_SUPPORT) do b.kind = "raidSupport"; b.groupIds = {}; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.SELF_BUFFS) do b.kind = "self"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.WEAPON_IMBUES) do
 	b.kind, b.class, b.selfOnly, b.groupIds, b.duration = "imbue", "SHAMAN", true, {}, 3600
@@ -74,8 +108,18 @@ for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey
 -- Single-target buffs the tracker casts one player at a time.
 Buffs.SINGLE_BUFFS = {}
 for _, b in ipairs(Buffs.TANK_BUFFS) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
-for _, b in ipairs(Buffs.SELF_BUFFS) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
+for _, b in ipairs(Buffs.ENCOUNTER_BUFFS) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
+for _, b in ipairs(Buffs.SELF_BUFFS) do
+	if not b.raidRadius then Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
+end
 for _, b in ipairs(Buffs.WEAPON_IMBUES) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
+for class, choices in pairs(Buffs.PERSONAL_BUFFS) do
+	for _, b in ipairs(choices) do
+		b.kind, b.class, b.selfOnly, b.groupIds = "personal", class, true, {}
+		Buffs.byKey[b.key] = b
+		Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b
+	end
+end
 
 Buffs.BLESSING_KEYS = {}
 for _, b in ipairs(Buffs.BLESSINGS) do Buffs.BLESSING_KEYS[#Buffs.BLESSING_KEYS + 1] = b.key end
@@ -88,18 +132,18 @@ Buffs.MANA_CLASSES = { PALADIN = true, PRIEST = true, DRUID = true, MAGE = true,
 
 -- Default blessing order per class, from highest to lowest priority.
 -- Melee lead with Might, mana users with Wisdom, hunters with Kings (agility;
--- Might has no effect on ranged attack power). Kings and Salvation follow for everyone.
+-- Might has no effect on ranged attack power).
 Buffs.DEFAULT_ORDER_VERSION = 2
 Buffs.DEFAULT_ORDER = {
-	WARRIOR = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "WISDOM" },
-	ROGUE   = { "MIGHT", "KINGS", "SALV", "LIGHT", "SANCT", "WISDOM" },
-	HUNTER  = { "KINGS", "WISDOM", "SALV", "MIGHT", "LIGHT", "SANCT" },
-	MAGE    = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "MIGHT" },
-	WARLOCK = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "MIGHT" },
-	PRIEST  = { "WISDOM", "KINGS", "SALV", "LIGHT", "SANCT", "MIGHT" },
-	DRUID   = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT" },
-	PALADIN = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT" },
-	SHAMAN  = { "WISDOM", "KINGS", "SALV", "MIGHT", "LIGHT", "SANCT" },
+	WARRIOR = { "MIGHT", "KINGS", "WISDOM" },
+	ROGUE   = { "MIGHT", "KINGS", "WISDOM" },
+	HUNTER  = { "KINGS", "WISDOM", "MIGHT" },
+	MAGE    = { "WISDOM", "KINGS", "MIGHT" },
+	WARLOCK = { "WISDOM", "KINGS", "MIGHT" },
+	PRIEST  = { "WISDOM", "KINGS", "MIGHT" },
+	DRUID   = { "WISDOM", "KINGS", "MIGHT" },
+	PALADIN = { "WISDOM", "KINGS", "MIGHT" },
+	SHAMAN  = { "WISDOM", "KINGS", "MIGHT" },
 }
 
 function Buffs.DefaultOrder(class) return Buffs.DEFAULT_ORDER[class] or Buffs.DEFAULT_ORDER.WARRIOR end
@@ -127,13 +171,24 @@ end
 -- Whether capabilities include the single or the group/Greater version of a spell.
 function Buffs.CanCast(caps, key) return caps ~= nil and (caps[key] or caps["g" .. key]) or false end
 
--- What we assume a player WITHOUT the add-on can cast (talents unknown, so be conservative).
+-- A bare spell name casts the highest learned rank. Use that rank's reagent.
+function Buffs.CastableGroupRank(buff)
+	local _, id = ns.WoW.KnowsAny(buff.groupIds)
+	for rank, groupID in ipairs(buff.groupIds) do
+		if groupID == id then
+			local reagent = buff.reagents[rank] or buff.reagents[1]
+			if ns.WoW.ItemCount(reagent) > 0 then return id end
+		end
+	end
+end
+
+-- Minimum levels for baseline spells we assume players without the add-on know.
 Buffs.ASSUMED_CAPS = {
-	PALADIN = { MIGHT = true, WISDOM = true, SALV = true, LIGHT = true,
-		DEVO = true, RETRI = true, FIRERES = true, FROSTRES = true, SHADOWRES = true },
-	PRIEST  = { FORT = true, SHADOW = true },
-	DRUID   = { MOTW = true, THORNS = true },
-	MAGE    = { INT = true },
+	PALADIN = { KINGS = 20, MIGHT = 4, WISDOM = 14,
+		DEVO = 1, CONC = 22, RETRI = 16, FIRERES = 36, FROSTRES = 32, SHADOWRES = 28 },
+	PRIEST  = { FORT = 1, SPIRIT = 30, SHADOW = 30, FWARD = 20 },
+	DRUID   = { MOTW = 1, THORNS = 6 },
+	MAGE    = { INT = 1 },
 }
 
 function Buffs.DefaultRanking(class) return Buffs.NormalizeOrder(Buffs.DefaultOrder(class), class) end

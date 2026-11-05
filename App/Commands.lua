@@ -22,7 +22,7 @@ local COMMANDS = {
 	settings = function() ns.Options.OpenSettings() end,
 	preferences = function() ns.Options.OpenTab("PERSONAL") end,
 	paladins = function()
-		if not ns.WoW.IsPaladin() then ns.WoW.Print("The Paladins assignment editor is available to paladins.") end
+		if ns.Options.DisplayClass() ~= "PALADIN" then ns.WoW.Print("The Paladins assignment editor is available to paladins.") end
 		ns.Options.OpenTab("PALADIN")
 	end,
 	extra = function() ns.Options.OpenTab("EXTRA") end,

@@ -17,7 +17,7 @@ Art.CHOICES = {
 }
 local byKey = {}
 for _, choice in ipairs(Art.CHOICES) do byKey[choice.key] = choice end
-local SUFFIX = { happy = "Happy", grumpy = "Grumpy", angry = "Angry" }
+local SUFFIX = { happy = "Happy", grumpy = "Grumpy", angry = "Angry", idle = "Happy" }
 
 local function choice(style)
 	return byKey[style or ns.db.headStyle] or Art.CHOICES[1]

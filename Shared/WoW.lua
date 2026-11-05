@@ -74,6 +74,16 @@ function ns.WoW.SpellInRange(spell, unit)
 	return true
 end
 
+-- Caster-centered area spells need distance to the player. Nil means the
+-- client could not check it, including when combat hides the value.
+function ns.WoW.WithinRadius(unit, yards)
+	if unit == "player" then return true end
+	if not UnitDistanceSquared then return nil end
+	local ok, distance, checked = pcall(UnitDistanceSquared, unit)
+	if not ok or (issecretvalue and (issecretvalue(distance) or issecretvalue(checked))) then return nil end
+	if checked and type(distance) == "number" then return distance <= yards * yards end
+end
+
 function ns.WoW.ItemCount(id)
 	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) or 0 end
 	return GetItemCount and GetItemCount(id) or 0

@@ -91,7 +91,14 @@ function Tooltip.Icon(owner, key, s)
 		if pk.bad > 0 then GameTooltip:AddLine(pk.bad .. " missing", unpack(Status.COLORS.bad)) end
 		if pk.warn > 0 then GameTooltip:AddLine(pk.warn .. " running low", unpack(Status.COLORS.warn)) end
 		if pk.bad + pk.warn == 0 then GameTooltip:AddLine("Your recipients have it.", unpack(Status.COLORS.ok)) end
-		if s.yours and s.yours[key] then
+		local buff = Buffs.byKey[key]
+		if buff.passive then
+			GameTooltip:AddLine("Provided by the druid's active form.", unpack(GREY))
+		elseif buff.totemSlot and (not s.next or s.next.key ~= key) then
+			GameTooltip:AddLine("Move into range of the totem or use Totemic Projection.", GREY[1], GREY[2], GREY[3], true)
+		elseif buff.kind == "raidSupport" and (not s.next or s.next.key ~= key) then
+			GameTooltip:AddLine("The hunter refreshes this when their aura runs low.", GREY[1], GREY[2], GREY[3], true)
+		elseif s.yours and s.yours[key] then
 			GameTooltip:AddLine("Your job: click the " .. (ns.db.trackerStyle == "CLEAN" and "button" or "head") .. " to cast it.", unpack(BLUE))
 		elseif pk.casters and next(pk.casters) then
 			local names = {}

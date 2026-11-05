@@ -70,7 +70,7 @@ class AddonTests(unittest.TestCase):
                     assert(ns.Assignments.roster.members[ns.WoW.Me()])
                     local caps = ns.Roster.Capabilities()
                     for _, buff in pairs(ns.Buffs.byKey) do
-                        if buff.class == PLAYER_CLASS then assert(caps[buff.key]) end
+                        if buff.class == PLAYER_CLASS and not buff.passive then assert(caps[buff.key]) end
                     end
                     ns.Options.Toggle()
                     ns.Assignments.Announce()
@@ -391,7 +391,7 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             ns.Paladins.Set('A-Realm', 'PALADIN', 'KINGS')
             ns.Paladins.Set('B-Realm', 'PALADIN', 'WISDOM'); runTimers()
-            ns.db.order = {'MIGHT','KINGS','WISDOM','LIGHT','SANCT','SALV'}
+            ns.db.order = {'MIGHT','KINGS','WISDOM'}
             ns.db.blessingsOverride = false
             local roster = ns.Assignments.roster
             local member = roster.members['A-Realm']
@@ -409,11 +409,11 @@ class AddonTests(unittest.TestCase):
         lua.execute("""
             local original = ns.WoW.SpellIcon
             ns.WoW.SpellIcon = function() return 134400 end
-            assert(ns.UI.BuffIcon('SANCT') == 'Interface\\\\Icons\\\\Spell_Nature_LightningShield')
-            ns.WoW.SpellIcon = function(id) if id == 20912 then return 987654 end end
-            assert(ns.UI.BuffIcon('SANCT') == 987654)
+            assert(ns.UI.BuffIcon('THORNS') == 134400)
+            ns.WoW.SpellIcon = function(id) if id == 782 then return 987654 end end
+            assert(ns.UI.BuffIcon('THORNS') == 987654)
             ns.WoW.SpellIcon = function() return nil end
-            assert(ns.UI.BuffIcon('SANCT') == 987654)
+            assert(ns.UI.BuffIcon('THORNS') == 987654)
             ns.WoW.SpellIcon = original
         """)
 
@@ -506,7 +506,7 @@ class AddonTests(unittest.TestCase):
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
             local s = ns.Tracker.Preview.Summary()
             -- A dense synthetic menu keeps layout coverage independent of class assignments.
-            for _, key in ipairs({'KINGS','MIGHT','WISDOM','SALV','LIGHT','FORT','SPIRIT','SHADOW','MOTW','INT'}) do
+            for _, key in ipairs({'KINGS','MIGHT','WISDOM','FORT','SPIRIT','SHADOW','MOTW','INT','THORNS','IFIRE'}) do
                 s.perKey[key] = {bad=1, warn=0, total=1}
             end
             ns.Tracker.Compute = function() return s end
@@ -614,7 +614,7 @@ class AddonTests(unittest.TestCase):
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
             ns.Tracker.Compute = function()
                 local s = ns.Tracker.Preview.Summary()
-                for _, key in ipairs({'KINGS','MIGHT','WISDOM','SALV','LIGHT','FORT','SPIRIT','SHADOW','MOTW','INT'}) do
+                for _, key in ipairs({'KINGS','MIGHT','WISDOM','FORT','SPIRIT','SHADOW','MOTW','INT','THORNS','IFIRE'}) do
                     s.perKey[key] = {bad=1, warn=0, total=1}
                 end
                 return s
@@ -1238,7 +1238,7 @@ class AddonTests(unittest.TestCase):
                     local compute = ns.Tracker.Compute
                     ns.Tracker.Compute = function() return {any=false, overall='idle', perKey={}} end
                     ns.Tracker.Refresh()
-                    assert(head.icon.texture:find('EsfandTVColoredGrumpy$') and head.icon.desaturated)
+                    assert(head.icon.texture:find('EsfandTVColoredHappy$') and head.icon.desaturated)
                     assert(not head.halo:IsShown() and not head.glow)
                     ns.Tracker.Compute = compute
                 """)
@@ -1415,6 +1415,7 @@ class AddonTests(unittest.TestCase):
         lua = full_addon(login=False)
         lua.execute("""
             UnitIsVisible = function() return false end
+            UnitLevel = function() return 19 end
             ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
             local s = ns.Tracker.Summary()
             assert(s.any and s.perKey.KINGS.unknown == s.perKey.KINGS.total)
@@ -1821,7 +1822,7 @@ class AddonTests(unittest.TestCase):
                 return {class=class, group=1, caps=caps or {}, ranking=ranking,
                     wants=ns.Buffs.DefaultWants(class), blessingsOverride=override}
             end
-            all = {KINGS=true, MIGHT=true, SALV=true, WISDOM=true, LIGHT=true, SANCT=true}
+            all = {KINGS=true, MIGHT=true, WISDOM=true}
         """)
         lua.execute(code)
 
@@ -1837,22 +1838,22 @@ class AddonTests(unittest.TestCase):
             "Features/Paladins/Plan.lua", "App/Bootstrap.lua",
         ):
             load(lua, name)
-        lua.execute("ns.Comm = {Announce=function() end, Send=function() end}; ns.Roster.Capabilities = function() return {KINGS=true,MIGHT=true,SALV=true,WISDOM=true} end")
+        lua.execute("ns.Comm = {Announce=function() end, Send=function() end}; ns.Roster.Capabilities = function() return {KINGS=true,MIGHT=true,WISDOM=true} end")
         return lua
 
     def test_saved_custom_rankings_migrate_and_can_opt_out(self):
         lua = self.core_runtime("ROGUE")
         lua.execute("""
-            BuffeteriaCharDB = {order={'SALV','MIGHT','KINGS','LIGHT','SANCT','|','WISDOM'}}
+            BuffeteriaCharDB = {order={'SALV','SANCT','WISDOM','LIGHT','MIGHT','|','KINGS'}}
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
             assert(ns.db.blessingsOverride)
-            assert(table.concat(ns.db.order, ',') == 'SALV,MIGHT,KINGS,LIGHT,SANCT,WISDOM')
+            assert(table.concat(ns.db.order, ',') == 'WISDOM,MIGHT,KINGS')
             assert(ns.Preferences.Get().excluded == nil)
-            assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'SALV')
+            assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'WISDOM')
             ns.db.blessingsOverride = false
             assert(ns.Roster.Build().members['A-Realm'].ranking[1] == 'MIGHT')
-            assert(ns.db.order[1] == 'SALV') -- preserve the order for re-enabling
-            ns.Roster.peers['B-Realm'] = {caps={KINGS=true},ranking={'SALV'},wants={},blessingsOverride=true}
+            assert(ns.db.order[1] == 'WISDOM') -- preserve the order for re-enabling
+            ns.Roster.peers['B-Realm'] = {caps={KINGS=true},ranking={'WISDOM'},wants={},blessingsOverride=true}
             assert(ns.Roster.Build().members['B-Realm'].blessingsOverride)
             ns.Roster.peers['B-Realm'].blessingsOverride = false
             assert(ns.Roster.Build().members['B-Realm'].ranking[1] == 'WISDOM') -- paladin default
@@ -2039,11 +2040,11 @@ class AddonTests(unittest.TestCase):
         self.solver("""
             local roster = {members={Pal=member('PALADIN', all),
                 Offline=member('ROGUE'), Default=member('ROGUE', {}, false),
-                Custom=member('ROGUE', {}, true)}, paladinAssignments={ROGUE={Pal='SALV'}}}
+                Custom=member('ROGUE', {}, true)}, paladinAssignments={ROGUE={Pal='WISDOM'}}}
             local r = ns.Solver.Solve(roster)
-            assert(r.pally.ROGUE.Pal == 'SALV')
-            assert(r.expected.Offline.SALV == 'Pal' and r.expected.Default.SALV == 'Pal')
-            assert(r.expected.Custom.MIGHT == 'Pal' and r.expected.Custom.SALV == nil)
+            assert(r.pally.ROGUE.Pal == 'WISDOM')
+            assert(r.expected.Offline.WISDOM == 'Pal' and r.expected.Default.WISDOM == 'Pal')
+            assert(r.expected.Custom.MIGHT == 'Pal' and r.expected.Custom.WISDOM == nil)
             assert(r.overrides.Custom.Pal == 'MIGHT')
         """)
 
@@ -2059,7 +2060,7 @@ class AddonTests(unittest.TestCase):
                     ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
                     assert(not ns.db.blessingsOverride)
                     ns.Preferences.Reset()
-                    assert(ns.db.blessingsOverride and #ns.db.order == 6)
+                    assert(ns.db.blessingsOverride and #ns.db.order == 3)
                     -- Old saves without the toggle adopt the new default too.
                     BuffeteriaCharDB = {order=ns.Buffs.DefaultRanking(PLAYER_CLASS)}
                     ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
@@ -2072,26 +2073,26 @@ class AddonTests(unittest.TestCase):
             BuffeteriaCharDB = {defaultOrderVersion=2, blessingsOverride=true,
                 order={'KINGS','|','SALV','|','MIGHT','SALV','BOGUS'}}
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
-            assert(table.concat(ns.db.order, ',') == 'KINGS,SALV,MIGHT,LIGHT,SANCT,WISDOM')
+            assert(table.concat(ns.db.order, ',') == 'KINGS,MIGHT,WISDOM')
             ns.Preferences.Reset()
-            assert(#ns.db.order == 6 and ns.db.blessingsOverride)
+            assert(#ns.db.order == 3 and ns.db.blessingsOverride)
             for _, class in ipairs(ns.Buffs.CLASS_KEYS) do
                 local ranking = ns.Buffs.DefaultRanking(class)
-                assert(#ranking == 6 and not table.concat(ranking, ','):find('|', 1, true))
+                assert(#ranking == 3 and not table.concat(ranking, ','):find('|', 1, true))
             end
-            ns.Events.Emit('Received:S', 'B-Realm', 'FORT', 'SALV,KINGS',
+            ns.Events.Emit('Received:S', 'B-Realm', 'FORT', 'SALV,SANCT,WISDOM,KINGS',
                 'MIGHT,WISDOM,LIGHT,SANCT', 'MIGHT,gMIGHT', '1')
             local peer = ns.Roster.peers['B-Realm']
             assert(peer.excluded == nil and peer.caps.MIGHT and peer.caps.gMIGHT and peer.wants.FORT)
             local member = ns.Roster.Build().members['B-Realm']
-            assert(member.excluded == nil and member.blessingsOverride and #member.ranking == 6)
-            assert(member.ranking[1] == 'SALV' and member.ranking[2] == 'KINGS')
+            assert(member.excluded == nil and member.blessingsOverride and #member.ranking == 3)
+            assert(member.ranking[1] == 'WISDOM' and member.ranking[2] == 'KINGS')
             local sent
             ns.Comm.Send = function(msg) sent = msg end
             ns.Events.Emit('BroadcastRequested')
             local kind, version, wants, ranking, reserved, caps, override = ns.Protocol.Decode(sent)
             assert(kind == 'S' and version == '2' and reserved == '' and override == '1')
-            assert(#ns.Protocol.List(ranking) == 6 and caps:find('KINGS', 1, true))
+            assert(#ns.Protocol.List(ranking) == 3 and caps:find('KINGS', 1, true))
         """)
 
     def test_class_defaults_lead_with_role_blessing_and_migrate_untouched_orders(self):
@@ -2135,14 +2136,14 @@ class AddonTests(unittest.TestCase):
         self.solver("""
             local roster = {members={A=member('PALADIN', all), B=member('PALADIN', all),
                 Rogue=member('ROGUE'), Tank=member('WARRIOR', {}, true,
-                    {'KINGS','MIGHT','WISDOM','LIGHT','SANCT','SALV'})},
-                paladinAssignments={ROGUE={A='NONE', B='NONE'}, WARRIOR={A='SALV', B='NONE'}}}
+                    {'KINGS','MIGHT','WISDOM'})},
+                paladinAssignments={ROGUE={A='NONE', B='NONE'}, WARRIOR={A='WISDOM', B='NONE'}}}
             local r = ns.Solver.Solve(roster)
             assert(next(r.expected.Rogue) == nil)
-            assert(r.expected.Tank.KINGS and r.expected.Tank.MIGHT and not r.expected.Tank.SALV)
+            assert(r.expected.Tank.KINGS and r.expected.Tank.MIGHT and not r.expected.Tank.WISDOM)
             assert(r.overrides.Tank.A and r.overrides.Tank.B)
             -- Lowest priority remains available once enough paladins can cover the list.
-            for _, name in ipairs({'C','D','E','F'}) do roster.members[name] = member('PALADIN', all) end
+            roster.members.C = member('PALADIN', all)
             r = ns.Solver.Solve(roster)
             for _, key in ipairs(ns.Buffs.BLESSING_KEYS) do assert(r.expected.Tank[key], key) end
         """)
@@ -2188,11 +2189,11 @@ class AddonTests(unittest.TestCase):
             assert(ns.db.paladinBlessings.ROGUE == 'KINGS')
             ns.Paladins.Set('B-Realm', 'ROGUE', 'KINGS')
             assert(ns.Paladins.Get('A-Realm', 'ROGUE') == 'NONE')
-            ns.Paladins.Set('B-Realm', 'ROGUE', 'SANCT')
+            ns.Paladins.Set('B-Realm', 'ROGUE', 'WISDOM')
             assert(ns.Paladins.Get('B-Realm', 'ROGUE') == 'KINGS')
-            ns.Paladins.Set('C-Realm', 'ROGUE', 'SANCT')
+            ns.Paladins.Set('C-Realm', 'ROGUE', 'WISDOM')
             local blessings, _, assumed = ns.Paladins.Assignments(ns.Assignments.roster)
-            assert(blessings.ROGUE['C-Realm'] == 'SANCT' and assumed['C-Realm'].SANCT)
+            assert(blessings.ROGUE['C-Realm'] == 'WISDOM' and assumed['C-Realm'].WISDOM)
             ns.Paladins.Set('A-Realm', 'ROGUE', 'AUTO')
             assert(ns.db.paladinBlessings.ROGUE == 'AUTO')
             for _, msg in ipairs(sent) do assert(#msg <= 255) end
@@ -2403,6 +2404,7 @@ class AddonTests(unittest.TestCase):
             ns.Comm.OnMessage('BUFFETERIA', 'S|2||WISDOM,KINGS,SALV,MIGHT,LIGHT,SANCT||KINGS,MIGHT,SALV,WISDOM,gMIGHT,gKINGS|0', 'PARTY', 'Pal-Realm')
             ns.Comm.OnMessage('BUFFETERIA', 'P|2|Pal-Realm|2|MIGHT|5000|Pal-Realm', 'PARTY', 'Pal')
             ns.Comm.OnMessage('BUFFETERIA', 'P|2|Pal-Realm|1|KINGS|5000|Pal-Realm', 'PARTY', 'Pal')
+            ns.Comm.OnMessage('BUFFETERIA', 'P|2|Pal-Realm|2|SALV|5001|Pal-Realm', 'PARTY', 'Pal')
             assert(ns.Paladins.Get('Pal-Realm', 'ROGUE') == 'AUTO')
             GROUP_SIZE = 2
             ns.Assignments.Resolve(); runTimers()
@@ -2411,7 +2413,8 @@ class AddonTests(unittest.TestCase):
             assert(ns.Paladins.Get(pal, 'ROGUE') == 'MIGHT' and ns.Paladins.Get(pal, 'WARRIOR') == 'KINGS')
             assert(r.pally.ROGUE[pal] == 'MIGHT' and r.pally.WARRIOR[pal] == 'KINGS')
             -- The rogue's explicit ranking beats the preset; the warrior follows it.
-            assert(r.expected['Rogue-Realm'].SALV == pal and r.overrides['Rogue-Realm'][pal] == 'SALV')
+            assert(r.expected['Rogue-Realm'].KINGS == pal and r.overrides['Rogue-Realm'][pal] == 'KINGS')
+            assert(not r.expected['Rogue-Realm'].SALV and not r.expected['Rogue-Realm'].LIGHT)
             assert(r.expected['A-Realm'].KINGS == pal and not r.overrides['A-Realm'])
             -- A paladin briefly missing from the roster keeps their plan.
             GROUP_SIZE = 1; NAMES.party1 = 'Rogue'; CLASSES.party1 = 'ROGUE'; ns.Assignments.Resolve(); runTimers()
@@ -2657,20 +2660,26 @@ class AddonTests(unittest.TestCase):
         """)
 
 
-    def test_group_buffs_split_by_work_and_home_group(self):
+    def test_group_buffs_assign_one_raid_caster_then_split_singles_by_work(self):
         self.solver("""
             local function at(m, g) m.group = g; return m end
             local members = {P1=at(member('PRIEST', {FORT=true, gFORT=true}), 1), P2=at(member('PRIEST', {FORT=true}), 2)}
             for i = 1, 4 do members['A' .. i] = at(member('ROGUE'), 1); members['B' .. i] = at(member('ROGUE'), 2) end
             members.C1 = at(member('ROGUE'), 3)
-            -- Prayer makes a group one cast for P1; P2 casts singles, so gets the small group.
+            -- One Prayer can reach members in all three groups.
             local r = ns.Solver.Solve({members=members})
-            assert(r.groups.FORT[1] == 'P1' and r.groups.FORT[2] == 'P1' and r.groups.FORT[3] == 'P2')
-            assert(r.expected.C1.FORT == 'P2' and r.expected.B1.FORT == 'P1')
-            -- Equal work: each priest keeps their own group (in range), whatever the names.
-            members.P2.caps.gFORT = true; members.P1.group = 2; members.P2.group = 1; members.C1 = nil
+            assert(r.raidGroupCasters.FORT == 'P1')
+            assert(r.groups.FORT[1] == 'P1' and r.groups.FORT[2] == 'P1' and r.groups.FORT[3] == 'P1')
+            assert(r.expected.C1.FORT == 'P1' and r.expected.B1.FORT == 'P1')
+            members.P1.dead, members.P2.caps.gFORT = true, true
             r = ns.Solver.Solve({members=members})
-            assert(r.groups.FORT[1] == 'P2' and r.groups.FORT[2] == 'P1')
+            assert(r.raidGroupCasters.FORT == 'P2' and r.expected.C1.FORT == 'P2')
+            -- With only singles, each priest keeps their own group on a tie.
+            members.P1.dead, members.P1.caps.gFORT, members.P2.caps.gFORT = nil, nil, nil
+            members.P1.group, members.P2.group = 2, 1
+            r = ns.Solver.Solve({members=members})
+            assert(not r.raidGroupCasters.FORT and r.groups.FORT[1] == 'P2' and r.groups.FORT[2] == 'P1')
+            assert(r.groups.FORT[3] == 'P1')
         """)
 
     def tracker_actions(self, setup):
@@ -2705,6 +2714,7 @@ class AddonTests(unittest.TestCase):
                 if IsSpellInRange then return IsSpellInRange(spell, unit) ~= 0 end
                 return true
             end
+            ns.WoW.WithinRadius = function() return nil end
             function UnitIsConnected() return true end
         """)
         lua.execute(setup)
@@ -2719,31 +2729,79 @@ class AddonTests(unittest.TestCase):
         """)
         return lua
 
-    def test_group_cast_marks_everyone_it_covers(self):
+    def test_raid_group_cast_marks_recipients_across_subgroups(self):
         lua = self.tracker_actions("""
             local members, units, expected = {Me={class='PRIEST', group=1, unit='player'}}, {Me='player'}, {}
-            for i = 1, 4 do
+            for i = 1, 5 do
                 local n = 'R' .. i
-                members[n] = {class='ROGUE', group=1, unit='party' .. i}; units[n] = 'party' .. i
+                members[n] = {class='ROGUE', group=i % 2 + 1, unit='raid' .. i}; units[n] = 'raid' .. i
                 expected[n] = {FORT='Me'}
             end
-            ns.Assignments.roster = {members=members, units=units}
-            ns.Assignments.result = {groups={FORT={[1]='Me'}}, auras={}, pally={}, expected=expected, overrides={}}
+            ns.Assignments.roster = {members=members, units=units, isRaid=true}
+            ns.Assignments.result = {groups={FORT={[1]='Me', [2]='Me'}}, auras={}, pally={}, expected=expected, overrides={}}
+            ns.WoW.WithinRadius = function(unit, yards) assert(yards == 100); return unit ~= 'raid5' end
+            IsSpellInRange = function(_, unit) return unit == 'raid5' and 0 or 1 end
         """)
         lua.execute("""
             local cast = nextCast()
             assert(cast.big and cast.spell == '21564' and #cast.covers == 4)
+            assert(cast.label == 'Raid' and cast.unit == 'player')
             ns.Tracker.Actions.MarkCast(cast)
-            -- Until the auras arrive, nobody in the group is offered a redundant single.
+            -- Until the auras arrive, neither subgroup is offered a redundant single.
             assert(nextCast() == nil)
+            -- The distant player was not marked pending and can receive a single immediately.
+            IsSpellInRange = nil
+            assert(nextCast().who == 'R5' and not nextCast().big)
             NOW = NOW + 4
             assert(nextCast().big)
+            -- A caster with no single version can still serve one reachable player.
+            for i = 1, 4 do HAVE['raid' .. i] = '10938' end
+            ns.WoW.WithinRadius = function() return true end
+            ns.WoW.KnowsAny = function(ids) return ids[1] == 21562, ids[1] == 21562 and 21564 or nil end
+            cast = nextCast()
+            assert(cast.big and cast.who == 'R5' and #cast.covers == 1)
+        """)
+
+    def test_raid_group_rank_requires_its_own_reagent(self):
+        lua = full_addon('PRIEST')
+        lua.execute("""
+            local me, onEvent = ns.WoW.Me(), ns.App:GetScript('OnEvent')
+            assert(ns.Assignments.result.raidGroupCasters.FORT == me)
+            assert(table.concat(ns.Assignments.Lines(false), ' '):find('Fortitude: A (group)', 1, true))
+            C_Item.GetItemCount = function(id) return id == 17028 and 1 or 0 end
+            onEvent(ns.App, 'BAG_UPDATE_DELAYED'); runTimers()
+            assert(not ns.Roster.Capabilities(true).gFORT and not ns.Assignments.result.raidGroupCasters.FORT)
+            assert(ns.Assignments.Served(me).FORT == me)
+            IsPlayerSpell = function(id) return id == 10938 or id == 21562 end
+            onEvent(ns.App, 'SPELLS_CHANGED'); runTimers()
+            assert(ns.Roster.Capabilities(true).gFORT and ns.Assignments.result.raidGroupCasters.FORT == me)
+            local frame, button = Buffeteria_Tracker, Buffeteria_CastButton
+            assert(button:GetAttribute('spell') == '21562')
+            frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
+            assert(not button:GetAttribute('spell'))
+            onEvent(ns.App, 'PLAYER_REGEN_ENABLED')
+
+            local function broadcastFortitude()
+                for i = #delivered, 1, -1 do
+                    local kind, _, _, _, _, caps = ns.Protocol.Decode(delivered[i])
+                    if kind == 'S' then return ns.Protocol.Set(caps).gFORT end
+                end
+            end
+            local stocked = C_Item.GetItemCount
+            WOW_TIME = WOW_TIME + 11
+            C_Item.GetItemCount = function() return 0 end
+            onEvent(ns.App, 'BAG_UPDATE_DELAYED')
+            assert(not broadcastFortitude() and ns.Assignments.result.raidGroupCasters.FORT == me)
+            -- Regain the reagent before the queued assignment rebuild sees the loss.
+            C_Item.GetItemCount = stocked
+            onEvent(ns.App, 'BAG_UPDATE_DELAYED'); runTimers()
+            assert(broadcastFortitude() and ns.Assignments.result.raidGroupCasters.FORT == me)
         """)
 
     def test_head_resurrects_dead_members_before_buffs(self):
         for player_class, spell in (("PRIEST", "20770"), ("PALADIN", "20773"), ("SHAMAN", "20777"),
-                                    ("DRUID", "20748"), ("MAGE", None)):
-            with self.subTest(player_class=player_class):
+                                    ("DRUID", "1237951"), ("DRUID", "20748"), ("MAGE", None)):
+            with self.subTest(player_class=player_class, spell=spell):
                 lua = self.tracker_actions(f"""
                     CLASS = '{player_class}'
                     ns.Assignments.roster = {{members={{Me={{class=CLASS, group=1, unit='player'}},
@@ -2754,6 +2812,9 @@ class AddonTests(unittest.TestCase):
                 """)
                 lua.execute(f"""
                     local SPELL = {'nil' if spell is None else repr(spell)}
+                    if SPELL == '20748' then
+                        ns.WoW.KnowsAny = function(ids) return ids[#ids] == 20748, ids[#ids] == 20748 and 20748 or nil end
+                    end
                     assert(nextCast(false, true) == nil)
                     DEAD.party1 = true; DEAD.party2 = true
                     local cast = nextCast(false, true)
@@ -2874,11 +2935,11 @@ class AddonTests(unittest.TestCase):
         self.solver("""
             local base = {DEVO=true, RETRI=true, FIRERES=true, FROSTRES=true, SHADOWRES=true}
             local function with(extra) local c = {} for k in pairs(base) do c[k] = true end; c[extra] = true; return c end
-            local roster = {members={Holy=member('PALADIN', with('CONC')), Ret=member('PALADIN', with('SANCTITY')),
+            local roster = {members={Holy=member('PALADIN', with('CONC')), Ret=member('PALADIN', base),
                 Prot=member('PALADIN', base), Rogue=member('ROGUE')}}
             local r = ns.Solver.Solve(roster)
-            -- Talented auras land on the paladins who have them; Devotion goes to the other.
-            assert(r.auras.Prot == 'DEVO' and r.auras.Holy == 'CONC' and r.auras.Ret == 'SANCTITY')
+            -- Concentration goes to the paladin who knows it.
+            assert(r.auras.Ret == 'DEVO' and r.auras.Holy == 'CONC' and r.auras.Prot == 'RETRI')
             assert(r.auras.Rogue == nil)
             roster.paladinAuras = {Prot='FIRERES', Holy='NONE'}
             r = ns.Solver.Solve(roster)
@@ -2886,7 +2947,7 @@ class AddonTests(unittest.TestCase):
             -- An unknown manual aura falls back to Auto.
             roster.paladinAuras = {Prot='CONC'}
             r = ns.Solver.Solve(roster)
-            assert(r.auras.Prot == 'DEVO' and r.auras.Holy == 'CONC')
+            assert(r.auras.Prot == 'RETRI' and r.auras.Holy == 'CONC')
         """)
 
     def test_aura_slot_syncs_persists_and_stays_unique(self):
@@ -2901,13 +2962,14 @@ class AddonTests(unittest.TestCase):
             assert(ns.Paladins.Get('A-Realm', 'AURA') == 'DEVO' and ns.Paladins.Get('A-Realm', 'ROGUE') == 'AUTO')
             ns.Paladins.Set('B-Realm', 'AURA', 'DEVO')
             assert(ns.Paladins.Get('A-Realm', 'AURA') == 'NONE' and ns.Paladins.Get('B-Realm', 'AURA') == 'DEVO')
-            ns.Paladins.Set('C-Realm', 'AURA', 'SANCTITY')
+            ns.Paladins.Set('C-Realm', 'AURA', 'CONC')
             local blessings, auras, assumed = ns.Paladins.Assignments(ns.Assignments.roster)
-            assert(auras['C-Realm'] == 'SANCTITY' and auras['B-Realm'] == 'DEVO' and blessings.AURA == nil)
-            assert(assumed['C-Realm'].SANCTITY)
+            assert(auras['C-Realm'] == 'CONC' and auras['B-Realm'] == 'DEVO' and blessings.AURA == nil)
+            assert(assumed['C-Realm'].CONC)
             ns.Paladins.Receive('B-Realm', 'A-Realm', '10', 'RETRI', '9999', 'B-Realm')
             assert(ns.Paladins.Get('A-Realm', 'AURA') == 'RETRI')
             ns.Paladins.Receive('B-Realm', 'A-Realm', '10', 'MIGHT', '99999', 'B-Realm')
+            ns.Paladins.Receive('B-Realm', 'A-Realm', '10', 'SANCTITY', '99999', 'B-Realm')
             ns.Paladins.Receive('B-Realm', 'A-Realm', '11', 'DEVO', '99999', 'B-Realm')
             assert(ns.Paladins.Get('A-Realm', 'AURA') == 'RETRI')
             ns.Paladins.cells = {}; ns.Paladins.Init()
@@ -2917,11 +2979,16 @@ class AddonTests(unittest.TestCase):
     def test_auto_fill_and_clear_from_the_paladins_tab(self):
         lua = full_addon()
         lua.execute("""
+            UnitLevel = function() return 22 end
+            assert(ns.Roster.Build().members['B-Realm'].caps.CONC)
+            UnitLevel = function() return 20 end
+            local caps = ns.Roster.Build().members['B-Realm'].caps
+            assert(caps.KINGS and not caps.CONC and not caps.FIRERES)
+            ns.Assignments.Resolve(); runTimers()
             ns.Options.Toggle()
             local tab = findWidget('Paladins').parent; tab:GetScript('OnClick')(tab)
             local panel = findWidget('Class blessings').parent
-            -- B has no add-on, so only baseline auras are assumed: it gets Devotion,
-            -- and A takes Concentration, which only A knows.
+            -- B is below the level for Concentration, so it gets Devotion.
             assert(ns.Assignments.result.auras['B-Realm'] == 'DEVO' and ns.Assignments.result.auras['A-Realm'] == 'CONC')
             local aura = panel.columns[1].aura
             assert(aura.state == 'green' and aura.detail == 'Auto: Concentration Aura')
@@ -2940,10 +3007,10 @@ class AddonTests(unittest.TestCase):
             -- The aura picker exposes available auras without cycling.
             aura:GetScript('OnClick')(aura, 'LeftButton')
             for _, choice in ipairs(panel.picker.choices) do
-                if choice.key == 'SANCTITY' then choice:GetScript('OnClick')(choice) end
+                if choice.key == 'RETRI' then choice:GetScript('OnClick')(choice) end
             end
             runTimers()
-            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'SANCTITY')
+            assert(ns.Paladins.Get('A-Realm', 'AURA') == 'RETRI')
             aura:GetScript('OnEnter')(aura)
             assert(GameTooltip:GetText() == 'A - Aura')
             panel.clear:GetScript('OnClick')(panel.clear); runTimers()
@@ -3049,8 +3116,13 @@ class AddonTests(unittest.TestCase):
         """)
 
     def test_shaman_weapon_imbue_picker_tracks_only_the_selected_main_hand_imbue(self):
-        lua = full_addon("SHAMAN")
+        lua = full_addon("SHAMAN", login=False)
         lua.execute("""
+            GROUP_SIZE = 0
+            local learned = {}
+            IsPlayerSpell = function(id) return learned[id] end
+            local onEvent = ns.App:GetScript('OnEvent')
+            onEvent(ns.App, 'PLAYER_LOGIN'); runTimers()
             local me = ns.WoW.Me()
             local button = Buffeteria_CastButton
             local tracker = Buffeteria_Tracker
@@ -3062,11 +3134,20 @@ class AddonTests(unittest.TestCase):
                 assert(slot == Enum.WeaponSlot.MainHand)
                 return enchants
             end
-            IsPlayerSpell = function(id) return id == 8017 or id == 8024 or id == 16342 end
             ns.Options.Toggle()
             local menu = Buffeteria_WeaponImbueMenu
             menu.parent:GetScript('OnClick')(menu.parent)
             assert(menu:IsShown() and menu.items[1]:GetChecked() and ns.db.weaponImbue == nil)
+            assert(not menu.items[2]:IsShown() and not ns.Tracker.Summary().any)
+            assert(button.icon.texture:find('OrcColoredHappy$') and button.icon.desaturated)
+
+            learned[8017] = true
+            onEvent(ns.App, 'SPELLS_CHANGED'); runTimers()
+            assert(ns.db.weaponImbue == 'ROCKBITER' and menu.items[2]:GetChecked())
+            assert(ns.Assignments.Served(me).ROCKBITER == me and button:GetAttribute('spell') == '8017')
+            learned[8024], learned[16342] = true, true
+            onEvent(ns.App, 'SPELLS_CHANGED'); runTimers()
+            assert(ns.db.weaponImbue == 'ROCKBITER')
             assert(menu.items[2]:IsShown() and menu.items[3]:IsShown())
             assert(not menu.items[4]:IsShown() and not menu.items[5]:IsShown())
             menu.items[3]:GetScript('OnClick')(menu.items[3]); runTimers()
@@ -3094,31 +3175,202 @@ class AddonTests(unittest.TestCase):
             assert(ns.Tracker.Summary().perKey.FLAMETONGUE.unknown == 1 and not button.pending)
             ns.Preferences.Init()
             assert(ns.db.weaponImbue == 'FLAMETONGUE')
+
+            menu.parent:GetScript('OnClick')(menu.parent)
+            menu.items[1]:GetScript('OnClick')(menu.items[1]); runTimers()
+            onEvent(ns.App, 'ADDON_LOADED', ADDON_NAME)
+            onEvent(ns.App, 'SPELLS_CHANGED'); runTimers()
+            assert(ns.db.weaponImbue == false and not ns.Assignments.roster.members[me].weaponImbue)
+            assert(menu.items[1]:GetChecked() and menu.parent.caption:GetText() == 'None')
             ns.Preferences.Reset(); runTimers()
-            assert(ns.db.weaponImbue == nil and not ns.Tracker.Summary().perKey.FLAMETONGUE)
+            assert(ns.db.weaponImbue == 'ROCKBITER' and not ns.Tracker.Summary().perKey.FLAMETONGUE)
         """)
 
-    def test_dev_weapon_imbue_picker_is_a_preview_on_other_classes(self):
-        lua = full_addon("PRIEST", addon_name="Buffeteria-Dev")
+    def test_dev_class_picker_previews_class_controls_without_changing_live_state(self):
+        lua = full_addon("PRIEST", login=False, addon_name=DEV_NAME)
         lua.execute("""
+            GROUP_SIZE = 0
             IsPlayerSpell = function(id) return id == 588 end
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
             ns.Options.Toggle()
+            local classMenu = BuffeteriaDev_ClassPreviewMenu
+            local function selectClass(label)
+                classMenu.parent:GetScript('OnClick')(classMenu.parent)
+                assert(classMenu:IsVisible())
+                for _, item in ipairs(widgets) do
+                    if item.parent == classMenu and item.caption and item.caption:GetText() == label then
+                        item:GetScript('OnClick')(item)
+                        assert(item:GetChecked() and not classMenu:IsShown())
+                        return
+                    end
+                end
+                error('Missing preview choice ' .. label)
+            end
+            local function tab(label) return findWidget(label).parent end
+            local function openTab(label) tab(label):GetScript('OnClick')(tab(label)) end
+            local prefs = findWidget('Blessings').parent.parent
+            local roster, assignments = ns.Assignments.roster, ns.Assignments.result
+            local head = BuffeteriaDev_CastButton
+            local spell, savedTab, sent = head:GetAttribute('spell'), ns.db.optionsTab, #delivered
+            assert(spell == '588' and prefs.wants.IFIRE:IsVisible() and not tab('Paladins'):IsVisible())
+            assert(not BuffeteriaDev_WeaponImbueMenu.parent:IsVisible())
+
+            selectClass('SHAMAN')
             local menu = BuffeteriaDev_WeaponImbueMenu
             local picker = menu.parent
             picker:GetScript('OnClick')(picker)
-            assert(menu:IsVisible() and menu.items[1]:GetChecked())
+            assert(menu:IsVisible() and menu.items[2]:GetChecked())
             for _, item in ipairs(menu.items) do assert(item:IsVisible()) end
-            local label = findWidget('Weapon imbue')
-            local innerFire = label.parent.parent.wants.IFIRE
-            assert(label.point[3] < innerFire.point[3] - innerFire:GetHeight())
             menu.items[5]:GetScript('OnClick')(menu.items[5]); runTimers()
-            assert(picker.caption:GetText() == 'Windfury Weapon')
-            local me = ns.WoW.Me()
-            assert(not ns.Assignments.roster.members[me].weaponImbue)
-            assert(not ns.Assignments.Served(me).WINDFURY and not ns.Tracker.Summary().perKey.WINDFURY)
+            assert(picker.caption:GetText() == 'Rockbiter Weapon' and ns.db.weaponImbue == nil)
+            assert(BuffeteriaDev_PersonalBuffMenu_SHAMAN.parent:IsVisible())
+            assert(not prefs.wants.IFIRE:IsVisible() and not prefs.wants.BSHOUT:IsVisible())
+            openTab('Extra')
+            assert(findWidget('Provide Windfury Totem'):IsVisible() and not findWidget('Provide Trueshot Aura'):IsVisible())
+            local windfury = findWidget('Provide Windfury Totem').parent
+            windfury:GetScript('OnClick')(windfury)
+            assert(not ns.db.wants.WINDFURYTOTEM)
+
+            selectClass('HUNTER')
+            assert(findWidget('Provide Trueshot Aura'):IsVisible() and not findWidget('Provide Windfury Totem'):IsVisible())
+            selectClass('DRUID')
+            assert(findWidget('Track Moonkin Aura or Leader of the Pack'):IsVisible())
+            assert(findWidget('Your spell: |cffffffff437138|r'):IsVisible())
+            openTab('Settings')
+            selectClass('SHAMAN')
+            local settings = findWidget('Tracker settings').parent
+            assert(settings.preview.gief:GetText() == 'GIEF Rockbiter Weapon!')
+            local headSize = ns.db.iconSize
+            BuffeteriaDev_IconSize:SetValue(headSize + 4)
+            assert(ns.db.iconSize == headSize)
+
+            selectClass('PALADIN')
+            openTab('Paladins')
+            local board = findWidget('Class blessings').parent
+            local column = board.columns[1]
+            assert(column.paladin == 'Sample Paladin' and column.aura:IsVisible())
+            column.aura:GetScript('OnClick')(column.aura, 'LeftButton')
+            assert(board.picker:IsVisible() and #board.picker.choices == 2 + #ns.Buffs.AURA_KEYS)
+            board.picker.choices[2]:GetScript('OnClick')(board.picker.choices[2])
+            assert(not next(ns.Paladins.cells))
+            openTab('My preferences')
+            assert(prefs.tankButtons.RFURY:IsVisible())
+            selectClass('WARRIOR')
+            assert(prefs.wants.BSHOUT:IsVisible() and not tab('Paladins'):IsVisible())
+            assert(prefs.rankRows[1].text:GetText() == 'Might')
+
+            settingsPage:GetScript('OnShow')(settingsPage)
+            assert(classMenu.parent:GetParent():GetParent() == settingsPage)
+            selectClass('MAGE')
+            assert(BuffeteriaDev_PersonalBuffMenu_MAGE.parent:IsVisible())
+            selectClass('WARLOCK')
+            assert(BuffeteriaDev_PersonalBuffMenu_WARLOCK.parent:IsVisible())
+            selectClass('ROGUE')
+            assert(not BuffeteriaDev_PersonalBuffMenu_WARLOCK.parent:IsVisible())
+            selectClass('Current character')
+            assert(not ns.Options.ClassPreview() and prefs.wants.IFIRE:IsVisible())
+            assert(ns.WoW.PlayerClass() == 'PRIEST' and ns.db.optionsTab == savedTab and #delivered == sent)
+            assert(ns.Assignments.roster == roster and ns.Assignments.result == assignments and head:GetAttribute('spell') == spell)
         """)
         lua = full_addon("PRIEST")
-        lua.execute("ns.Options.Toggle(); assert(not Buffeteria_WeaponImbueMenu)")
+        lua.execute("ns.Options.Toggle(); assert(not Buffeteria_ClassPreviewMenu and not Buffeteria_WeaponImbueMenu)")
+
+    def test_personal_buff_picker_autoselects_learned_armor_or_shield_and_saves_overrides(self):
+        for player_class, base, later, automatic in (
+                ("MAGE", 168, 7302, "ICEARMOR"),
+                ("WARLOCK", 687, 706, "DEMONARMOR"),
+                ("SHAMAN", 324, 408510, "LIGHTNINGSHIELD")):
+            with self.subTest(player_class=player_class):
+                lua = full_addon(player_class, login=False)
+                lua.globals().BASE_ID, lua.globals().LATER_ID, lua.globals().AUTO_KEY = base, later, automatic
+                lua.execute("""
+                    GROUP_SIZE = 0
+                    local known = {[BASE_ID]=true}
+                    IsPlayerSpell = function(id) return known[id] end
+                    local onEvent = ns.App:GetScript('OnEvent')
+                    local function learnChanged()
+                        onEvent(ns.App, 'SPELLS_CHANGED'); runTimers()
+                    end
+                    onEvent(ns.App, 'PLAYER_LOGIN'); runTimers()
+                    local me, button = ns.WoW.Me(), Buffeteria_CastButton
+                    local initial = ns.Preferences.PersonalBuff()
+                    assert(initial.ids[1] == BASE_ID and ns.Assignments.Served(me)[initial.key] == me)
+                    assert(button:GetAttribute('spell') == tostring(BASE_ID)
+                        and button:GetAttribute('*unit1') == 'player')
+                    assert(not ns.Preferences.Get().wants[initial.key] and not ns.Roster.Capabilities(true)[initial.key])
+                    ns.Options.Toggle()
+                    local menu = Buffeteria_PersonalBuffMenu
+                    local function open()
+                        menu.parent:GetScript('OnClick')(menu.parent)
+                    end
+                    local function item(key)
+                        for _, choice in ipairs(menu.items) do if choice.key == key then return choice end end
+                    end
+                    local function choose(key)
+                        local choice = item(key)
+                        choice:GetScript('OnClick')(choice); runTimers()
+                    end
+                    open()
+                    assert(menu:IsShown() and item('AUTO'):GetChecked())
+                    assert(menu.parent.caption:GetText() == 'Auto (' .. initial.label .. ')')
+                    local later
+                    for _, buff in ipairs(ns.Buffs.PERSONAL_BUFFS[PLAYER_CLASS]) do
+                        if buff.ids[1] == LATER_ID then later = buff end
+                    end
+                    assert(not item(later.key):IsShown())
+                    known[LATER_ID] = true
+                    learnChanged()
+                    assert(item(later.key):IsShown() and ns.Preferences.PersonalBuff().key == AUTO_KEY)
+                    if PLAYER_CLASS == 'MAGE' then
+                        known[6117], known[22783] = true, true
+                        learnChanged()
+                        assert(item('MAGEARMOR'):IsShown() and ns.Preferences.PersonalBuff().key == AUTO_KEY)
+                        choose('MAGEARMOR')
+                        assert(button:GetAttribute('spell') == '22783')
+                        assert(not ns.Assignments.Served(me).ICEARMOR)
+                        open()
+                    elseif PLAYER_CLASS == 'WARLOCK' then
+                        choose(initial.key)
+                        assert(button:GetAttribute('spell') == tostring(BASE_ID))
+                        assert(not ns.Assignments.Served(me).DEMONARMOR)
+                        open()
+                    end
+                    choose(later.key)
+                    assert(not menu:IsShown() and menu.parent.caption:GetText() == later.label)
+                    assert(ns.Assignments.Served(me)[later.key] == me and not ns.Assignments.Served(me)[initial.key])
+                    assert(button:GetAttribute('spell') == tostring(LATER_ID))
+                    local left = later.duration / 20 + 1
+                    C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                        if unit == 'player' and i == 1 then
+                            return {name=tostring(LATER_ID), expirationTime=WOW_TIME+left, sourceUnit='player'}
+                        end
+                    end
+                    ns.Tracker.Refresh()
+                    assert(not button.pending)
+                    left = left - 1; ns.Tracker.Refresh()
+                    assert(button.pending and ns.Tracker.Summary().perKey[later.key].warn == 1)
+                    local frame = Buffeteria_Tracker
+                    frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
+                    assert(not button:GetAttribute('spell'))
+                    onEvent(ns.App, 'PLAYER_REGEN_ENABLED')
+                    known[LATER_ID] = nil
+                    learnChanged()
+                    assert(ns.db.personalBuff == later.key and not ns.Preferences.PersonalBuff())
+                    assert(menu.parent.caption:GetText() == later.label .. ' (not learned)')
+                    assert(not button.pending)
+                    open(); choose(false)
+                    onEvent(ns.App, 'ADDON_LOADED', ADDON_NAME)
+                    learnChanged()
+                    assert(ns.db.personalBuff == false and not ns.Preferences.PersonalBuff())
+                    assert(menu.parent.caption:GetText() == 'None')
+                    open(); choose('AUTO')
+                    assert(ns.db.personalBuff == nil and ns.Preferences.PersonalBuff().key == initial.key)
+                    if PLAYER_CLASS == 'SHAMAN' then
+                        known[8017] = true; learnChanged()
+                        local expected = ns.Assignments.Served(me)
+                        assert(expected.ROCKBITER == me and expected.LIGHTNINGSHIELD == me)
+                    end
+                """)
 
     def test_warrior_battle_shout_is_optional_self_buff_with_percentage_warning(self):
         lua = full_addon('WARRIOR')
@@ -3133,14 +3385,14 @@ class AddonTests(unittest.TestCase):
             ns.Tracker.Refresh()
             local button = Buffeteria_CastButton
             assert(button:GetAttribute('spell') == '25289' and button:GetAttribute('*unit1') == 'player')
-            -- At 5% of two minutes, 60 seconds is fine and six seconds warns.
-            local left = 60
+            -- At 5% of three minutes, 10 seconds is fine and nine seconds warns.
+            local left = 10
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if i == 1 then return {name='25289', expirationTime=WOW_TIME + left, sourceUnit='player'} end
             end
             ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.BSHOUT.warn == 0 and not button:GetAttribute('spell'))
-            left = 6; ns.Tracker.Refresh()
+            left = 9; ns.Tracker.Refresh()
             assert(ns.Tracker.Summary().perKey.BSHOUT.warn == 1)
             -- Not enough rage: still tracked, but nothing to cast.
             C_Spell.IsSpellUsable = function() return false, true end
@@ -3198,11 +3450,11 @@ class AddonTests(unittest.TestCase):
             ns.Assignments.result.pally = {}; ns.Assignments.result.auras = {}
             ns.Assignments.result.expected['B-Realm'] = {}
             local function call() return ns.Tracker.Summary().next and ns.Tracker.Summary().next.key end
-            -- Out of combat: a readable shout with 100 seconds left (a talented 150-second one).
+            -- Out of combat: a readable shout with 100 seconds left (an observed 240-second one).
             C_UnitAuras.GetAuraDataByIndex = function(unit, i)
                 if COMBAT then error('blocked in combat') end
                 if unit == 'player' and i == 1 then
-                    return {name='25289', expirationTime=WOW_TIME + 100, duration=150, sourceUnit='player'}
+                    return {name='25289', expirationTime=WOW_TIME + 100, duration=240, sourceUnit='player'}
                 end
             end
             ns.Tracker.Refresh()
@@ -3210,19 +3462,19 @@ class AddonTests(unittest.TestCase):
             COMBAT = true; ns.Tracker.Refresh()
             assert(call() == nil)
             -- It runs out mid-fight: dated from the last read.
-            WOW_TIME = WOW_TIME + 93; ns.Tracker.Refresh()
+            WOW_TIME = WOW_TIME + 89; ns.Tracker.Refresh()
             assert(call() == 'BSHOUT' and ns.Tracker.Summary().perKey.BSHOUT.warn == 1)
             WOW_TIME = WOW_TIME + 12; ns.Tracker.Refresh()
             assert(call() == 'BSHOUT' and ns.Tracker.Summary().perKey.BSHOUT.bad == 1)
-            -- Recast in combat: good for the learned duration, not the base two minutes.
+            -- Recast in combat: good for the learned duration, not the base three minutes.
             frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 25289)
             assert(call() == nil)
-            WOW_TIME = WOW_TIME + 110; ns.Tracker.Refresh()
+            WOW_TIME = WOW_TIME + 210; ns.Tracker.Refresh()
             assert(call() == nil)
             -- Other units and other spells change nothing.
             frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'party1', 'guid', 25289)
             frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 12345)
-            WOW_TIME = WOW_TIME + 33; ns.Tracker.Refresh()
+            WOW_TIME = WOW_TIME + 20; ns.Tracker.Refresh()
             assert(call() == 'BSHOUT')
             COMBAT = false; ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_REGEN_ENABLED')
             assert(call() == nil) -- readable again: the real aura wins
@@ -3242,13 +3494,15 @@ class AddonTests(unittest.TestCase):
         """)
 
     def test_long_buffs_wait_until_after_combat(self):
-        lua = full_addon('PRIEST')
+        lua = full_addon('PRIEST', login=False)
         lua.execute("""
+            GROUP_SIZE = 0
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
             local frame, head = Buffeteria_Tracker, Buffeteria_CastButton
             ns.db.wants.IFIRE = false; ns.Preferences.Changed(); runTimers()
             ns.Tracker.Refresh()
             local before = head:GetAttribute('spell')
-            assert(ns.Tracker.Summary().next and ns.Tracker.Summary().next.key ~= 'IFIRE')
+            assert(ns.Tracker.Summary().next.key == 'FORT' and not ns.Tracker.Summary().next.big)
             frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
             COMBAT = true; ns.Tracker.Refresh()
             assert(head:GetAttribute('spell') == before) -- nothing to arm
@@ -3257,7 +3511,7 @@ class AddonTests(unittest.TestCase):
             assert(ns.Tracker.Summary().next and frame.gief:IsShown())
         """)
 
-    def test_battle_shout_is_warrior_only(self):
+    def test_only_enabled_warriors_can_be_assigned_battle_shout(self):
         lua = full_addon('PRIEST')
         lua.execute("""
             assert(ns.db.wants.BSHOUT == false and not ns.Preferences.Get().wants.BSHOUT)
@@ -3271,8 +3525,75 @@ class AddonTests(unittest.TestCase):
             local w = member('WARRIOR'); w.wants = {BSHOUT=true}; w.caps = {BSHOUT=true}
             local p = member('PALADIN'); p.wants = {BSHOUT=true}; p.caps.BSHOUT = true
             local x = member('WARRIOR'); x.wants = {BSHOUT=true} -- not learned
-            local result = ns.Solver.Solve({members={W=w, P=p, X=x}})
-            assert(result.expected.W.BSHOUT == 'W' and not result.expected.P.BSHOUT and not result.expected.X.BSHOUT)
+            local y = member('WARRIOR', {BSHOUT=true})
+            local roster = {members={W=w, P=p, X=x, Y=y}}
+            local result = ns.Solver.Solve(roster)
+            assert(result.raidShout == 'W')
+            assert(result.expected.W.BSHOUT == 'W' and result.expected.P.BSHOUT == 'W' and result.expected.X.BSHOUT == 'W')
+            w.dead = true
+            assert(ns.Solver.Solve(roster).raidShout == 'Y')
+            y.wants.BSHOUT = false
+            assert(not ns.Solver.Solve(roster).raidShout)
+        """)
+
+    def test_battle_shout_tracks_nearby_raid_recipients_in_combat(self):
+        lua = full_addon("WARRIOR", login=False)
+        lua.execute("""
+            local names, classes = {'A', 'B', 'C'}, {'WARRIOR', 'ROGUE', 'WARRIOR'}
+            local dead = {}
+            function IsInRaid() return true end
+            function GetNumGroupMembers() return 3 end
+            function GetRaidRosterInfo(i) return names[i], 0, i, 60, nil, classes[i], nil, true, dead[i] end
+            function UnitIsDeadOrGhost(unit) return dead[tonumber(unit:match('^raid(%d+)$')) or 1] end
+            function UnitFullName(unit)
+                return names[tonumber(unit:match('^raid(%d+)$')) or 1], 'Realm'
+            end
+            function UnitDistanceSquared(unit)
+                if unit == 'raid2' then return 20 * 20, true end
+                return 21 * 21, true
+            end
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if COMBAT then error('auras hidden in combat') end
+                if unit == 'raid1' and i == 1 then
+                    return {name='25289', duration=180, expirationTime=WOW_TIME + 100}
+                end
+            end
+            ns.Roster.peers['C-Realm'] = {wants={BSHOUT=true}, caps={BSHOUT=true}, ranking={}}
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+            local frame = Buffeteria_Tracker
+            local s = ns.Tracker.Summary()
+            assert(s.perKey.BSHOUT.total == 3 and s.perKey.BSHOUT.bad == 1 and s.perKey.BSHOUT.unknown == 1)
+            assert(s.next.key == 'BSHOUT' and s.next.unit == 'player' and s.next.label == 'Raid')
+            assert(#s.next.covers == 1 and s.next.covers[1] == 'B-Realm')
+            frame:GetScript('OnEvent')(frame, 'PLAYER_REGEN_DISABLED')
+            COMBAT = true; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().next.key == 'BSHOUT')
+            frame:GetScript('OnEvent')(frame, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'guid', 25289)
+            s = ns.Tracker.Summary()
+            assert(s.perKey.BSHOUT.bad == 0 and s.perKey.BSHOUT.unknown == 1 and not s.next)
+            COMBAT = false; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.BSHOUT.bad == 1)
+            dead[1] = true
+            frame:GetScript('OnEvent')(frame, 'UNIT_HEALTH', 'raid1'); runTimers()
+            assert(ns.Assignments.result.raidShout == 'C-Realm' and not ns.Tracker.Summary().next)
+        """)
+
+    def test_separated_warrior_can_cover_their_own_shout(self):
+        lua = full_addon("WARRIOR", login=False)
+        lua.execute("""
+            function UnitFullName(unit) return unit == 'player' and 'B' or 'A', 'Realm' end
+            function UnitClass() return 'Warrior', 'WARRIOR' end
+            local yards = 21
+            function UnitDistanceSquared() return yards * yards, true end
+            ns.Roster.peers['A-Realm'] = {wants={BSHOUT=true}, caps={BSHOUT=true}, ranking={}}
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+            assert(ns.Assignments.result.raidShout == 'A-Realm')
+            local cast = ns.Tracker.Summary().next
+            assert(cast.key == 'BSHOUT' and cast.helping == 'A-Realm' and cast.unit == 'player')
+            yards = 20; ns.Tracker.Refresh()
+            assert(not ns.Tracker.Summary().next)
+            yards = 21; ns.Preferences.Toggle('wants', 'BSHOUT'); runTimers()
+            assert(not ns.Tracker.Summary().next)
         """)
 
     def test_priest_inner_fire_is_optional_self_buff_with_percentage_warning(self):
@@ -3421,6 +3742,128 @@ class AddonTests(unittest.TestCase):
             assert(ns.Tracker.Summary().mine.pending == pendingBefore - 1)
             assert(button:GetAttribute('spell') ~= '19746')
         """)
+
+    def test_optional_fear_ward_is_requested_and_respects_cooldown(self):
+        lua = full_addon("PRIEST", login=False)
+        lua.execute("""
+            GROUP_SIZE = 0
+            IsPlayerSpell = function(id) return id == 6346 end
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+            local me = ns.WoW.Me()
+            assert(not ns.Assignments.Served(me).FWARD)
+            ns.Options.OpenTab('EXTRA')
+            local request = findWidget('Request Fear Ward').parent
+            assert(not request:GetChecked())
+            request:GetScript('OnClick')(request); runTimers()
+            assert(request:GetChecked() and ns.Preferences.Get().wants.FWARD)
+            assert(ns.Assignments.Served(me).FWARD == me)
+            local next = ns.Tracker.Summary().next
+            assert(next.key == 'FWARD' and next.unit == 'player')
+            C_Spell.GetSpellCooldown = function() return {startTime=WOW_TIME-5, duration=180} end
+            ns.Tracker.Refresh()
+            assert(not ns.Tracker.Summary().next)
+            C_Spell.GetSpellCooldown = function() return {startTime=0, duration=0} end
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if i == 1 then return {spellId=6346, expirationTime=WOW_TIME+180, duration=180} end
+            end
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.FWARD.bad == 0 and not ns.Tracker.Summary().next)
+        """)
+
+    def test_trueshot_tracks_raid_coverage_but_only_refreshes_the_casters_aura(self):
+        lua = full_addon("HUNTER", login=False)
+        lua.execute("""
+            IsPlayerSpell = function(id) return id == 1299346 end
+            local distance = 30
+            UnitDistanceSquared = function() return distance * distance, true end
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+            local me = ns.WoW.Me()
+            assert(not ns.Assignments.Served(me).TRUESHOT)
+            ns.Preferences.Toggle('wants', 'TRUESHOT'); runTimers()
+            assert(ns.Assignments.Served('B-Realm').TRUESHOT == me)
+            local next = ns.Tracker.Summary().next
+            assert(next.key == 'TRUESHOT' and next.spellID == 1299346 and #next.covers == 2)
+            local left = 300
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if unit == 'player' and i == 1 then return {spellId=1299346, expirationTime=WOW_TIME+left} end
+            end
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.TRUESHOT.bad == 1 and not ns.Tracker.Summary().next)
+            distance = 46; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.TRUESHOT.unknown == 1)
+            left = 90; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().next.key == 'TRUESHOT')
+        """)
+
+    def test_shaman_totems_track_slots_and_ignore_windfury_attack_procs(self):
+        lua = full_addon("SHAMAN", login=False)
+        lua.execute("""
+            GROUP_SIZE = 0
+            IsPlayerSpell = function(id) return id == 8512 or id == 8835 end
+            local id, auraID, left = 8177, 8516, 300
+            GetTotemInfo = function(slot)
+                assert(slot == 4)
+                if id then return true, '', WOW_TIME+left-300, 300, 1, 1, id end
+                return false
+            end
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if i == 1 then return {name='8515', spellId=auraID, expirationTime=0} end
+            end
+            ns.App:GetScript('OnEvent')(ns.App, 'PLAYER_LOGIN'); runTimers()
+            local me, tracker = ns.WoW.Me(), Buffeteria_Tracker
+            ns.Preferences.Toggle('wants', 'WINDFURYTOTEM')
+            ns.Preferences.Toggle('wants', 'GRACEOFAIR'); runTimers()
+            assert(ns.Assignments.Served(me).WINDFURYTOTEM == me)
+            assert(not ns.Assignments.Served(me).GRACEOFAIR)
+            assert(ns.Tracker.Summary().perKey.WINDFURYTOTEM.bad == 1)
+            assert(not ns.Tracker.Summary().next) -- Grounding keeps the slot
+            id = nil; tracker:GetScript('OnEvent')(tracker, 'PLAYER_TOTEM_UPDATE', 4); runTimers()
+            assert(ns.Tracker.Summary().next.spellID == 8512 and not ns.Tracker.Summary().next.unit)
+            id, auraID = 8512, 8515; ns.Tracker.Refresh()
+            assert(not ns.Tracker.Summary().next)
+            left = 15; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().next.status == 'warn')
+            id = 8835; ns.Tracker.Refresh()
+            assert(not ns.Tracker.Summary().next)
+        """)
+
+    def test_raid_support_matches_air_slots_and_tracks_only_active_druid_crit(self):
+        self.solver("""
+            local roster = {members={A=member('SHAMAN', {WINDFURYTOTEM=true,GRACEOFAIR=true}),
+                B=member('SHAMAN', {WINDFURYTOTEM=true}), C=member('DRUID'), D=member('DRUID', {DRUIDCRIT=true})}}
+            roster.members.A.wants = {WINDFURYTOTEM=true, GRACEOFAIR=true}
+            roster.members.B.wants = {WINDFURYTOTEM=true}
+            roster.members.C.wants = {DRUIDCRIT=true}
+            roster.members.D.wants = {DRUIDCRIT=true}
+            local result = ns.Solver.Solve(roster)
+            assert(result.raidSupport.WINDFURYTOTEM == 'B' and result.raidSupport.GRACEOFAIR == 'A')
+            assert(result.expected.A.DRUIDCRIT == 'D')
+            roster.members.B.dead = true
+            result = ns.Solver.Solve(roster)
+            assert(result.raidSupport.WINDFURYTOTEM == 'A' and not result.raidSupport.GRACEOFAIR)
+        """)
+        lua = full_addon("DRUID", login=False)
+        lua.execute("""
+            GROUP_SIZE = 0
+            local form, effect = 0, 24907
+            GetShapeshiftForm = function() return form end
+            GetShapeshiftFormInfo = function(i) return nil, true, true, i == 1 and 24858 or 768 end
+            IsPlayerSpell = function(id) return id == 17007 end
+            local onEvent = ns.App:GetScript('OnEvent')
+            onEvent(ns.App, 'PLAYER_LOGIN'); runTimers()
+            ns.Preferences.Toggle('wants', 'DRUIDCRIT'); runTimers()
+            assert(not ns.Roster.Capabilities(true).DRUIDCRIT)
+            C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+                if i == 1 then return {spellId=effect, expirationTime=0} end
+            end
+            form = 1; onEvent(ns.App, 'UPDATE_SHAPESHIFT_FORM'); runTimers()
+            assert(ns.Tracker.Summary().perKey.DRUIDCRIT.bad == 0 and not ns.Tracker.Summary().next)
+            form, effect = 2, 24932; onEvent(ns.App, 'UPDATE_SHAPESHIFT_FORM'); runTimers()
+            assert(ns.Tracker.Summary().perKey.DRUIDCRIT.bad == 0 and not ns.Tracker.Summary().next)
+            form = 0; onEvent(ns.App, 'UPDATE_SHAPESHIFT_FORM'); runTimers()
+            assert(not ns.Tracker.Summary().perKey.DRUIDCRIT)
+        """)
+
 
 if __name__ == "__main__":
     unittest.main()

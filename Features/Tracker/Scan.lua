@@ -6,7 +6,7 @@ local Scan = {}
 ns.Tracker.Scan = Scan
 
 local isSecret = issecretvalue or function() return false end
-local nameToKey = {}
+local nameToKey, idToKey = {}, {}
 local cache = {}          -- [fullName] = { [key] = { exp, name, duration } }
 local weaponAuras         -- my main-hand imbue, read independently of unit auras
 local durations = {}      -- My combat self buffs' last readable durations (including talents)
@@ -17,24 +17,35 @@ for _, b in ipairs(Buffs.SELF_BUFFS) do
 end
 
 -- Spell names are only known once the client has loaded them.
-local function keyOf(name)
+local function keyOf(name, spellID)
 	if not next(nameToKey) then
 		for _, b in pairs(Buffs.byKey) do
 			if b.kind ~= "imbue" then
-				for _, id in ipairs(b.ids) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
-				for _, id in ipairs(b.groupIds) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
+				for _, ids in ipairs({ b.auraIds or b.ids, b.groupIds }) do
+					for _, id in ipairs(ids) do
+						local n = ns.WoW.SpellName(id)
+						idToKey[id] = b.key
+						if n then nameToKey[n] = b.key end
+					end
+				end
 			end
 		end
 	end
-	return nameToKey[name]
+	local key = nameToKey[name]
+	if not isSecret(spellID) and spellID and spellID > 0 then
+		-- Windfury's short attack proc shares its name with the raid buff.
+		if idToKey[spellID] then return idToKey[spellID] end
+		if key and Buffs.byKey[key].auraIds then return nil end
+	end
+	return key
 end
 
 local function auraAt(unit, i)
 	if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
 		return C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
 	end
-	local name, _, _, _, duration, exp, source = UnitBuff(unit, i)
-	if name then return { name = name, duration = duration, expirationTime = exp, sourceUnit = source } end
+	local name, _, _, _, duration, exp, source, _, _, spellID = UnitBuff(unit, i)
+	if name then return { name = name, duration = duration, expirationTime = exp, sourceUnit = source, spellId = spellID } end
 end
 
 -- Calls visit(aura) for each helpful aura. False if the client hides them, or
@@ -55,7 +66,7 @@ local function readAuras(unit)
 	local out = {}
 	local readable = eachAura(unit, function(a)
 		if isSecret(a.name) or isSecret(a.expirationTime) then return false end
-		local key = keyOf(a.name)
+		local key = keyOf(a.name, a.spellId)
 		if key then
 			local exp, prev = a.expirationTime or 0, out[key]
 			local d = a.duration
@@ -88,7 +99,18 @@ function Scan.SelfCast(key, now)
 	local d = durations[key] or buff.duration
 	if not d then return end
 	cache[me] = cache[me] or {}
-	cache[me][key] = { exp = now + d, name = buff.label, duration = d }
+	local observed = { exp = now + d, name = buff.label, duration = d }
+	cache[me][key] = observed
+	if buff.raidRadius then
+		-- Estimate the refresh for nearby allies with cached readings. Leave
+		-- unknown aura maps alone so other buffs still report unknown.
+		for full, member in pairs(ns.Assignments.roster.members) do
+			if full ~= me and cache[full] and not member.dead
+				and ns.WoW.WithinRadius(member.unit, buff.raidRadius) then
+				cache[full][key] = observed
+			end
+		end
+	end
 end
 
 -- nil means unreadable, {} means the selected imbue is absent.
@@ -113,12 +135,50 @@ local function readWeaponImbue(buff, now)
 	return {}
 end
 
+-- The slot may be unreadable or occupied by another totem. Only refresh an
+-- identified totem of this type or fill a positively empty slot.
+function Scan.TotemRate(buff, now, warnPercent)
+	if not GetTotemInfo then return "unknown" end
+	local ok, active, name, start, duration, _, _, id = pcall(GetTotemInfo, buff.totemSlot)
+	if not ok or isSecret(active) or active == nil then return "unknown" end
+	if not active then return "bad" end
+	if isSecret(name) or isSecret(start) or isSecret(duration) or isSecret(id) then return "unknown" end
+	local hasSpellID = id and id > 0
+	local matched
+	for _, rank in ipairs(buff.ids) do
+		if (hasSpellID and id == rank) or (not hasSpellID and name and name ~= "" and name == ns.WoW.SpellName(rank)) then
+			matched = true
+			break
+		end
+	end
+	if not matched then return "unknown" end
+	if not duration or duration <= 0 or not start then return "ok" end
+	local rem = start + duration - now
+	if rem <= 0 then return "bad" end
+	if rem <= duration * warnPercent / 100 then return "warn", rem end
+	return "ok", rem
+end
+
 -- status: "ok" | "warn" | "bad" | "unknown"
-function Scan.Rate(full, key, now, warnPercent)
+function Scan.Rate(full, key, now, warnPercent, ignoreRadius)
 	local auras = cache[full]
-	if Buffs.byKey[key].kind == "imbue" then auras = full == ns.WoW.Me() and weaponAuras or nil end
+	local buff = Buffs.byKey[key]
+	if buff.kind == "imbue" then auras = full == ns.WoW.Me() and weaponAuras or nil end
 	if not auras then return "unknown" end
 	local a = auras[key]
+	if buff.raidRadius and not ignoreRadius then
+		local assignments, me = ns.Assignments, ns.WoW.Me()
+		local caster = assignments.Served(full)[key]
+		local other = caster == me and full or (full == me and caster)
+		if other and other ~= me and not ns.WoW.WithinRadius(assignments.roster.units[other], buff.raidRadius) then
+			if a and (a.exp == 0 or a.exp > now) then return "ok" end
+			return "unknown"
+		end
+	end
+	if buff.totemSlot and full == ns.WoW.Me() and ns.Assignments.Served(full)[key] == full then
+		local status, rem = Scan.TotemRate(buff, now, warnPercent)
+		if status == "warn" then return status, rem end
+	end
 	if not a then return "bad" end
 	if a.exp == 0 then return "ok" end
 	local rem = a.exp - now
@@ -180,7 +240,7 @@ function Scan.Update(now, warnPercent)
 					end
 					if pk then pk[st] = pk[st] + 1 end
 					problem(full, key, st, rem, caster)
-					if caster == me then summary.yours[key] = true end
+					if caster == me and not Buffs.byKey[key].passive then summary.yours[key] = true end
 					if full == me then table.insert(summary.needs, { key = key, status = st, caster = caster }) end
 				end
 			end
@@ -224,7 +284,7 @@ function Scan.MissingAura()
 	local running = false
 	local readable = eachAura("player", function(a)
 		if isSecret(a.name) then return false end
-		if keyOf(a.name) == key then running = true end
+		if keyOf(a.name, a.spellId) == key then running = true end
 	end)
 	if readable and not running then return key end
 end

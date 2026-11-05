@@ -1,6 +1,6 @@
 -- Purpose-based settings with an isolated, non-casting tracker preview.
 local _, ns = ...
-local UI, Tracker, set = ns.UI, ns.Tracker, ns.Database.Set
+local UI, Tracker = ns.UI, ns.Tracker
 local View = {}
 Tracker.View = View
 local panel, controls, previewCard, layoutCard, stage, sample, headPicker, headMenu, warnValue, combatNote, hair
@@ -12,6 +12,10 @@ local MODES = { { "ALL", "All" }, { "MISSING", "Missing" },
 -- Icon position chips in a compass: key, label, x offset, row.
 local POSITIONS = { { "TOP", "Top", 0, 0 }, { "LEFT", "Left", -76, 1 },
 	{ "AUTO", "Auto", 0, 1 }, { "RIGHT", "Right", 76, 1 }, { "BOTTOM", "Bottom", 0, 2 } }
+
+local function set(key, value)
+	if not ns.Options.ClassPreview() then ns.Database.Set(key, value) end
+end
 
 local function hint(parent, x, y, width, label)
 	local text = UI.Text(parent, "GameFontHighlightSmall", x, y, width, label)
@@ -36,14 +40,22 @@ local function slider(key, name, label, y)
 	bar.readout:SetPoint("TOPRIGHT", -16, y); bar.readout:SetJustifyH("RIGHT")
 	bar:SetMinMaxValues(minimum, maximum); bar:SetValueStep(step)
 	if bar.SetObeyStepOnDrag then bar:SetObeyStepOnDrag(true) end
-	bar:SetScript("OnValueChanged", function(_, raw) if not refreshing then set(key, raw) end end)
+	bar:SetScript("OnValueChanged", function(_, raw)
+		if refreshing then return end
+		if ns.Options.ClassPreview() then View.Refresh() else set(key, raw) end
+	end)
 	sliders[#sliders + 1] = bar
 end
 
 function View.Refresh()
 	if not panel then return end
 	refreshing = true
-	for _, cb in ipairs(toggles) do cb:SetChecked(cb.get() and true or false) end
+	local preview = ns.Options.ClassPreview()
+	for _, cb in ipairs(toggles) do
+		cb:SetChecked(cb.get() and true or false); cb:SetEnabled(not preview)
+	end
+	controls:SetAlpha(preview and 0.7 or 1)
+	layoutCard:SetAlpha(preview and 0.7 or 1)
 	local clean = ns.db.trackerStyle == "CLEAN"
 	for _, choice in ipairs(headButtons) do
 		if choice.style == "CLEAN" then
@@ -56,13 +68,14 @@ function View.Refresh()
 	headPicker.caption:SetText("Head: " .. (clean and "None (clean)" or Tracker.Art.Label()))
 	headPicker.portrait:SetTexture(clean and UI.ICON or Tracker.Art.Texture("happy"))
 	-- Hair only exists on a head.
-	hair:SetEnabled(not clean)
+	hair:SetEnabled(not clean and not preview)
 	hair.text:SetTextColor(clean and 0.5 or 1, clean and 0.5 or 1, clean and 0.5 or 1)
 	for _, option in ipairs(displayButtons) do option:SetChecked(ns.db.buffDisplay == option.mode) end
 	for _, chip in ipairs(rowButtons) do chip:SetChecked(ns.db.iconsPerRow == chip.columns) end
 	for _, chip in ipairs(positionButtons) do chip:SetChecked(ns.db.iconPosition == chip.side) end
 	for _, chip in ipairs(moods) do chip:SetChecked(sample.mood == chip.mood) end
 	for _, bar in ipairs(sliders) do
+		bar:EnableMouse(not preview)
 		bar:SetValue(ns.db[bar.key]); bar.readout:SetText(ns.db[bar.key] .. " px")
 	end
 	warnValue:SetText(ns.db.warnPercent .. "%")
@@ -142,7 +155,9 @@ function View.Create(host)
 	UI.Section(controls, "Display", 16, -14)
 	toggle("Show tracker", function() return ns.db.showTracker end, function(v) set("showTracker", v) end, 16, -34)
 	toggle("Lock tracker", function() return ns.db.locked end, function(v) set("locked", v) end, 170, -34)
-	toggle("Minimap button", function() return not ns.db.minimap.hide end, function(v) ns.Minimap.SetShown(v) end, 330, -34)
+	toggle("Minimap button", function() return not ns.db.minimap.hide end, function(v)
+		if not ns.Options.ClassPreview() then ns.Minimap.SetShown(v) end
+	end, 330, -34)
 
 	UI.Section(controls, "Behavior", 16, -74)
 	toggle("Help with overdue buffs", function() return ns.db.helpOthers end, function(v) set("helpOthers", v) end, 16, -94)

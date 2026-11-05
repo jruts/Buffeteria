@@ -209,7 +209,8 @@ local function buildCastButton()
 	-- The alpha silhouette supplies the shape; no square background or highlight.
 	castBtn.icon = castBtn:CreateTexture(nil, "ARTWORK")
 	castBtn.icon:SetAllPoints()
-	castBtn.icon:SetTexture(Art.Texture("grumpy"))
+	castBtn.icon:SetTexture(Art.Texture("idle"))
+	castBtn.icon:SetDesaturated(true)
 	-- "Your turn" cue stays behind the head so facial detail remains crisp.
 	castBtn.halo = castBtn:CreateTexture(nil, "BACKGROUND", nil, -8)
 	castBtn.halo:SetPoint("CENTER", castBtn, "CENTER", 0, 0)
@@ -479,8 +480,11 @@ end
 local function armForCombat()
 	if InCombatLockdown() or Tracker.Preview.active or castBtn.dragged then return end
 	local n = Tracker.Actions.CombatBuff()
-	local pending = castBtn.pending and Buffs.byKey[castBtn.pending.key]
-	if not n and not (pending and pending.kind == "imbue") then return end
+	local pending = castBtn.pending
+	local buff = pending and Buffs.byKey[pending.key]
+	local disarm = buff and (buff.kind == "imbue" or buff.kind == "personal" or buff.kind == "raidSupport"
+		or buff.kind == "encounter" or (buff.kind == "group" and pending.big))
+	if not n and not disarm then return end
 	applySecure({ next = n })
 	updateShade()
 end
@@ -583,9 +587,11 @@ function Tracker.Init()
 	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 	frame:RegisterEvent("UNIT_AURA")
+	frame:RegisterEvent("UNIT_HEALTH")
 	if ns.WoW.PlayerClass() == "SHAMAN" then
 		frame:RegisterEvent("WEAPON_ENCHANT_CHANGED")
 		frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+		frame:RegisterEvent("PLAYER_TOTEM_UPDATE")
 	end
 	frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 	frame:SetScript("OnEvent", function(_, event, unit, _, spellID)
@@ -594,7 +600,19 @@ function Tracker.Init()
 			return
 		end
 		if event == "SPELL_UPDATE_COOLDOWN" then updateShade(); return end
-		if event == "WEAPON_ENCHANT_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" then
+		if event == "UNIT_HEALTH" then
+			if groupUnit(unit) then
+				local member = ns.Assignments.roster.members[ns.WoW.FullName(unit)]
+				if member then
+					local dead = UnitIsDeadOrGhost(unit)
+					if not (issecretvalue and issecretvalue(dead)) and (not not dead) ~= (not not member.dead) then
+						ns.Assignments.Resolve()
+					end
+				end
+			end
+			return
+		end
+		if event == "WEAPON_ENCHANT_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_TOTEM_UPDATE" then
 			Tracker.RequestRefresh()
 			return
 		end

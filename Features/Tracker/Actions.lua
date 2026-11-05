@@ -9,19 +9,12 @@ local pendingUntil = {} -- ["name:key"] = expiry; wait for a cast's aura to arri
 -- each helper ahead of me, so two helpers don't cast the same buff at once.
 local HELP_GRACE, HELP_STAGGER = 30, 10
 
-local function hasReagent(list)
-	for _, id in ipairs(list or EMPTY) do if ns.WoW.ItemCount(id) > 0 then return true end end
-	return false
-end
-
 -- Highest known rank -> castable spell name, icon and ID.
 local function spellFor(ids)
 	local ok, id = ns.WoW.KnowsAny(ids)
 	if not ok then return nil end
 	return ns.WoW.SpellName(id), ns.WoW.SpellIcon(id), id
 end
-
-local function groupVersion(buff) return ns.WoW.KnowsAny(buff.groupIds) and hasReagent(buff.reagents) end
 
 -- A cast landed: everyone it covers stops counting as needy until the auras arrive.
 function Actions.MarkCast(cast)
@@ -75,9 +68,11 @@ local function newSearch(now, warnPercent)
 	end
 
 	function ctx.add(buff, spell, icon, id, unit, who, status, big, label, covers)
-		ctx.cands[#ctx.cands + 1] = { spell = spell, icon = icon, spellID = id, unit = unit, who = who, key = buff.key,
+		local cast = { spell = spell, icon = icon, spellID = id, unit = unit, who = who, key = buff.key,
 			status = status, big = big, label = label or ns.WoW.Short(who), covers = covers or { who },
 			helping = ctx.helping and ctx.caster(who, buff.key) or nil }
+		ctx.cands[#ctx.cands + 1] = cast
+		return cast
 	end
 	-- Living recipients of a buff that match and that this search is about, the
 	-- needy ones I serve sorted, and the worst status.
@@ -85,7 +80,7 @@ local function newSearch(now, warnPercent)
 		local needy, worst, count = {}, "warn", 0
 		for full, m in pairs(ctx.roster.members) do
 			local caster = ctx.caster(full, key)
-			if not m.dead and match(m) and caster and (ctx.helping or caster == ctx.me) then
+			if not m.dead and (not match or match(m)) and caster and (ctx.helping or caster == ctx.me) then
 				count = count + 1
 				local st = ctx.serves(full, key) and ctx.needs(full, key)
 				if st then needy[#needy + 1] = full; if st == "bad" then worst = "bad" end end
@@ -117,17 +112,33 @@ local function newSearch(now, warnPercent)
 	return ctx
 end
 
--- Group buffs (Fort, Spirit, Shadow Prot, Mark, Intellect), per raid group.
+-- Prayer, Gift and Brilliance are centered on the caster, up to 100 yards.
+local function raidGroupCast(ctx, buff, needy, wanters)
+	local id = Buffs.CastableGroupRank(buff)
+	local spell = id and ns.WoW.SpellName(id)
+	if not spell then return end
+	local covers, worst = {}, "warn"
+	for _, full in ipairs(needy) do
+		local unit = ctx.roster.units[full]
+		local within = unit and ns.WoW.WithinRadius(unit, 100)
+		if within == true or (within == nil and unit and UnitIsVisible(unit)) then
+			covers[#covers + 1] = full
+			if ctx.needs(full, buff.key) == "bad" then worst = "bad" end
+		end
+	end
+	if #covers == 0 or (#covers < math.max(2, math.min(3, wanters)) and ns.WoW.KnowsAny(buff.ids)) then return end
+	local label = ctx.roster.isRaid and "Raid" or "Group"
+	ctx.add(buff, spell, ns.WoW.SpellIcon(id), id, "player", covers[1], worst, true, label, covers)
+	return true
+end
+
+-- A raid-wide cast serves everyone reachable across subgroups. Use singles for
+-- a few recipients or when the raid version cannot cover them.
 local function groupBuffs(ctx)
 	for _, buff in ipairs(Buffs.GROUP_BUFFS) do
-		for g, caster in pairs(ctx.res.groups[buff.key] or EMPTY) do
-			if (caster == ctx.me) ~= (ctx.helping == true) then
-				local needy, worst, wanters = ctx.recipients(buff.key, function(m) return m.group == g end)
-				if #needy > 0 then
-					local big = groupVersion(buff) and wanters >= 2 and #needy >= math.min(3, wanters)
-					ctx.addCover(buff, needy, worst, big, "Group " .. g)
-				end
-			end
+		local needy, worst, wanters = ctx.recipients(buff.key)
+		if #needy > 0 and not raidGroupCast(ctx, buff, needy, wanters) then
+			ctx.addCover(buff, needy, worst, false)
 		end
 	end
 end
@@ -141,7 +152,7 @@ local function blessings(ctx)
 		if buff then
 			local needy, worst = ctx.recipients(buff.key, function(m) return m.class == class end)
 			if #needy > 0 then
-				local big = groupVersion(buff)
+				local big = Buffs.CastableGroupRank(buff) ~= nil
 				for full, m in pairs(roster.members) do
 					if big and m.class == class and not m.dead and (res.overrides[full] or EMPTY)[me] ~= nil then big = false end
 				end
@@ -158,10 +169,47 @@ local function blessings(ctx)
 	end
 end
 
+-- An opted-in warrior separated from the assigned caster can keep their own
+-- shout up. Everyone nearby will still benefit from that cast.
+local function shoutBackup(me, caster)
+	if not caster or caster == me then return false end
+	local roster = ns.Assignments.roster
+	local member, unit = roster.members[me], roster.units[caster]
+	return member and member.class == "WARRIOR" and (member.wants or EMPTY).BSHOUT and unit
+		and (not UnitIsVisible(unit) or ns.WoW.WithinRadius(unit, Buffs.byKey.BSHOUT.raidRadius) == false)
+end
+
+-- Battle Shout is cast on the warrior and covers needy allies across subgroups.
+local function battleShout(ctx)
+	local buff, me = Buffs.byKey.BSHOUT, ctx.me
+	local caster = ctx.caster(me, buff.key)
+	if not caster or UnitIsDeadOrGhost("player") then return end
+	local needy, worst
+	if caster == me then
+		needy, worst = ctx.recipients(buff.key)
+		if #needy == 0 then return end
+	elseif shoutBackup(me, caster) and not ctx.casting(me, buff.key) then
+		worst = ns.Tracker.Scan.Rate(me, buff.key, ctx.now, ctx.warnPercent, true)
+		if worst ~= "bad" and worst ~= "warn" then return end
+		needy = { me }
+	else
+		return
+	end
+	local spell, icon, id = spellFor(buff.ids)
+	if spell and ns.WoW.SpellUsable(spell) then
+		local label = ctx.roster.isRaid and "Raid" or "Group"
+		local cast = ctx.add(buff, spell, icon, id, "player", me, worst, #needy > 1, label, needy)
+		if caster ~= me then cast.helping = caster end
+	end
+end
+
 -- Tank and self buffs: always singles, once I have the power to cast them.
--- Self-only ones (Righteous Fury, Battle Shout, Inner Fire) belong to the caster alone.
 local function usable(buff)
 	local spell = spellFor(buff.ids)
+	if spell and buff.cooldown then
+		local start, duration = ns.WoW.SpellCooldown(spell)
+		if start and duration > 1.5 and start + duration > GetTime() then return false end
+	end
 	return spell and ns.WoW.SpellUsable(spell)
 end
 
@@ -171,6 +219,31 @@ local function singleBuffs(ctx, combatOnly)
 			if not m.dead and ctx.serves(full, buff.key) and (not buff.selfOnly or full == ctx.me) then
 				local st = ctx.needs(full, buff.key)
 				if st and usable(buff) then ctx.addSingle(buff, full, st, buff.selfOnly) end
+			end
+		end
+	end
+end
+
+-- Raid support is cast at the provider. Missing distant recipients can show
+-- in the scan, but won't repeatedly refresh a running aura or deployed totem.
+local function raidSupport(ctx)
+	local me = ctx.me
+	local member = ctx.roster.members[me]
+	if not member or member.dead or (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) then return end
+	for _, buff in ipairs(Buffs.RAID_SUPPORT) do
+		if not buff.passive and ctx.caster(me, buff.key) == me then
+			local status = ctx.needs(me, buff.key)
+			if status and buff.totemSlot then
+				local slot = ns.Tracker.Scan.TotemRate(buff, ctx.now, ctx.warnPercent)
+				if slot ~= "bad" and slot ~= "warn" then status = nil end
+			end
+			if status then
+				local spell, icon, id = spellFor(buff.ids)
+				if spell and ns.WoW.SpellUsable(spell) then
+					local needy, worst = ctx.recipients(buff.key)
+					local label = ctx.roster.isRaid and "Raid" or "Group"
+					ctx.add(buff, spell, icon, id, not buff.totemSlot and "player" or nil, me, worst, #needy > 1, label, needy)
+				end
 			end
 		end
 	end
@@ -189,7 +262,8 @@ end
 function Actions.CombatBuff()
 	local me = ns.WoW.Me()
 	for _, buff in ipairs(Buffs.SELF_BUFFS) do
-		if buff.combat and (ns.Assignments.result.expected[me] or EMPTY)[buff.key] == me then
+		local caster = (ns.Assignments.result.expected[me] or EMPTY)[buff.key]
+		if buff.combat and (caster == me or (buff.raidRadius and shoutBackup(me, caster))) then
 			local spell, icon, id = spellFor(buff.ids)
 			if spell then return { spell = spell, icon = icon, spellID = id, unit = "player", who = me, key = buff.key } end
 		end
@@ -209,12 +283,14 @@ function Actions.Next(now, warnPercent, missingAura, combat, help, resurrect)
 		local rez = ns.Extra.Resurrect.Next(ctx.roster, now)
 		if rez then return rez end
 	end
+	battleShout(ctx)
 	if combat then
 		singleBuffs(ctx, true)
 	else
 		groupBuffs(ctx)
 		blessings(ctx)
 		singleBuffs(ctx)
+		raidSupport(ctx)
 		aura(ctx, missingAura)
 		if #ctx.cands == 0 and help then
 			ctx.helping = true
