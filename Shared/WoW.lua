@@ -6,6 +6,12 @@ function ns.WoW.Print(msg)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff" .. ns.title .. "|r: " .. tostring(msg))
 end
 
+function ns.WoW.SendChat(message, channel)
+	local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
+	local ok, result = pcall(send, message, channel)
+	return ok and result ~= false
+end
+
 ------------------------------------------------------------------------
 -- Small API helpers (work on Mainline and Classic-style clients)
 ------------------------------------------------------------------------

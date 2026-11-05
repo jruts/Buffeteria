@@ -106,6 +106,15 @@ tracker and cast button as other buffs. Updated casters need Buffeteria's tank-b
 support to serve these requests; druids without the addon are named in the plan but
 must cast manually. `/buff who` and **Announce to group** still list the group's plan.
 
+## Who has Buffeteria?
+
+Open the **Group** tab in `/buff`, or type `/buff group` directly. The roster shows
+each party or raid member as **Detected**, **Not detected**, or **Offline**.
+Detection uses addon messages heard during your current session, so a player
+who is still loading or has yet to send a message may show as **Not detected**.
+Click **Share install link** to post the Buffeteria CurseForge link in your
+party, raid, or instance chat. The button is disabled when you are solo.
+
 ## Extra
 
 The **Extra** tab in `/buff` (or `/buff extra`) holds conveniences beyond buffs.
@@ -360,8 +369,8 @@ see the exact plan and whether it goes to Raid, Party or your local chat.
 The tab bar sits below the native title bar. `/buff preferences` opens personal
 preferences directly; `/buff paladins` opens the paladin-only assignment editor.
 `/buff settings` selects Settings, including when another tab was remembered.
-`/buff extra` opens Extra.
-Dev uses `/buffdev preferences`, `/buffdev paladins`, `/buffdev settings`, and `/buffdev extra`.
+`/buff extra` opens Extra, and `/buff group` opens Group.
+Dev uses the same subcommands with `/buffdev`.
 
 ## Commands
 
@@ -458,7 +467,7 @@ Each feature owns its logic and, when needed, its view:
 | --- | --- |
 | `Features/Buffs` | Spell catalog and class defaults |
 | `Features/Preferences` | Personal buff choices, their defaults and migrations, reset behavior, the drag-and-drop ranking, and preference controls |
-| `Features/Roster` | Group members, peer preferences (the `S` message), spell capabilities, and member names |
+| `Features/Roster` | Group members, peer preferences (the `S` message), spell capabilities, member names, and the Group tab |
 | `Features/Assignments` | Pure assignment solver, recomputation, summaries, and announcements |
 | `Features/Paladins` | Shared class plans and their editor |
 | `Features/Sync` | Wire format (`Protocol`), transport, and retry queue |

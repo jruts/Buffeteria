@@ -116,8 +116,10 @@ function Comm.OnMessage(prefix, msg, _, sender)
 	if prefix ~= PREFIX or not msg then return end
 	local full = ns.WoW.NormalizeName(sender)
 	if not full or full == ns.WoW.Me() then return end
-	stats.heard[full] = (stats.heard[full] or 0) + 1
+	local previous = stats.heard[full]
+	stats.heard[full] = (previous or 0) + 1
 	dispatch(full, Protocol.Decode(msg))
+	if not previous then ns.Events.Emit("PeerHeard") end
 end
 
 -- Sync health for /buff sync: where messages go and who the client hears.

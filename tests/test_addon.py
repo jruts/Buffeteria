@@ -113,6 +113,47 @@ class AddonTests(unittest.TestCase):
                     assert(#chat == 0 and #printed == #ns.Assignments.Lines(false))
                 """)
 
+    def test_group_tab_updates_when_a_peer_is_heard_and_shares_to_group_chat(self):
+        lua = full_addon("ROGUE", addon_name=DEV_NAME)
+        lua.execute("""
+            SlashCmdList[ns.commandKey]('group')
+            local member = findWidget('B-Realm').parent
+            local share = findWidget('Share install link')
+            local window = _G[ns.globalPrefix .. '_Prefs']
+            assert(member:IsVisible() and member.status:GetText() == 'Not detected')
+            assert(findWidget('1 of 2 detected'):IsVisible())
+
+            ns.Comm.OnMessage(ns.Protocol.PREFIX, 'S|1', 'PARTY', 'B')
+            assert(member.status:GetText() == 'Detected')
+            assert(findWidget('2 of 2 detected'):IsVisible())
+            assert(not ns.Assignments.roster.members['B-Realm'].hasAddon)
+
+            UnitIsConnected = function(unit) return unit == 'player' end
+            window:GetScript('OnEvent')(window, 'UNIT_CONNECTION', 'party1')
+            assert(member.status:GetText() == 'Offline')
+            assert(findWidget('1 of 2 detected'):IsVisible())
+
+            local messages = {}
+            C_ChatInfo.SendChatMessage = function(message, channel)
+                messages[#messages + 1] = { message, channel }
+            end
+            assert(share.enabled and #messages == 0)
+            share:GetScript('OnClick')(share)
+            assert(#messages == 1 and messages[1][2] == 'PARTY')
+            assert(messages[1][1]:find('https://www.curseforge.com/wow/addons/buffeteria', 1, true))
+
+            IsInGroup = function(category) return category == LE_PARTY_CATEGORY_INSTANCE end
+            share:GetScript('OnClick')(share)
+            assert(#messages == 2 and messages[2][2] == 'INSTANCE_CHAT')
+
+            GROUP_SIZE = 0
+            IsInGroup = function() return false end
+            ns.App:GetScript('OnEvent')(ns.App, 'GROUP_ROSTER_UPDATE'); runTimers()
+            assert(not member:IsVisible() and not share.enabled)
+            share:GetScript('OnClick')(share)
+            assert(#messages == 2)
+        """)
+
     def test_expiry_percentage_migrates_and_updates_settings_controls(self):
         lua = full_addon()
         lua.execute("""
@@ -1869,7 +1910,7 @@ class AddonTests(unittest.TestCase):
             ns.Paladins.Init(); ns.Assignments.roster = ns.Roster.Build(); ns.Assignments.result = ns.Solver.Solve(ns.Assignments.roster)
             ns.Tracker.Preview = {active=false}; ns.Tracker.Refresh = function() end
         """)
-        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Extra/Resurrect.lua", "Features/Extra/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Extra/Resurrect.lua", "Features/Extra/View.lua", "Features/Roster/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("""
             ns.Options.Toggle()
@@ -2032,7 +2073,7 @@ class AddonTests(unittest.TestCase):
             ns.App:GetScript('OnEvent')(ns.App, 'ADDON_LOADED', 'Buffeteria')
             ns.Assignments.roster = ns.Roster.Build(); ns.Tracker.Preview = {active=false}
         """)
-        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Extra/Resurrect.lua", "Features/Extra/View.lua", "Features/Options/Window.lua"):
+        for name in ("Features/Tracker/Layout.lua", "Features/Tracker/SettingsPreview.lua", "Features/Tracker/View.lua", "Features/Preferences/RankList.lua", "Features/Preferences/View.lua", "Features/Paladins/View.lua", "Features/Extra/Resurrect.lua", "Features/Extra/View.lua", "Features/Roster/View.lua", "Features/Options/Window.lua"):
             load(lua, name)
         lua.execute("ns.Options.Toggle(); assert(not findWidget('Paladins').parent:IsVisible())")
 

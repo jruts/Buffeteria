@@ -39,6 +39,7 @@ Features/Preferences/RankList.lua
 Features/Preferences/View.lua
 Features/Paladins/View.lua
 Features/Extra/View.lua
+Features/Roster/View.lua
 Features/Options/Window.lua
 App/Commands.lua
 App/Bootstrap.lua

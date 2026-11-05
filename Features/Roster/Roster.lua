@@ -85,6 +85,24 @@ local function eachGroupUnit(fn)
 	end
 end
 
+-- Include offline members in the status view. The assignment roster below
+-- excludes them so they are never given work.
+function ns.Roster.GroupMembers()
+	local members = {}
+	local me = ns.WoW.Me()
+	eachGroupUnit(function(unit, _, class, online)
+		local name = ns.WoW.FullName(unit)
+		if name then
+			members[#members + 1] = { name = name, class = class, online = online, isPlayer = name == me }
+		end
+	end)
+	table.sort(members, function(a, b)
+		if a.isPlayer ~= b.isPlayer then return a.isPlayer end
+		return a.name < b.name
+	end)
+	return members
+end
+
 -- Players without the add-on get class defaults; assigned tanks also want tank buffs.
 local function defaultWants(class, unit)
 	local wants = Buffs.DefaultWants(class)

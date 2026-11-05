@@ -26,12 +26,13 @@ local COMMANDS = {
 		ns.Options.OpenTab("PALADIN")
 	end,
 	extra = function() ns.Options.OpenTab("EXTRA") end,
+	group = function() ns.Options.OpenTab("GROUP") end,
 	preview = function() ns.Tracker.Preview.Toggle() end,
 	minimap = function() ns.Minimap.Toggle() end,
 	help = function()
 		local c = ns.command
-		ns.WoW.Print(("%s (options), %s preferences, %s paladins, %s settings, %s extra, %s who, %s announce, %s sync, %s show|hide, %s lock, %s minimap, %s preview, %s reset")
-			:format(c, c, c, c, c, c, c, c, c, c, c, c, c))
+		ns.WoW.Print(("%s (options), %s preferences, %s paladins, %s settings, %s extra, %s group, %s who, %s announce, %s sync, %s show|hide, %s lock, %s minimap, %s preview, %s reset")
+			:format(c, c, c, c, c, c, c, c, c, c, c, c, c, c))
 	end,
 }
 COMMANDS.config, COMMANDS.test = COMMANDS.settings, COMMANDS.preview

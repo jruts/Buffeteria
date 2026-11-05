@@ -11,10 +11,11 @@ local footer, channel, announce
 local previewClass, activeTab
 -- Tabs in order; Paladins only exists for paladins. Each view fills a panel below the tab bar.
 local TABS = {
-	{ key = "PERSONAL", label = "My preferences", view = ns.Preferences.View },
-	{ key = "PALADIN", label = "Paladins", view = ns.Paladins.View, paladinOnly = true },
-	{ key = "SETTINGS", label = "Settings", view = ns.Tracker.View },
-	{ key = "EXTRA", label = "Extra", view = ns.Extra.View },
+	{ key = "PERSONAL", label = "My preferences", width = 140, view = ns.Preferences.View },
+	{ key = "PALADIN", label = "Paladins", width = 108, view = ns.Paladins.View, paladinOnly = true },
+	{ key = "SETTINGS", label = "Settings", width = 108, view = ns.Tracker.View },
+	{ key = "EXTRA", label = "Extra", width = 90, view = ns.Extra.View },
+	{ key = "GROUP", label = "Group", width = 90, view = ns.Roster.View },
 }
 
 function Options.ClassPreview() return previewClass end
@@ -155,7 +156,7 @@ local function build()
 	if ns.isDev then createClassPicker() end
 	local paladin = ns.WoW.IsPaladin()
 	for _, tab in ipairs(TABS) do
-		tab.button = ns.UI.Tab(content, tab.label, 140, function() showTab(tab.key); Options.Refresh() end)
+		tab.button = ns.UI.Tab(content, tab.label, tab.width, function() showTab(tab.key); Options.Refresh() end)
 		tab.button:SetFrameLevel(content:GetFrameLevel() + 10)
 		tab.button:SetShown(paladin or not tab.paladinOnly)
 	end
@@ -196,11 +197,18 @@ local function build()
 	for _, event in ipairs({ "AssignmentsChanged", "PaladinPlanChanged", "PreferencesChanged", "PreviewChanged", "SettingsChanged" }) do
 		ns.Events.On(event, refreshVisible)
 	end
+	local function refreshGroup()
+		if activeTab == "GROUP" and content:IsVisible() then ns.Roster.View.Refresh() end
+	end
+	ns.Events.On("PeerHeard", refreshGroup)
 	win:RegisterEvent("DISPLAY_SIZE_CHANGED")
 	win:RegisterEvent("UI_SCALE_CHANGED")
 	win:RegisterEvent("PLAYER_REGEN_DISABLED")
 	win:RegisterEvent("PLAYER_REGEN_ENABLED")
-	win:SetScript("OnEvent", refreshVisible)
+	win:RegisterEvent("UNIT_CONNECTION")
+	win:SetScript("OnEvent", function(_, event)
+		if event == "UNIT_CONNECTION" then refreshGroup() else refreshVisible() end
+	end)
 end
 
 function Options.Toggle()
