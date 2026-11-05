@@ -1,5 +1,11 @@
 # Buffeteria
 
+## v0.6.17
+
+<!-- buffeteria:auto-notes:start -->
+- Show Buffeteria status and share the install link in groups ([9130071](https://github.com/jruts/Buffeteria/commit/91300711dd0ae12e80b5d34bfdfa5b675a9975c9))
+<!-- buffeteria:auto-notes:end -->
+
 ## v0.6.16
 
 <!-- buffeteria:auto-notes:start -->
