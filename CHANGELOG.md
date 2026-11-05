@@ -7,6 +7,10 @@
   The tracker flags a missing, different, or expiring imbue and offers to cast
   your choice out of combat.
 
+<!-- buffeteria:auto-notes:start -->
+- Track selected Shaman weapon imbues ([200f370](https://github.com/jruts/Buffeteria/commit/200f370ac4f46d276e0d9151edb61ef1a2dfd1aa))
+<!-- buffeteria:auto-notes:end -->
+
 ## v0.6.14
 
 - Added **Asmongold** and **EsfandTV** to the tracker head selector, with happy,
