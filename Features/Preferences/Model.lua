@@ -5,7 +5,7 @@ local Buffs = ns.Buffs
 ns.Preferences = {}
 
 -- Preferences that Reset returns to their class defaults.
-local KEYS = { "order", "wants", "blessingsOverride", "tankRole", "tankBuffs" }
+local KEYS = { "order", "wants", "blessingsOverride", "tankRole", "tankBuffs", "weaponImbue" }
 
 -- Version 1 defaults (Kings first for everyone), only used to migrate untouched rankings.
 local LEGACY_ORDER = {
@@ -21,6 +21,11 @@ local LEGACY_ORDER = {
 }
 
 local function sameOrder(a, b) return table.concat(a, ",") == table.concat(b, ",") end
+
+local function weaponChoice(key, class)
+	local buff = Buffs.byKey[key]
+	if buff and buff.kind == "imbue" and (buff.class == class or ns.isDev) then return key end
+end
 
 -- Fill in and migrate my saved preferences; runs after Database.Init.
 function ns.Preferences.Init()
@@ -41,6 +46,7 @@ function ns.Preferences.Init()
 		if db.wants[buff.key] == nil then db.wants[buff.key] = defaults[buff.key] end
 	end
 	db.tankRole = ns.Database.Normalize("tankRole", db.tankRole)
+	db.weaponImbue = weaponChoice(db.weaponImbue, class)
 	db.tankBuffs = db.tankBuffs or {}
 	for _, buff in ipairs(Buffs.TANK_BUFFS) do
 		if db.tankBuffs[buff.key] == nil then db.tankBuffs[buff.key] = true end
@@ -92,6 +98,7 @@ end
 
 -- Change one preference and share it.
 function ns.Preferences.Set(key, value)
+	if key == "weaponImbue" then value = weaponChoice(value, ns.WoW.PlayerClass()) end
 	ns.db[key] = ns.Database.Normalize(key, value)
 	ns.Preferences.Changed()
 end

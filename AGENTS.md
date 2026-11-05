@@ -16,10 +16,10 @@ overwrite the installed Buffeteria-Dev add-on with the current workspace's runti
 files. This is a required part of every change, so the user can test it in-game
 with `/reload`.**
 
-The WoW Forever installation used on this machine loads development changes from:
+The live WoW Forever installation used on this machine loads development changes from:
 
 ```text
-C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\Buffeteria-Dev
+C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\Buffeteria-Dev
 ```
 
 The repository and installed add-on are separate directories. Do not assume

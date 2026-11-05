@@ -4,6 +4,7 @@ local UI, Buffs = ns.UI, ns.Buffs
 local View = {}
 ns.Preferences.View = View
 local panel, cards, list, own, ownText, roles, wants, tankButtons, roleText, tankTip, note
+local imbueLabel, imbuePicker, imbueHelp
 local GREY = UI.COLOR.GREY
 local CARD_Y, CARD_H = -4, 560
 local cachedRoster, cachedOrder, outcomes
@@ -49,6 +50,24 @@ local function visibleWant(buff, class)
 	return Buffs.OfferedTo(buff, class) and (not buff.selfOnly or ns.WoW.KnowsAny(buff.ids))
 end
 
+local function refreshImbuePicker()
+	local selected, menu = ns.db.weaponImbue, imbuePicker.menu
+	local buff = Buffs.byKey[selected]
+	imbuePicker.caption:SetText(buff and buff.label or "None")
+	local row = 0
+	for _, item in ipairs(menu.items) do
+		local choice = Buffs.byKey[item.key]
+		local shown = menu.preview or not choice or ns.WoW.KnowsAny(choice.ids)
+		item:SetShown(shown)
+		item:SetChecked(item.key == selected)
+		if shown then
+			item:ClearAllPoints(); item:SetPoint("TOPLEFT", 8, -8 - row * 24)
+			row = row + 1
+		end
+	end
+	menu:SetHeight(row * 24 + 16)
+end
+
 function View.Refresh()
 	if not panel then return end
 	local mine, class, tank = served(), ns.WoW.PlayerClass(), ns.Preferences.IsTank()
@@ -73,6 +92,7 @@ function View.Refresh()
 		row:SetState(ns.db.wants[row.key] and "gold" or "grey", UI.BuffIcon(row.key))
 		row.caster:SetText(casterText(buff, ns.db.wants[row.key], mine[row.key]))
 	end
+	if imbuePicker then refreshImbuePicker() end
 	for _, role in ipairs(roles) do role:SetChecked(ns.db.tankRole == role.role) end
 	roleText:SetText(ns.db.tankRole == "AUTO" and ("Auto: " .. (tank and "tank buffs active" or "tank buffs inactive"))
 		or (tank and "Tank buffs active" or "Tank buffs inactive"))
@@ -108,6 +128,15 @@ function View.Layout(width)
 			row = row + 1
 		end
 	end
+	if imbuePicker then
+		local width = second - 24
+		local y = -56 - row * 54
+		imbueLabel:ClearAllPoints(); imbueLabel:SetPoint("TOPLEFT", 12, y)
+		imbuePicker:ClearAllPoints(); imbuePicker:SetPoint("TOPLEFT", 12, y - 20); imbuePicker:SetWidth(width)
+		imbueHelp:ClearAllPoints(); imbueHelp:SetPoint("TOPLEFT", 12, y - 54); imbueHelp:SetWidth(width)
+		imbuePicker.menu:SetWidth(width)
+		for _, item in ipairs(imbuePicker.menu.items) do item:SetWidth(width - 16) end
+	end
 	local roleWidth = math.floor((third - 20) / 3)
 	for i, role in ipairs(roles) do
 		role:ClearAllPoints(); role:SetPoint("TOPLEFT", 10 + (i - 1) * roleWidth, -44)
@@ -123,6 +152,40 @@ function View.Layout(width)
 	end
 	tankTip:ClearAllPoints(); tankTip:SetPoint("TOPLEFT", 12, -118 - tankRow * 54); tankTip:SetWidth(third - 24)
 	panel.roleHelp:SetWidth(third - 24)
+end
+
+local function createImbuePicker(parent, preview)
+	imbueLabel = UI.Text(parent, "GameFontNormal", 12, -326, nil, "Weapon imbue")
+	imbuePicker = UI.Chip(parent, "", 200, function(self)
+		refreshImbuePicker()
+		self.menu:SetShown(not self.menu:IsShown())
+	end, "GameFontHighlight")
+	imbuePicker.caption:ClearAllPoints(); imbuePicker.caption:SetPoint("LEFT", 10, 0)
+	local arrow = imbuePicker:CreateTexture(nil, "OVERLAY")
+	arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+	arrow:SetSize(22, 22); arrow:SetPoint("RIGHT", -4, 0)
+	imbueHelp = hint(parent, 12, -380, 200, preview and "Dev preview. Tracking and casting require a Shaman."
+		or "Track an imbue on your main-hand weapon.")
+
+	local name = ns.globalPrefix .. "_WeaponImbueMenu"
+	local menu = UI.Menu(imbuePicker, name)
+	menu:SetPoint("BOTTOMLEFT", imbuePicker, "TOPLEFT", 0, 2)
+	menu:SetFrameLevel(imbuePicker:GetFrameLevel() + 25)
+	menu:Hide(); menu.items = {}; menu.preview = preview; imbuePicker.menu = menu
+	tinsert(UISpecialFrames, name)
+	imbuePicker:SetScript("OnHide", function() menu:Hide() end)
+
+	local function addChoice(key, label, icon)
+		local item = UI.MenuItem(menu, 184, function()
+			menu:Hide()
+			ns.Preferences.Set("weaponImbue", key)
+		end)
+		item.key = key
+		item.caption:SetText(label); item.icon:SetTexture(icon)
+		menu.items[#menu.items + 1] = item
+	end
+	addChoice(nil, "None")
+	for _, buff in ipairs(Buffs.WEAPON_IMBUES) do addChoice(buff.key, buff.label, UI.BuffIcon(buff.key)) end
 end
 
 function View.Create(host)
@@ -156,6 +219,8 @@ function View.Create(host)
 			row:SetScript("OnLeave", GameTooltip_Hide); wants[key] = row
 		end
 	end
+	local shaman = ns.WoW.PlayerClass() == "SHAMAN"
+	if shaman or ns.isDev then createImbuePicker(cards[2], not shaman) end
 	roles = {}
 	for _, choice in ipairs({ { "AUTO", "Auto" }, { "TANK", "Tank" }, { "OFF", "Not tank" } }) do
 		local key = choice[1]

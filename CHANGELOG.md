@@ -1,5 +1,12 @@
 # Buffeteria
 
+## v0.6.15
+
+- Added a Shaman weapon imbue picker under **My preferences > Buffs**. Choose
+  Rockbiter, Flametongue, Frostbrand, or Windfury to track on your main hand.
+  The tracker flags a missing, different, or expiring imbue and offers to cast
+  your choice out of combat.
+
 ## v0.6.14
 
 - Added **Asmongold** and **EsfandTV** to the tracker head selector, with happy,

@@ -8,6 +8,7 @@ ns.Tracker.Scan = Scan
 local isSecret = issecretvalue or function() return false end
 local nameToKey = {}
 local cache = {}          -- [fullName] = { [key] = { exp, name, duration } }
+local weaponAuras         -- my main-hand imbue, read independently of unit auras
 local durations = {}      -- My combat self buffs' last readable durations (including talents)
 local missingSince = {}   -- ["name:key"] = when an expected buff was first seen missing
 local selfKeys = {}       -- [spellID] = key, for my combat self buffs
@@ -19,8 +20,10 @@ end
 local function keyOf(name)
 	if not next(nameToKey) then
 		for _, b in pairs(Buffs.byKey) do
-			for _, id in ipairs(b.ids) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
-			for _, id in ipairs(b.groupIds) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
+			if b.kind ~= "imbue" then
+				for _, id in ipairs(b.ids) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
+				for _, id in ipairs(b.groupIds) do local n = ns.WoW.SpellName(id); if n then nameToKey[n] = b.key end end
+			end
 		end
 	end
 	return nameToKey[name]
@@ -88,9 +91,32 @@ function Scan.SelfCast(key, now)
 	cache[me][key] = { exp = now + d, name = buff.label, duration = d }
 end
 
+-- nil means unreadable, {} means the selected imbue is absent.
+local function readWeaponImbue(buff, now)
+	local slot, enchantType = Enum and Enum.WeaponSlot, Enum and Enum.ItemEnchantType
+	if not (C_Item and C_Item.GetWeaponEnchantInfo and slot and enchantType) then return nil end
+	local ok, enchants = pcall(C_Item.GetWeaponEnchantInfo, slot.MainHand)
+	if not ok or isSecret(enchants) or type(enchants) ~= "table" then return nil end
+	for _, enchant in ipairs(enchants) do
+		if isSecret(enchant) or isSecret(enchant.enchantType) then return nil end
+		if enchant.enchantType == enchantType.Imbue then
+			if isSecret(enchant.hasEnchant) or isSecret(enchant.enchantID) or isSecret(enchant.timeLeft) then return nil end
+			if enchant.hasEnchant then
+				for _, id in ipairs(buff.enchantIds) do
+					if enchant.enchantID == id then
+						return { [buff.key] = { exp = now + enchant.timeLeft / 1000, duration = buff.duration } }
+					end
+				end
+			end
+		end
+	end
+	return {}
+end
+
 -- status: "ok" | "warn" | "bad" | "unknown"
 function Scan.Rate(full, key, now, warnPercent)
 	local auras = cache[full]
+	if Buffs.byKey[key].kind == "imbue" then auras = full == ns.WoW.Me() and weaponAuras or nil end
 	if not auras then return "unknown" end
 	local a = auras[key]
 	if not a then return "bad" end
@@ -120,6 +146,10 @@ end
 function Scan.Update(now, warnPercent)
 	local roster, res, me = ns.Assignments.roster, ns.Assignments.result, ns.WoW.Me()
 	readGroup(roster)
+	local member = roster.members[me]
+	local imbue = member and not member.dead and member.weaponImbue
+	weaponAuras = imbue and res.expected[me] and res.expected[me][imbue]
+		and readWeaponImbue(Buffs.byKey[imbue], now) or nil
 	local summary, since = Status.NewSummary(), {}
 	local function problem(full, key, status, rem, caster)
 		table.insert(summary.problems, { who = full, key = key, status = status, rem = rem, caster = caster })

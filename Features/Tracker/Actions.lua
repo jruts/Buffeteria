@@ -109,7 +109,10 @@ local function newSearch(now, warnPercent)
 	function ctx.addSingle(buff, full, status, onSelf)
 		local spell, icon, id = spellFor(buff.ids)
 		local unit = onSelf and "player" or ctx.roster.units[full]
-		if spell and unit and (onSelf or ns.WoW.SpellInRange(spell, unit)) then ctx.add(buff, spell, icon, id, unit, full, status, false) end
+		if spell and unit and (onSelf or ns.WoW.SpellInRange(spell, unit)) then
+			-- Imbues apply to the main-hand weapon through the spell's default targeting.
+			ctx.add(buff, spell, icon, id, buff.kind ~= "imbue" and unit or nil, full, status, false)
+		end
 	end
 	return ctx
 end

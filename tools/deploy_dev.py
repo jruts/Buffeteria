@@ -9,7 +9,7 @@ import shutil
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_ADDONS = Path(r"C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns")
+DEFAULT_ADDONS = Path(r"C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns")
 DEV_NAME = "Buffeteria-Dev"
 RUNTIME_DIRS = ("App", "Shared", "Features", "Media")
 
@@ -133,7 +133,7 @@ def deploy(addons_dir=DEFAULT_ADDONS, repo=ROOT):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--addons-dir", type=Path, default=DEFAULT_ADDONS,
-                        help="Existing Interface/AddOns directory (default: local WoW Forever install)")
+                        help="Existing Interface/AddOns directory (default: live WoW Forever install)")
     args = parser.parse_args()
     destination, backup, count = deploy(args.addons_dir)
     print(f"Installed {destination}; SHA-256 verified {count} runtime files.")

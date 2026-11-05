@@ -5,12 +5,13 @@ local Buffs, Protocol = ns.Buffs, ns.Protocol
 ns.Roster = { peers = {} }
 
 -- What I can cast: plain key = single version, "g"..key = group/Greater version.
-function ns.Roster.Capabilities()
+function ns.Roster.Capabilities(shared)
 	local caps = {}
 	local class = ns.WoW.PlayerClass()
 	for _, b in pairs(Buffs.byKey) do
 		local paladinSpell = b.kind == "blessing" or b.kind == "aura"
-		if (paladinSpell and class == "PALADIN") or (not paladinSpell and class == b.class) then
+		local myClass = (paladinSpell and class == "PALADIN") or (not paladinSpell and class == b.class)
+		if myClass and not (shared and b.kind == "imbue") then
 			if ns.WoW.KnowsAny(b.ids) then caps[b.key] = true end
 			if ns.WoW.KnowsAny(b.groupIds) then caps["g" .. b.key] = true end
 		end
@@ -23,7 +24,7 @@ end
 ns.Events.On("BroadcastRequested", function()
 	local p = ns.Preferences.Get()
 	ns.Comm.Send(Protocol.Encode("S", Protocol.SetString(p.wants), table.concat(p.ranking, ","),
-		"", Protocol.SetString(ns.Roster.Capabilities()), p.blessingsOverride and "1" or "0"))
+		"", Protocol.SetString(ns.Roster.Capabilities(true)), p.blessingsOverride and "1" or "0"))
 end)
 
 -- Keep state even if the sender isn't in our roster yet (they just joined or
@@ -69,6 +70,7 @@ function ns.Roster.Build()
 		local peer = (full == me) and ns.Preferences.Get() or ns.Roster.peers[full]
 		if full == me then
 			m.caps, m.hasAddon = ns.Roster.Capabilities(), true
+			if class == "SHAMAN" then m.weaponImbue = ns.db.weaponImbue end
 		elseif peer and peer.caps then
 			m.caps, m.hasAddon = peer.caps, true
 		else

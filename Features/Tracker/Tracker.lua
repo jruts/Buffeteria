@@ -479,11 +479,9 @@ end
 local function armForCombat()
 	if InCombatLockdown() or Tracker.Preview.active or castBtn.dragged then return end
 	local n = Tracker.Actions.CombatBuff()
-	if not n then return end
-	castBtn:SetAttribute("*type1", nil)
-	castBtn:SetAttribute("spell", n.spell)
-	castBtn:SetAttribute("*unit1", n.unit)
-	castBtn.pending = n
+	local pending = castBtn.pending and Buffs.byKey[castBtn.pending.key]
+	if not n and not (pending and pending.kind == "imbue") then return end
+	applySecure({ next = n })
 	updateShade()
 end
 
@@ -585,6 +583,10 @@ function Tracker.Init()
 	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 	frame:RegisterEvent("UNIT_AURA")
+	if ns.WoW.PlayerClass() == "SHAMAN" then
+		frame:RegisterEvent("WEAPON_ENCHANT_CHANGED")
+		frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+	end
 	frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 	frame:SetScript("OnEvent", function(_, event, unit, _, spellID)
 		if event == "UNIT_SPELLCAST_SUCCEEDED" then
@@ -592,6 +594,10 @@ function Tracker.Init()
 			return
 		end
 		if event == "SPELL_UPDATE_COOLDOWN" then updateShade(); return end
+		if event == "WEAPON_ENCHANT_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" then
+			Tracker.RequestRefresh()
+			return
+		end
 		-- React when someone gains or loses a buff, e.g. another caster served
 		-- my group. Combat hides the auras, so the ticker covers it then.
 		if event == "UNIT_AURA" then

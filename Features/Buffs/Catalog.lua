@@ -29,6 +29,15 @@ Buffs.SELF_BUFFS = {
 	{ key = "IFIRE", class = "PRIEST", label = "Inner Fire", ids = {588,7128,602,1006,10951,10952}, groupIds = {}, selfOnly = true, combat = true, duration = 600 },
 }
 
+-- Forever main-hand imbues have their own enchant type, alongside oils and stones.
+-- enchantIds covers every rank of the applied enchant, independently of spell IDs.
+Buffs.WEAPON_IMBUES = {
+	{ key = "ROCKBITER", label = "Rockbiter Weapon", ids = {8017,8018,8019,10399,16314,16315,16316}, enchantIds = {29,6,1,503,1663,683,1664} },
+	{ key = "FLAMETONGUE", label = "Flametongue Weapon", ids = {8024,8027,8030,16339,16341,16342}, enchantIds = {5,4,3,523,1665,1666} },
+	{ key = "FROSTBRAND", label = "Frostbrand Weapon", ids = {8033,8038,10456,16355,16356}, enchantIds = {2,12,524,1667,1668} },
+	{ key = "WINDFURY", label = "Windfury Weapon", ids = {8232,8235,10486,16362}, enchantIds = {283,284,525,1669} },
+}
+
 -- Paladin blessings. Greater versions hit every member of the target's class.
 Buffs.BLESSINGS = {
 	{ key = "KINGS",  label = "Kings",     ids = {20217},                                   groupIds = {25898} },
@@ -55,6 +64,10 @@ Buffs.byKey = {}
 for _, b in ipairs(Buffs.GROUP_BUFFS) do b.kind = "group"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.TANK_BUFFS) do b.kind = "tank"; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.SELF_BUFFS) do b.kind = "self"; Buffs.byKey[b.key] = b end
+for _, b in ipairs(Buffs.WEAPON_IMBUES) do
+	b.kind, b.class, b.selfOnly, b.groupIds, b.duration = "imbue", "SHAMAN", true, {}, 3600
+	Buffs.byKey[b.key] = b
+end
 for _, b in ipairs(Buffs.BLESSINGS) do b.kind = "blessing"; b.reagents = { Buffs.BLESSING_REAGENT }; Buffs.byKey[b.key] = b end
 for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey[b.key] = b end
 
@@ -62,6 +75,7 @@ for _, b in ipairs(Buffs.AURAS) do b.kind = "aura"; b.groupIds = {}; Buffs.byKey
 Buffs.SINGLE_BUFFS = {}
 for _, b in ipairs(Buffs.TANK_BUFFS) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
 for _, b in ipairs(Buffs.SELF_BUFFS) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
+for _, b in ipairs(Buffs.WEAPON_IMBUES) do Buffs.SINGLE_BUFFS[#Buffs.SINGLE_BUFFS + 1] = b end
 
 Buffs.BLESSING_KEYS = {}
 for _, b in ipairs(Buffs.BLESSINGS) do Buffs.BLESSING_KEYS[#Buffs.BLESSING_KEYS + 1] = b.key end

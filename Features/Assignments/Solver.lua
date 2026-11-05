@@ -287,7 +287,9 @@ local function solveSingleBuffs(roster, names, out)
 		end
 		for _, n in ipairs(names) do
 			local m, caster = roster.members[n], nil
-			if (m.wants or EMPTY)[buff.key] then
+			local wanted = (m.wants or EMPTY)[buff.key]
+			if buff.kind == "imbue" then wanted = m.weaponImbue == buff.key end
+			if wanted then
 				if buff.selfOnly then
 					if m.class == buff.class and can(m, buff.key) then caster = n end
 				elseif #casters > 0 then

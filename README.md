@@ -61,6 +61,16 @@ minutes is 30 seconds), and the big button casts it
 once you have the mana. Other classes never see it, and priests without
 Buffeteria aren't tracked for it.
 
+Shamans can choose a **Weapon imbue** under **My preferences > Buffs**. Pick a
+learned **Rockbiter Weapon**, **Flametongue Weapon**, **Frostbrand Weapon**, or
+**Windfury Weapon**, or leave the per-character choice at **None**. The tracker
+checks your main-hand weapon and flags the chosen imbue if it is missing,
+replaced by another imbue, or near expiry (by default, 5% of an hour is three
+minutes). Oils and stones can coexist with the imbue. Click the head out of
+combat to apply the selected spell.
+In **Buffeteria-Dev**, other classes can try the picker with all four choices.
+Tracking and casting require a Shaman.
+
 Battle Shout and Inner Fire are also tracked **during combat**. When combat starts,
 the head is set to cast your shout or Inner Fire, so if it runs low or falls off
 mid-fight the head demands it and a click recasts it. Other buffs wait until combat
@@ -364,8 +374,8 @@ python tests/test_addon.py
 python tools/deploy_dev.py
 ```
 
-The deployment command installs to
-`C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\Buffeteria-Dev`,
+The deployment command installs to the live WoW Forever client at
+`C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\Buffeteria-Dev`,
 backs up overwritten files under `.release/local-backups/`, and checks installed
 SHA-256 hashes. It leaves the published `Buffeteria` folder and saved variables
 untouched. The source TOC remains `Buffeteria.toc` for release packaging; deployment

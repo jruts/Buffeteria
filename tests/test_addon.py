@@ -3048,6 +3048,78 @@ class AddonTests(unittest.TestCase):
             assert(not button:GetAttribute('spell'))
         """)
 
+    def test_shaman_weapon_imbue_picker_tracks_only_the_selected_main_hand_imbue(self):
+        lua = full_addon("SHAMAN")
+        lua.execute("""
+            local me = ns.WoW.Me()
+            local button = Buffeteria_CastButton
+            local tracker = Buffeteria_Tracker
+            local fire = {hasEnchant=true, enchantType=3, enchantID=1666, timeLeft=181000}
+            local stone = {hasEnchant=true, enchantType=2, enchantID=40, timeLeft=600000}
+            local enchants = {stone}
+            Enum = {WeaponSlot={MainHand=0}, ItemEnchantType={Imbue=3}}
+            C_Item.GetWeaponEnchantInfo = function(slot)
+                assert(slot == Enum.WeaponSlot.MainHand)
+                return enchants
+            end
+            IsPlayerSpell = function(id) return id == 8017 or id == 8024 or id == 16342 end
+            ns.Options.Toggle()
+            local menu = Buffeteria_WeaponImbueMenu
+            menu.parent:GetScript('OnClick')(menu.parent)
+            assert(menu:IsShown() and menu.items[1]:GetChecked() and ns.db.weaponImbue == nil)
+            assert(menu.items[2]:IsShown() and menu.items[3]:IsShown())
+            assert(not menu.items[4]:IsShown() and not menu.items[5]:IsShown())
+            menu.items[3]:GetScript('OnClick')(menu.items[3]); runTimers()
+            assert(not menu:IsShown() and ns.db.weaponImbue == 'FLAMETONGUE')
+            assert(not ns.Preferences.Get().wants.FLAMETONGUE and not ns.Roster.Capabilities(true).FLAMETONGUE)
+            assert(ns.Assignments.Served(me).FLAMETONGUE == me and not ns.Assignments.Served(me).ROCKBITER)
+            assert(button:GetAttribute('spell') == '16342' and button:GetAttribute('*unit1') == nil)
+            assert(ns.Tracker.Summary().perKey.FLAMETONGUE.bad == 1) -- a stone alone is not an imbue
+
+            enchants = {stone, fire}
+            tracker:GetScript('OnEvent')(tracker, 'WEAPON_ENCHANT_CHANGED'); runTimers()
+            assert(ns.Tracker.Summary().perKey.FLAMETONGUE.warn == 0 and not button.pending)
+            fire.timeLeft = 180000; ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.FLAMETONGUE.warn == 1 and button.pending)
+            tracker:GetScript('OnEvent')(tracker, 'PLAYER_REGEN_DISABLED')
+            COMBAT = true; ns.Tracker.Refresh()
+            assert(not ns.Tracker.Summary().next and not button:GetAttribute('spell'))
+            COMBAT = false
+
+            enchants = {{hasEnchant=true, enchantType=3, enchantID=29, timeLeft=3600000}}
+            tracker:GetScript('OnEvent')(tracker, 'PLAYER_EQUIPMENT_CHANGED'); runTimers()
+            assert(ns.Tracker.Summary().perKey.FLAMETONGUE.bad == 1)
+            C_Item.GetWeaponEnchantInfo = function() error('unavailable') end
+            ns.Tracker.Refresh()
+            assert(ns.Tracker.Summary().perKey.FLAMETONGUE.unknown == 1 and not button.pending)
+            ns.Preferences.Init()
+            assert(ns.db.weaponImbue == 'FLAMETONGUE')
+            ns.Preferences.Reset(); runTimers()
+            assert(ns.db.weaponImbue == nil and not ns.Tracker.Summary().perKey.FLAMETONGUE)
+        """)
+
+    def test_dev_weapon_imbue_picker_is_a_preview_on_other_classes(self):
+        lua = full_addon("PRIEST", addon_name="Buffeteria-Dev")
+        lua.execute("""
+            IsPlayerSpell = function(id) return id == 588 end
+            ns.Options.Toggle()
+            local menu = BuffeteriaDev_WeaponImbueMenu
+            local picker = menu.parent
+            picker:GetScript('OnClick')(picker)
+            assert(menu:IsVisible() and menu.items[1]:GetChecked())
+            for _, item in ipairs(menu.items) do assert(item:IsVisible()) end
+            local label = findWidget('Weapon imbue')
+            local innerFire = label.parent.parent.wants.IFIRE
+            assert(label.point[3] < innerFire.point[3] - innerFire:GetHeight())
+            menu.items[5]:GetScript('OnClick')(menu.items[5]); runTimers()
+            assert(picker.caption:GetText() == 'Windfury Weapon')
+            local me = ns.WoW.Me()
+            assert(not ns.Assignments.roster.members[me].weaponImbue)
+            assert(not ns.Assignments.Served(me).WINDFURY and not ns.Tracker.Summary().perKey.WINDFURY)
+        """)
+        lua = full_addon("PRIEST")
+        lua.execute("ns.Options.Toggle(); assert(not Buffeteria_WeaponImbueMenu)")
+
     def test_warrior_battle_shout_is_optional_self_buff_with_percentage_warning(self):
         lua = full_addon('WARRIOR')
         lua.execute("""
