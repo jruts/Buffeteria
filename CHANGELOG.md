@@ -1,5 +1,11 @@
 # Buffeteria
 
+## v0.6.16
+
+<!-- buffeteria:auto-notes:start -->
+- Update Forever buff coverage and add Dev class preview ([c7142cb](https://github.com/jruts/Buffeteria/commit/c7142cb244e810b89fda182cbe56f26f39beadf0))
+<!-- buffeteria:auto-notes:end -->
+
 ## v0.6.15
 
 - Added a Shaman weapon imbue picker under **My preferences > Buffs**. Choose
